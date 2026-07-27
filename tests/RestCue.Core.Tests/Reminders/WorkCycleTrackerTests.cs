@@ -201,6 +201,54 @@ public sealed class WorkCycleTrackerTests
     }
 
     [Fact]
+    public void Transitions_on_natural_pause_at_exact_threshold()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            naturalPause: TimeSpan.FromSeconds(5));
+
+        ReachPendingReminder(tracker, clock);
+
+        clock.Advance(TimeSpan.FromSeconds(5));
+        tracker.Tick(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Does_not_transition_on_pause_just_below_natural_threshold()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            naturalPause: TimeSpan.FromSeconds(5));
+
+        ReachPendingReminder(tracker, clock);
+
+        clock.Advance(TimeSpan.FromSeconds(5) - TimeSpan.FromMilliseconds(1));
+        tracker.Tick(TimeSpan.FromSeconds(5) - TimeSpan.FromMilliseconds(1));
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Does_not_transition_on_max_wait_just_below()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            maxWait: TimeSpan.FromMinutes(3));
+
+        ReachPendingReminder(tracker, clock);
+
+        clock.Advance(TimeSpan.FromMinutes(3) - TimeSpan.FromMilliseconds(1));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+    }
+
+    [Fact]
     public void StartBreak_transitions_to_BreakInProgress()
     {
         var clock = new FakeClock();

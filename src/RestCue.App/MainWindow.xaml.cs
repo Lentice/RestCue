@@ -78,12 +78,12 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     {
         if (activityTracker == null || activityMonitor == null) return;
 
-        var status = activityTracker.Refresh();
+        var sample = activityMonitor.GetCurrentActivity();
+        var status = activityTracker.Refresh(sample);
         RefreshActivityStatus(status);
 
         if (workCycleTracker != null)
         {
-            var sample = activityMonitor.GetCurrentActivity();
             if (sample.IsAvailable)
             {
                 workCycleTracker.Tick(sample.IdleDuration);

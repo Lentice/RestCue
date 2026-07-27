@@ -20,4 +20,10 @@ public sealed class UserActivityStatusTracker
         CurrentStatus = evaluator.Evaluate(activityMonitor.GetCurrentActivity());
         return CurrentStatus;
     }
+
+    public UserActivityStatus Refresh(UserActivitySample sample)
+    {
+        CurrentStatus = evaluator.Evaluate(sample);
+        return CurrentStatus;
+    }
 }

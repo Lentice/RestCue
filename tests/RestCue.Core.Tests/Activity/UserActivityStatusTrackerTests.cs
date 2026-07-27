@@ -24,6 +24,21 @@ public sealed class UserActivityStatusTrackerTests
         Assert.Equal(3, source.ReadCount);
     }
 
+    [Fact]
+    public void Refresh_WithSample_DoesNotCallMonitor()
+    {
+        var source = new FakeActivityMonitor();
+        var tracker = new UserActivityStatusTracker(
+            source,
+            new UserActivityStatusEvaluator(TimeSpan.FromSeconds(10)));
+
+        var result = tracker.Refresh(UserActivitySample.Available(TimeSpan.FromSeconds(5)));
+
+        Assert.Equal(UserActivityStatus.Working, result);
+        Assert.Equal(UserActivityStatus.Working, tracker.CurrentStatus);
+        Assert.Equal(0, source.ReadCount);
+    }
+
     private sealed class FakeActivityMonitor : IUserActivityMonitor
     {
         public UserActivitySample Sample { get; set; } = UserActivitySample.Unavailable;

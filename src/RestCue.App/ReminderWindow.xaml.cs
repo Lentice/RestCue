@@ -9,7 +9,6 @@ public partial class ReminderWindow : Window
 {
     private readonly DispatcherTimer countdownTimer;
     private int countdownSeconds;
-    private bool isBreakActive;
     private bool isBreakStarting;
 
     public event EventHandler? BreakRequested;
@@ -29,21 +28,21 @@ public partial class ReminderWindow : Window
 
     public void ShowReminder()
     {
-        isBreakActive = false;
         PhaseText.Text = "Look at something\n6 meters away.";
         CountdownText.Text = "";
         ActionButton.Content = "Start 20s Break";
+        ActionButton.IsEnabled = true;
         PositionOnPrimaryScreenRightEdge();
         Show();
     }
 
     public void StartBreakCountdown(int durationSeconds)
     {
-        isBreakActive = true;
         countdownSeconds = durationSeconds;
         CountdownText.Text = $"{countdownSeconds}s";
         PhaseText.Text = "Break in progress...";
-        ActionButton.Content = "Skip";
+        ActionButton.IsEnabled = false;
+        ActionButton.Content = "Break in progress...";
         countdownTimer.Start();
     }
 
@@ -69,16 +68,10 @@ public partial class ReminderWindow : Window
 
     private void OnActionButtonClick(object sender, RoutedEventArgs e)
     {
-        if (isBreakActive)
-        {
-            countdownTimer.Stop();
-            OnBreakCompleted();
-        }
-        else if (!isBreakStarting)
-        {
-            isBreakStarting = true;
-            BreakRequested?.Invoke(this, EventArgs.Empty);
-        }
+        if (isBreakStarting) return;
+
+        isBreakStarting = true;
+        BreakRequested?.Invoke(this, EventArgs.Empty);
     }
 
     public void CompleteBreak()
@@ -95,7 +88,6 @@ public partial class ReminderWindow : Window
         {
             countdownTimer.Stop();
             CountdownText.Text = "Done!";
-            OnBreakCompleted();
         }
         else
         {
@@ -105,7 +97,6 @@ public partial class ReminderWindow : Window
 
     private void OnBreakCompleted()
     {
-        isBreakActive = false;
         isBreakStarting = false;
         Hide();
         BreakCompleted?.Invoke(this, EventArgs.Empty);
