@@ -20,10 +20,8 @@
 - 核心時間邏輯使用可替換 clock，並以單元測試驗證。
 - MVP 不宣稱具有醫療診斷或治療效果。
 
-## 原始規格
+## 完整原始規格
 
-目前原始規格位於工作站：
+[Windows 護眼助理 Design Spec 與開發 Backlog（MVP v1.1）](windows-eye-care-assistant-design-spec-v1.1.md)
 
-`D:\Downloads\windows_eye_care_assistant_design_spec (1).md`
-
-在首次正式發版前，應將經確認的完整規格納入版本控制，並更新本文件連結。
+連結文件是納入版本控制的原始 MVP v1.1 開發基準。若其中的技術版本、產品命名、隱私規則或其他內容與本頁「核心契約」或根目錄 `AGENTS.md` 衝突，以本頁核心契約及 `AGENTS.md` 為準。
