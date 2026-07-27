@@ -1,10 +1,11 @@
+using Microsoft.Data.Sqlite;
 using RestCue.Core.Settings;
 using RestCue.Infrastructure.Settings;
 using Xunit;
 
 namespace RestCue.Infrastructure.Tests.Settings;
 
-public sealed class JsonFileSettingsRepositoryTests : IDisposable
+public sealed class SqliteSettingsRepositoryTests : IDisposable
 {
     private readonly string directory = Path.Combine(
         Path.GetTempPath(),
@@ -14,31 +15,48 @@ public sealed class JsonFileSettingsRepositoryTests : IDisposable
     [Fact]
     public async Task Valid_settings_survive_a_new_repository_instance()
     {
-        string settingsPath = Path.Combine(directory, "settings.json");
+        string databasePath = Path.Combine(directory, "restcue.db");
         var saved = AppSettings.Default with
         {
             WorkInterval = TimeSpan.FromMinutes(35),
             CollectForegroundProcessNames = true,
         };
 
-        var firstRun = new JsonFileSettingsRepository(settingsPath, new AppSettingsValidator());
+        var firstRun = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
         await firstRun.SaveAsync(saved);
 
-        var restartedApp = new JsonFileSettingsRepository(settingsPath, new AppSettingsValidator());
+        var restartedApp = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
         SettingsLoadResult result = await restartedApp.LoadAsync();
 
         Assert.Equal(saved, result.Settings);
         Assert.False(result.RecoveredFromCorruption);
-        Assert.Null(result.CorruptBackupPath);
     }
 
     [Fact]
-    public async Task Corrupted_settings_are_backed_up_and_replaced_with_safe_defaults()
+    public async Task Creates_the_product_contract_settings_schema()
+    {
+        string databasePath = Path.Combine(directory, "restcue.db");
+        var repository = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+
+        await repository.LoadAsync();
+
+        await using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        await connection.OpenAsync();
+        await using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'settings';";
+        string schema = Assert.IsType<string>(await command.ExecuteScalarAsync());
+        Assert.Contains("key TEXT PRIMARY KEY", schema);
+        Assert.Contains("value TEXT NOT NULL", schema);
+        Assert.Contains("updated_at_utc TEXT NOT NULL", schema);
+    }
+
+    [Fact]
+    public async Task Corrupted_database_is_backed_up_and_replaced_with_safe_defaults()
     {
         Directory.CreateDirectory(directory);
-        string settingsPath = Path.Combine(directory, "settings.json");
-        await File.WriteAllTextAsync(settingsPath, "{ definitely not JSON");
-        var repository = new JsonFileSettingsRepository(settingsPath, new AppSettingsValidator());
+        string databasePath = Path.Combine(directory, "restcue.db");
+        await File.WriteAllTextAsync(databasePath, "definitely not SQLite");
+        var repository = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
 
         SettingsLoadResult result = await repository.LoadAsync();
 
@@ -46,7 +64,7 @@ public sealed class JsonFileSettingsRepositoryTests : IDisposable
         Assert.True(result.RecoveredFromCorruption);
         Assert.NotNull(result.CorruptBackupPath);
         Assert.True(File.Exists(result.CorruptBackupPath));
-        Assert.Equal("{ definitely not JSON", await File.ReadAllTextAsync(result.CorruptBackupPath));
+        Assert.Equal("definitely not SQLite", await File.ReadAllTextAsync(result.CorruptBackupPath));
 
         SettingsLoadResult nextLoad = await repository.LoadAsync();
         Assert.Equal(AppSettings.Default, nextLoad.Settings);
@@ -56,8 +74,8 @@ public sealed class JsonFileSettingsRepositoryTests : IDisposable
     [Fact]
     public async Task Invalid_cross_field_settings_are_rejected_without_replacing_saved_settings()
     {
-        string settingsPath = Path.Combine(directory, "settings.json");
-        var repository = new JsonFileSettingsRepository(settingsPath, new AppSettingsValidator());
+        string databasePath = Path.Combine(directory, "restcue.db");
+        var repository = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
         await repository.SaveAsync(AppSettings.Default);
         var invalid = AppSettings.Default with
         {

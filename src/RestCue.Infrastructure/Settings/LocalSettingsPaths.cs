@@ -2,9 +2,9 @@ namespace RestCue.Infrastructure.Settings;
 
 public static class LocalSettingsPaths
 {
-    public static string SettingsFile =>
+    public static string DatabaseFile =>
         Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "RestCue",
-            "settings.json");
+            "restcue.db");
 }

@@ -1,6 +1,6 @@
 namespace RestCue.App.Lifecycle;
 
-public sealed class ApplicationLifecycle : IDisposable
+public sealed class ApplicationLifecycle : IApplicationLifecycle
 {
     private readonly ITrayIcon _trayIcon;
     private readonly IStatusWindow _statusWindow;

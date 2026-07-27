@@ -1,13 +1,16 @@
 using System.Windows;
 using RestCue.App.Lifecycle;
+using RestCue.Core.Settings;
+using RestCue.Infrastructure.Settings;
 
 namespace RestCue.App;
 
 public partial class App : System.Windows.Application
 {
     private ApplicationLifecycle? _lifecycle;
+    private ApplicationStartup? _startup;
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
@@ -16,7 +19,11 @@ public partial class App : System.Windows.Application
             new WindowsTrayIcon(),
             statusWindow,
             Shutdown);
-        _lifecycle.Start();
+        var settingsRepository = new SqliteSettingsRepository(
+            LocalSettingsPaths.DatabaseFile,
+            new AppSettingsValidator());
+        _startup = new ApplicationStartup(settingsRepository, _lifecycle);
+        await _startup.InitializeAsync();
     }
 
     protected override void OnExit(ExitEventArgs e)
