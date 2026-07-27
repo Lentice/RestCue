@@ -12,3 +12,6 @@ RestCue 採三層單一應用程式結構：
 
 設定 persistence 與 WPF startup composition seam 見
 [`ADR-0001`](../adr/0001-sqlite-settings-persistence.md)。
+
+Windows 最後輸入時間的活動與隱私邊界見
+[`ADR-0002`](../adr/0002-windows-last-input-activity-boundary.md)。

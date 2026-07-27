@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Windows;
 using RestCue.App.Lifecycle;
 using RestCue.Core.Settings;
+using RestCue.Infrastructure.Activity;
 using RestCue.Infrastructure.Settings;
 
 namespace RestCue.App;
@@ -27,6 +28,9 @@ public partial class App : System.Windows.Application
         try
         {
             await _startup.InitializeAsync();
+            statusWindow.StartActivityTracking(
+                new WindowsUserActivityMonitor(),
+                _startup.CurrentSettings);
         }
         catch (Exception exception)
         {
