@@ -116,7 +116,7 @@ public sealed class WorkCycleTrackerTests
         }
 
         Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
-        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+        Assert.Equal(TimeSpan.FromSeconds(30), tracker.AccumulatedWorkTime);
     }
 
     [Fact]
@@ -684,19 +684,41 @@ public sealed class WorkCycleTrackerTests
     }
 
     [Fact]
-    public void Ignore_does_not_call_ResetCycle()
+    public void Ignore_preserves_nonzero_AccumulatedWorkTime()
     {
         var clock = new FakeClock();
-        var tracker = CreateTracker(clock: clock);
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
 
         ReachReminderVisible(tracker, clock);
 
-        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+        Assert.NotEqual(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+        var before = tracker.AccumulatedWorkTime;
 
         tracker.Ignore();
 
         Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
-        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+        Assert.Equal(before, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Snooze_preserves_AccumulatedWorkTime()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+
+        Assert.NotEqual(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+        var before = tracker.AccumulatedWorkTime;
+
+        tracker.Snooze();
+
+        Assert.Equal(WorkCyclePhase.Snoozed, tracker.CurrentPhase);
+        Assert.Equal(before, tracker.AccumulatedWorkTime);
     }
 
     [Fact]
@@ -787,6 +809,53 @@ public sealed class WorkCycleTrackerTests
     }
 
     [Fact]
+    public void AutoDismissed_preserves_AccumulatedWorkTime()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30),
+            reminderDisplayDuration: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+
+        Assert.NotEqual(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+        var before = tracker.AccumulatedWorkTime;
+
+        clock.Advance(TimeSpan.FromSeconds(30));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(before, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Snooze_restores_exactly_one_reminder_flow()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            snoozeDuration: TimeSpan.FromMinutes(5),
+            reminderDisplayDuration: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+        tracker.Snooze();
+
+        int reminderShownCount = 0;
+        tracker.ReminderShown += (_, _) => reminderShownCount++;
+
+        clock.Advance(TimeSpan.FromMinutes(5));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.Equal(0, reminderShownCount);
+
+        clock.Advance(TimeSpan.FromSeconds(6));
+        tracker.Tick(TimeSpan.FromSeconds(6));
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+        Assert.Equal(1, reminderShownCount);
+    }
+
+    [Fact]
     public void AutoDismissed_transitions_after_reminderDisplayDuration()
     {
         var clock = new FakeClock();
@@ -871,7 +940,7 @@ public sealed class WorkCycleTrackerTests
     }
 
     [Fact]
-    public void Snooze_Ignore_AutoDismissed_are_mutually_exclusive()
+    public void Ignore_mutual_exclusion()
     {
         var clock = new FakeClock();
         var tracker = CreateTracker(
@@ -892,6 +961,74 @@ public sealed class WorkCycleTrackerTests
         Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
         Assert.Equal(0, breakCompletedCount);
         Assert.Equal(0, passiveBreakCount);
+        Assert.Equal(1, dismissCount);
+
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(1, dismissCount);
+    }
+
+    [Fact]
+    public void Snooze_mutual_exclusion()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            snoozeDuration: TimeSpan.FromMinutes(5),
+            reminderDisplayDuration: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+
+        int breakCompletedCount = 0;
+        int passiveBreakCount = 0;
+        int dismissCount = 0;
+        int reminderShownCount = 0;
+        tracker.BreakCompleted += (_, _) => breakCompletedCount++;
+        tracker.PassiveBreakCompleted += (_, _) => passiveBreakCount++;
+        tracker.ReminderDismissed += (_, _) => dismissCount++;
+        tracker.ReminderShown += (_, _) => reminderShownCount++;
+
+        tracker.Snooze();
+
+        Assert.Equal(WorkCyclePhase.Snoozed, tracker.CurrentPhase);
+        Assert.Equal(0, breakCompletedCount);
+        Assert.Equal(0, passiveBreakCount);
+        Assert.Equal(1, dismissCount);
+
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(1, dismissCount);
+
+        clock.Advance(TimeSpan.FromMinutes(5));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.Equal(1, dismissCount);
+    }
+
+    [Fact]
+    public void AutoDismissed_mutual_exclusion()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            reminderDisplayDuration: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+
+        int breakCompletedCount = 0;
+        int passiveBreakCount = 0;
+        int dismissCount = 0;
+        tracker.BreakCompleted += (_, _) => breakCompletedCount++;
+        tracker.PassiveBreakCompleted += (_, _) => passiveBreakCount++;
+        tracker.ReminderDismissed += (_, _) => dismissCount++;
+
+        clock.Advance(TimeSpan.FromSeconds(30));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(0, breakCompletedCount);
+        Assert.Equal(0, passiveBreakCount);
+        Assert.Equal(1, dismissCount);
+
+        tracker.Tick(TimeSpan.Zero);
         Assert.Equal(1, dismissCount);
     }
 

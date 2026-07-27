@@ -19,6 +19,7 @@ public sealed class WorkCycleTracker
     private DateTimeOffset? reminderVisibleSinceUtc;
     private DateTimeOffset? snoozeUntilUtc;
     private bool wasWorking;
+    private TimeSpan? lastReminderWorkTime;
 
     private readonly TimeSpan workInterval;
 
@@ -190,11 +191,11 @@ public sealed class WorkCycleTracker
                     AccumulatedWorkTime += delta;
             }
 
-            if (workInterval > TimeSpan.Zero && AccumulatedWorkTime >= workInterval)
+            if (workInterval > TimeSpan.Zero &&
+                AccumulatedWorkTime - (lastReminderWorkTime ?? TimeSpan.Zero) >= workInterval)
             {
                 CurrentPhase = WorkCyclePhase.PendingReminder;
                 pendingSinceUtc = now;
-                AccumulatedWorkTime = TimeSpan.Zero;
             }
         }
 
@@ -256,6 +257,7 @@ public sealed class WorkCycleTracker
     {
         CurrentPhase = WorkCyclePhase.ReminderVisible;
         reminderVisibleSinceUtc = now;
+        lastReminderWorkTime = AccumulatedWorkTime;
         ReminderShown?.Invoke(this, EventArgs.Empty);
     }
 
@@ -264,7 +266,13 @@ public sealed class WorkCycleTracker
         var visibleElapsed = now - reminderVisibleSinceUtc!.Value;
         if (visibleElapsed >= reminderDisplayDuration)
         {
-            ResetCycle();
+            CurrentPhase = WorkCyclePhase.Working;
+            pendingSinceUtc = null;
+            breakStartUtc = null;
+            lastTickUtc = null;
+            wasWorking = false;
+            reminderVisibleSinceUtc = null;
+            snoozeUntilUtc = null;
             ReminderDismissed?.Invoke(this, new ReminderDismissedEventArgs(ReminderResult.AutoDismissed));
         }
     }
@@ -279,6 +287,7 @@ public sealed class WorkCycleTracker
         wasWorking = false;
         reminderVisibleSinceUtc = null;
         snoozeUntilUtc = null;
+        lastReminderWorkTime = null;
     }
 
     private static void ValidateThreshold(TimeSpan value, string paramName)
