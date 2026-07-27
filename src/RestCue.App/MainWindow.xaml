@@ -10,7 +10,7 @@
                        Text="A gentle cue to rest your eyes." />
             <TextBlock Margin="0,12,0,0"
                        TextWrapping="Wrap"
-                       Text="護眼提醒專案骨架已就緒。提醒核心與系統列功能將由後續 tracer-bullet tickets 逐步交付。" />
+                       Text="護眼提醒專案骨架與基本系統列操作已就緒。提醒核心與其他系統列功能將由後續 tracer-bullet tickets 逐步交付。" />
         </StackPanel>
     </Grid>
 </Window>

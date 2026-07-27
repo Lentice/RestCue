@@ -35,9 +35,10 @@ dotnet test RestCue.sln
 |---|---|---|---|
 | 2026-07-27 | Windows NT 10.0.26200.0, .NET SDK 10.0.302 | `dotnet build RestCue.sln` | PASS — 0 warnings, 0 errors |
 | 2026-07-27 | Windows NT 10.0.26200.0, .NET SDK 10.0.302 | `dotnet test RestCue.sln` | PASS — 4 passed, 0 failed |
-| 2026-07-27 | Windows automation sandbox | Interactive steps 1–6 | NOT RUN — Windows UI automation helper was unavailable |
+| 2026-07-27 | Windows computer-use session | Interactive step 1 | PARTIAL — App launched successfully and no main window appeared automatically |
+| 2026-07-27 | Windows computer-use session | Interactive steps 2–6 | NOT RUN — the tool could not target the Windows taskbar or system tray |
 
 The automated App lifecycle tests verify one tray visibility transition, repeated opening of the
 same status-window instance, and tray disposal before shutdown. A human Windows desktop session
-must still execute interactive steps 1–6 to verify Explorer's rendered tray icon and context menu;
+must still execute interactive steps 2–6 to verify Explorer's rendered tray icon and context menu;
 the automation result must not be treated as that visual confirmation.
