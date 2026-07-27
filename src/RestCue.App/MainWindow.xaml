@@ -1,0 +1,16 @@
+<Window x:Class="RestCue.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="RestCue – Eye Break Reminder" Height="260" Width="420"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="32">
+        <StackPanel VerticalAlignment="Center">
+            <TextBlock FontSize="28" FontWeight="SemiBold" Text="RestCue" />
+            <TextBlock Margin="0,4,0,0" Foreground="#666666"
+                       Text="A gentle cue to rest your eyes." />
+            <TextBlock Margin="0,12,0,0"
+                       TextWrapping="Wrap"
+                       Text="護眼提醒專案骨架已就緒。提醒核心與系統列功能將由後續 tracer-bullet tickets 逐步交付。" />
+        </StackPanel>
+    </Grid>
+</Window>
