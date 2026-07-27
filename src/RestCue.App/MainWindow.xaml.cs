@@ -17,6 +17,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     private UserActivityStatusTracker? activityTracker;
     private WorkCycleTracker? workCycleTracker;
     private ReminderWindow? reminderWindow;
+    private TimeSpan snoozeDuration;
 
     public MainWindow()
     {
@@ -37,6 +38,8 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             activityMonitor,
             new UserActivityStatusEvaluator(settings.IdleThreshold));
 
+        snoozeDuration = settings.SnoozeDuration;
+
         workCycleTracker = new WorkCycleTracker(
             new SystemClock(),
             settings.WorkInterval,
@@ -44,11 +47,14 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             settings.NaturalPauseThreshold,
             settings.MaximumReminderWait,
             settings.BreakDuration,
-            settings.PassiveBreakThreshold);
+            settings.PassiveBreakThreshold,
+            settings.SnoozeDuration,
+            settings.ReminderDisplayDuration);
 
         workCycleTracker.ReminderShown += OnReminderShown;
         workCycleTracker.BreakCompleted += OnBreakCompleted;
         workCycleTracker.PassiveBreakCompleted += OnPassiveBreakCompleted;
+        workCycleTracker.ReminderDismissed += OnReminderDismissed;
 
         RefreshActivityStatus(activityTracker.Refresh());
         activityTimer.Start();
@@ -108,9 +114,12 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
                 reminderWindow = new ReminderWindow();
                 reminderWindow.BreakRequested += OnBreakRequested;
                 reminderWindow.BreakCompleted += OnReminderBreakCompleted;
+                reminderWindow.SnoozeRequested += OnSnoozeRequested;
+                reminderWindow.IgnoreRequested += OnIgnoreRequested;
                 reminderWindow.Closed += (_, _) => reminderWindow = null;
             }
 
+            reminderWindow.SnoozeDuration = snoozeDuration;
             reminderWindow.ShowReminder();
         });
     }
@@ -152,6 +161,35 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         });
     }
 
+    private void OnReminderDismissed(object? sender, ReminderDismissedEventArgs e)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (reminderWindow != null)
+            {
+                reminderWindow.Close();
+                reminderWindow = null;
+            }
+            UpdateCycleStatus();
+        });
+    }
+
+    private void OnSnoozeRequested(object? sender, EventArgs e)
+    {
+        workCycleTracker?.Snooze();
+        reminderWindow?.Close();
+        reminderWindow = null;
+        UpdateCycleStatus();
+    }
+
+    private void OnIgnoreRequested(object? sender, EventArgs e)
+    {
+        workCycleTracker?.Ignore();
+        reminderWindow?.Close();
+        reminderWindow = null;
+        UpdateCycleStatus();
+    }
+
     private void RefreshActivityStatus(UserActivityStatus status)
     {
         ActivityStatusText.Text = status switch
@@ -172,6 +210,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             WorkCyclePhase.PendingReminder => "等待停頓中",
             WorkCyclePhase.ReminderVisible => "提醒顯示中",
             WorkCyclePhase.BreakInProgress => "休息中",
+            WorkCyclePhase.Snoozed => "延後中",
             _ => "未知"
         };
     }

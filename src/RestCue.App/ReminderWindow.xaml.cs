@@ -13,6 +13,10 @@ public partial class ReminderWindow : Window
 
     public event EventHandler? BreakRequested;
     public event EventHandler? BreakCompleted;
+    public event EventHandler? SnoozeRequested;
+    public event EventHandler? IgnoreRequested;
+
+    public TimeSpan SnoozeDuration { get; set; } = TimeSpan.FromMinutes(5);
 
     public ReminderWindow()
     {
@@ -32,6 +36,10 @@ public partial class ReminderWindow : Window
         CountdownText.Text = "";
         ActionButton.Content = "Start 20s Break";
         ActionButton.IsEnabled = true;
+        ActionButton.Visibility = Visibility.Visible;
+        SnoozeButton.Content = $"Snooze {(int)SnoozeDuration.TotalMinutes}min";
+        SnoozeButton.Visibility = Visibility.Visible;
+        IgnoreButton.Visibility = Visibility.Visible;
         PositionOnPrimaryScreenRightEdge();
         Show();
     }
@@ -43,6 +51,8 @@ public partial class ReminderWindow : Window
         PhaseText.Text = "Break in progress...";
         ActionButton.IsEnabled = false;
         ActionButton.Content = "Break in progress...";
+        SnoozeButton.Visibility = Visibility.Collapsed;
+        IgnoreButton.Visibility = Visibility.Collapsed;
         countdownTimer.Start();
     }
 
@@ -72,6 +82,16 @@ public partial class ReminderWindow : Window
 
         isBreakStarting = true;
         BreakRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnSnoozeButtonClick(object sender, RoutedEventArgs e)
+    {
+        SnoozeRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnIgnoreButtonClick(object sender, RoutedEventArgs e)
+    {
+        IgnoreRequested?.Invoke(this, EventArgs.Empty);
     }
 
     public void CompleteBreak()

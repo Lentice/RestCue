@@ -12,13 +12,16 @@ public sealed class WorkCycleTrackerTests
     private static readonly TimeSpan DefaultMaxWait = TimeSpan.FromMinutes(3);
     private static readonly TimeSpan DefaultBreakDuration = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan DefaultPassiveBreak = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan DefaultSnoozeDuration = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan DefaultReminderDisplayDuration = TimeSpan.FromSeconds(30);
 
     [Fact]
     public void Constructor_throws_for_null_clock()
     {
         Assert.Throws<ArgumentNullException>(() => new WorkCycleTracker(
             null!, DefaultWorkInterval, DefaultIdleThreshold,
-            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration, DefaultPassiveBreak));
+            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration, DefaultPassiveBreak,
+            DefaultSnoozeDuration, DefaultReminderDisplayDuration));
     }
 
     [Theory]
@@ -28,7 +31,8 @@ public sealed class WorkCycleTrackerTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new WorkCycleTracker(
             new FakeClock(), TimeSpan.FromSeconds(seconds), DefaultIdleThreshold,
-            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration, DefaultPassiveBreak));
+            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration, DefaultPassiveBreak,
+            DefaultSnoozeDuration, DefaultReminderDisplayDuration));
     }
 
     [Fact]
@@ -621,7 +625,306 @@ public sealed class WorkCycleTrackerTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new WorkCycleTracker(
             new FakeClock(), DefaultWorkInterval, DefaultIdleThreshold,
-            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration, TimeSpan.Zero));
+            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration, TimeSpan.Zero,
+            DefaultSnoozeDuration, DefaultReminderDisplayDuration));
+    }
+
+    [Fact]
+    public void Constructor_throws_for_non_positive_snoozeDuration()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new WorkCycleTracker(
+            new FakeClock(), DefaultWorkInterval, DefaultIdleThreshold,
+            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration, DefaultPassiveBreak,
+            TimeSpan.Zero, DefaultReminderDisplayDuration));
+    }
+
+    [Fact]
+    public void Constructor_throws_for_non_positive_reminderDisplayDuration()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new WorkCycleTracker(
+            new FakeClock(), DefaultWorkInterval, DefaultIdleThreshold,
+            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration, DefaultPassiveBreak,
+            DefaultSnoozeDuration, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void Ignore_transitions_to_Working()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+
+        ReachReminderVisible(tracker, clock);
+
+        tracker.Ignore();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Ignore_throws_when_not_in_ReminderVisible()
+    {
+        var tracker = CreateTracker();
+        Assert.Throws<InvalidOperationException>(() => tracker.Ignore());
+    }
+
+    [Fact]
+    public void Ignore_fires_ReminderDismissed_with_Ignored()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+
+        ReachReminderVisible(tracker, clock);
+
+        ReminderResult? result = null;
+        tracker.ReminderDismissed += (_, args) => result = args.Result;
+
+        tracker.Ignore();
+
+        Assert.Equal(ReminderResult.Ignored, result);
+    }
+
+    [Fact]
+    public void Ignore_does_not_call_ResetCycle()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+
+        ReachReminderVisible(tracker, clock);
+
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+
+        tracker.Ignore();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Snooze_transitions_to_Snoozed()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+
+        ReachReminderVisible(tracker, clock);
+
+        tracker.Snooze();
+
+        Assert.Equal(WorkCyclePhase.Snoozed, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Snooze_throws_when_not_in_ReminderVisible()
+    {
+        var tracker = CreateTracker();
+        Assert.Throws<InvalidOperationException>(() => tracker.Snooze());
+    }
+
+    [Fact]
+    public void Snooze_fires_ReminderDismissed_with_Snoozed()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+
+        ReachReminderVisible(tracker, clock);
+
+        ReminderResult? result = null;
+        tracker.ReminderDismissed += (_, args) => result = args.Result;
+
+        tracker.Snooze();
+
+        Assert.Equal(ReminderResult.Snoozed, result);
+    }
+
+    [Fact]
+    public void Snooze_suppresses_reminder_during_duration()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            snoozeDuration: TimeSpan.FromMinutes(5));
+
+        ReachReminderVisible(tracker, clock);
+        tracker.Snooze();
+
+        clock.Advance(TimeSpan.FromMinutes(4));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.Snoozed, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Snooze_expires_after_duration_returns_to_PendingReminder()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            snoozeDuration: TimeSpan.FromMinutes(5));
+
+        ReachReminderVisible(tracker, clock);
+        tracker.Snooze();
+
+        clock.Advance(TimeSpan.FromMinutes(5));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Snooze_expires_in_TickActivityUnavailable()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            snoozeDuration: TimeSpan.FromMinutes(5));
+
+        ReachReminderVisible(tracker, clock);
+        tracker.Snooze();
+
+        clock.Advance(TimeSpan.FromMinutes(5));
+        tracker.TickActivityUnavailable();
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void AutoDismissed_transitions_after_reminderDisplayDuration()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            reminderDisplayDuration: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+
+        clock.Advance(TimeSpan.FromSeconds(30));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void AutoDismissed_fires_ReminderDismissed_with_AutoDismissed()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            reminderDisplayDuration: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+
+        ReminderResult? result = null;
+        tracker.ReminderDismissed += (_, args) => result = args.Result;
+
+        clock.Advance(TimeSpan.FromSeconds(30));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(ReminderResult.AutoDismissed, result);
+    }
+
+    [Fact]
+    public void AutoDismissed_does_not_fire_before_reminderDisplayDuration()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            reminderDisplayDuration: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+
+        clock.Advance(TimeSpan.FromSeconds(29));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void AutoDismissed_in_TickActivityUnavailable()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            reminderDisplayDuration: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+
+        clock.Advance(TimeSpan.FromSeconds(30));
+        tracker.TickActivityUnavailable();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Passive_break_takes_priority_over_AutoDismissed()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            passiveBreak: TimeSpan.FromSeconds(20),
+            reminderDisplayDuration: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+
+        clock.Advance(TimeSpan.FromSeconds(35));
+        tracker.Tick(TimeSpan.FromSeconds(35));
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Snooze_Ignore_AutoDismissed_are_mutually_exclusive()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            reminderDisplayDuration: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+
+        int breakCompletedCount = 0;
+        int passiveBreakCount = 0;
+        int dismissCount = 0;
+        tracker.BreakCompleted += (_, _) => breakCompletedCount++;
+        tracker.PassiveBreakCompleted += (_, _) => passiveBreakCount++;
+        tracker.ReminderDismissed += (_, _) => dismissCount++;
+
+        tracker.Ignore();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(0, breakCompletedCount);
+        Assert.Equal(0, passiveBreakCount);
+        Assert.Equal(1, dismissCount);
+    }
+
+    [Fact]
+    public void Snooze_does_not_reset_cycle()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+
+        tracker.Snooze();
+
+        Assert.Equal(WorkCyclePhase.Snoozed, tracker.CurrentPhase);
+        Assert.NotEqual(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Repeated_Ignore_does_not_accumulate_work_time_reduction()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+
+        var accumulated = tracker.AccumulatedWorkTime;
+        tracker.Ignore();
+
+        Assert.Equal(accumulated, tracker.AccumulatedWorkTime);
     }
 
     private static WorkCycleTracker CreateTracker(
@@ -631,7 +934,9 @@ public sealed class WorkCycleTrackerTests
         TimeSpan? naturalPause = null,
         TimeSpan? maxWait = null,
         TimeSpan? breakDuration = null,
-        TimeSpan? passiveBreak = null)
+        TimeSpan? passiveBreak = null,
+        TimeSpan? snoozeDuration = null,
+        TimeSpan? reminderDisplayDuration = null)
     {
         return new WorkCycleTracker(
             clock ?? new FakeClock(),
@@ -640,7 +945,9 @@ public sealed class WorkCycleTrackerTests
             naturalPause ?? DefaultNaturalPause,
             maxWait ?? DefaultMaxWait,
             breakDuration ?? DefaultBreakDuration,
-            passiveBreak ?? DefaultPassiveBreak);
+            passiveBreak ?? DefaultPassiveBreak,
+            snoozeDuration ?? DefaultSnoozeDuration,
+            reminderDisplayDuration ?? DefaultReminderDisplayDuration);
     }
 
     private static void ReachPendingReminder(

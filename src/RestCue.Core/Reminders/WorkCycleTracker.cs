@@ -10,10 +10,14 @@ public sealed class WorkCycleTracker
     private readonly TimeSpan maximumReminderWait;
     private readonly TimeSpan breakDuration;
     private readonly TimeSpan passiveBreakThreshold;
+    private readonly TimeSpan snoozeDuration;
+    private readonly TimeSpan reminderDisplayDuration;
 
     private DateTimeOffset? pendingSinceUtc;
     private DateTimeOffset? breakStartUtc;
     private DateTimeOffset? lastTickUtc;
+    private DateTimeOffset? reminderVisibleSinceUtc;
+    private DateTimeOffset? snoozeUntilUtc;
     private bool wasWorking;
 
     private readonly TimeSpan workInterval;
@@ -25,7 +29,9 @@ public sealed class WorkCycleTracker
         TimeSpan naturalPauseThreshold,
         TimeSpan maximumReminderWait,
         TimeSpan breakDuration,
-        TimeSpan passiveBreakThreshold)
+        TimeSpan passiveBreakThreshold,
+        TimeSpan snoozeDuration,
+        TimeSpan reminderDisplayDuration)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ValidateThreshold(workInterval, nameof(workInterval));
@@ -34,6 +40,8 @@ public sealed class WorkCycleTracker
         ValidateThreshold(maximumReminderWait, nameof(maximumReminderWait));
         ValidateThreshold(breakDuration, nameof(breakDuration));
         ValidateThreshold(passiveBreakThreshold, nameof(passiveBreakThreshold));
+        ValidateThreshold(snoozeDuration, nameof(snoozeDuration));
+        ValidateThreshold(reminderDisplayDuration, nameof(reminderDisplayDuration));
 
         this.clock = clock;
         this.workInterval = workInterval;
@@ -42,6 +50,8 @@ public sealed class WorkCycleTracker
         this.maximumReminderWait = maximumReminderWait;
         this.breakDuration = breakDuration;
         this.passiveBreakThreshold = passiveBreakThreshold;
+        this.snoozeDuration = snoozeDuration;
+        this.reminderDisplayDuration = reminderDisplayDuration;
     }
 
     public WorkCyclePhase CurrentPhase { get; private set; } = WorkCyclePhase.Working;
@@ -50,9 +60,12 @@ public sealed class WorkCycleTracker
 
     public TimeSpan BreakDuration => breakDuration;
 
+    public TimeSpan SnoozeDuration => snoozeDuration;
+
     public event EventHandler? ReminderShown;
     public event EventHandler? BreakCompleted;
     public event EventHandler? PassiveBreakCompleted;
+    public event EventHandler<ReminderDismissedEventArgs>? ReminderDismissed;
 
     public void Tick(TimeSpan idleDuration)
     {
@@ -79,6 +92,10 @@ public sealed class WorkCycleTracker
             case WorkCyclePhase.BreakInProgress:
                 TickBreak(now);
                 break;
+
+            case WorkCyclePhase.Snoozed:
+                TickSnoozed(now);
+                break;
         }
     }
 
@@ -96,9 +113,12 @@ public sealed class WorkCycleTracker
             case WorkCyclePhase.PendingReminder:
                 if (now - pendingSinceUtc!.Value >= maximumReminderWait)
                 {
-                    CurrentPhase = WorkCyclePhase.ReminderVisible;
-                    ReminderShown?.Invoke(this, EventArgs.Empty);
+                    EnterReminderVisible(now);
                 }
+                break;
+
+            case WorkCyclePhase.ReminderVisible:
+                TryAutoDismiss(now);
                 break;
 
             case WorkCyclePhase.BreakInProgress:
@@ -106,6 +126,15 @@ public sealed class WorkCycleTracker
                 {
                     ResetCycle();
                     BreakCompleted?.Invoke(this, EventArgs.Empty);
+                }
+                break;
+
+            case WorkCyclePhase.Snoozed:
+                if (now >= snoozeUntilUtc!.Value)
+                {
+                    CurrentPhase = WorkCyclePhase.PendingReminder;
+                    pendingSinceUtc = now;
+                    snoozeUntilUtc = null;
                 }
                 break;
         }
@@ -119,6 +148,35 @@ public sealed class WorkCycleTracker
 
         CurrentPhase = WorkCyclePhase.BreakInProgress;
         breakStartUtc = clock.UtcNow;
+        reminderVisibleSinceUtc = null;
+    }
+
+    public void Snooze()
+    {
+        if (CurrentPhase != WorkCyclePhase.ReminderVisible)
+            throw new InvalidOperationException(
+                $"Cannot snooze from phase {CurrentPhase}.");
+
+        CurrentPhase = WorkCyclePhase.Snoozed;
+        snoozeUntilUtc = clock.UtcNow + snoozeDuration;
+        reminderVisibleSinceUtc = null;
+        ReminderDismissed?.Invoke(this, new ReminderDismissedEventArgs(ReminderResult.Snoozed));
+    }
+
+    public void Ignore()
+    {
+        if (CurrentPhase != WorkCyclePhase.ReminderVisible)
+            throw new InvalidOperationException(
+                $"Cannot ignore from phase {CurrentPhase}.");
+
+        CurrentPhase = WorkCyclePhase.Working;
+        pendingSinceUtc = null;
+        breakStartUtc = null;
+        reminderVisibleSinceUtc = null;
+        snoozeUntilUtc = null;
+        lastTickUtc = null;
+        wasWorking = false;
+        ReminderDismissed?.Invoke(this, new ReminderDismissedEventArgs(ReminderResult.Ignored));
     }
 
     private void TickWorking(DateTimeOffset now, bool isWorking)
@@ -155,13 +213,11 @@ public sealed class WorkCycleTracker
         }
         else if (idleDuration >= naturalPauseThreshold)
         {
-            CurrentPhase = WorkCyclePhase.ReminderVisible;
-            ReminderShown?.Invoke(this, EventArgs.Empty);
+            EnterReminderVisible(now);
         }
         else if (elapsed >= maximumReminderWait)
         {
-            CurrentPhase = WorkCyclePhase.ReminderVisible;
-            ReminderShown?.Invoke(this, EventArgs.Empty);
+            EnterReminderVisible(now);
         }
     }
 
@@ -171,6 +227,19 @@ public sealed class WorkCycleTracker
         {
             ResetCycle();
             PassiveBreakCompleted?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
+        TryAutoDismiss(now);
+    }
+
+    private void TickSnoozed(DateTimeOffset now)
+    {
+        if (now >= snoozeUntilUtc!.Value)
+        {
+            CurrentPhase = WorkCyclePhase.PendingReminder;
+            pendingSinceUtc = now;
+            snoozeUntilUtc = null;
         }
     }
 
@@ -183,6 +252,23 @@ public sealed class WorkCycleTracker
         }
     }
 
+    private void EnterReminderVisible(DateTimeOffset now)
+    {
+        CurrentPhase = WorkCyclePhase.ReminderVisible;
+        reminderVisibleSinceUtc = now;
+        ReminderShown?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void TryAutoDismiss(DateTimeOffset now)
+    {
+        var visibleElapsed = now - reminderVisibleSinceUtc!.Value;
+        if (visibleElapsed >= reminderDisplayDuration)
+        {
+            ResetCycle();
+            ReminderDismissed?.Invoke(this, new ReminderDismissedEventArgs(ReminderResult.AutoDismissed));
+        }
+    }
+
     private void ResetCycle()
     {
         CurrentPhase = WorkCyclePhase.Working;
@@ -191,6 +277,8 @@ public sealed class WorkCycleTracker
         breakStartUtc = null;
         lastTickUtc = null;
         wasWorking = false;
+        reminderVisibleSinceUtc = null;
+        snoozeUntilUtc = null;
     }
 
     private static void ValidateThreshold(TimeSpan value, string paramName)

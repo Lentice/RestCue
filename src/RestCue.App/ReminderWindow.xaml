@@ -7,7 +7,7 @@
         ShowInTaskbar="False"
         Topmost="True"
         ResizeMode="NoResize"
-        Width="220" Height="280"
+        Width="220" Height="300"
         WindowStartupLocation="Manual"
         Background="#EE2B2B2B"
         Foreground="White"
@@ -43,17 +43,40 @@
                            Margin="0,0,0,8" />
             </StackPanel>
 
-            <Button x:Name="ActionButton"
-                    Grid.Row="2"
-                    Content="Start 20s Break"
-                    FontSize="14"
-                    Height="36"
-                    Width="160"
-                    Click="OnActionButtonClick"
-                    Cursor="Hand"
-                    Background="#FF4CAF50"
-                    Foreground="White"
-                    BorderThickness="0" />
+            <StackPanel Grid.Row="2" HorizontalAlignment="Center">
+                <Button x:Name="ActionButton"
+                        Content="Start 20s Break"
+                        FontSize="14"
+                        Height="36"
+                        Width="160"
+                        Click="OnActionButtonClick"
+                        Cursor="Hand"
+                        Background="#FF4CAF50"
+                        Foreground="White"
+                        BorderThickness="0"
+                        Margin="0,0,0,6" />
+                <Button x:Name="SnoozeButton"
+                        Content="Snooze"
+                        FontSize="13"
+                        Height="32"
+                        Width="160"
+                        Click="OnSnoozeButtonClick"
+                        Cursor="Hand"
+                        Background="#FF2196F3"
+                        Foreground="White"
+                        BorderThickness="0"
+                        Margin="0,0,0,4" />
+                <Button x:Name="IgnoreButton"
+                        Content="Ignore"
+                        FontSize="13"
+                        Height="32"
+                        Width="160"
+                        Click="OnIgnoreButtonClick"
+                        Cursor="Hand"
+                        Background="#FF757575"
+                        Foreground="White"
+                        BorderThickness="0" />
+            </StackPanel>
         </Grid>
     </Border>
 </Window>
