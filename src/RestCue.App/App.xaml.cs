@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using RestCue.App.Lifecycle;
 using RestCue.Core.Settings;
@@ -23,7 +24,17 @@ public partial class App : System.Windows.Application
             LocalSettingsPaths.DatabaseFile,
             new AppSettingsValidator());
         _startup = new ApplicationStartup(settingsRepository, _lifecycle);
-        await _startup.InitializeAsync();
+        try
+        {
+            await _startup.InitializeAsync();
+        }
+        catch (Exception exception)
+        {
+            ApplicationStartupFailureHandler.Handle(
+                exception,
+                message => Trace.TraceError(message),
+                Shutdown);
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

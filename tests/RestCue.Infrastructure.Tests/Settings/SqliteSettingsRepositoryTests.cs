@@ -90,6 +90,61 @@ public sealed class SqliteSettingsRepositoryTests : IDisposable
         Assert.Equal(AppSettings.Default, (await repository.LoadAsync()).Settings);
     }
 
+    [Fact]
+    public async Task Locked_database_propagates_operational_error_without_deleting_valid_settings()
+    {
+        string databasePath = Path.Combine(directory, "restcue.db");
+        var repository = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+        var saved = AppSettings.Default with { WorkInterval = TimeSpan.FromMinutes(37) };
+        await repository.SaveAsync(saved);
+
+        await using (var lockConnection = new SqliteConnection(
+                         $"Data Source={databasePath};Pooling=False;Default Timeout=1"))
+        {
+            await lockConnection.OpenAsync();
+            await using SqliteCommand lockCommand = lockConnection.CreateCommand();
+            lockCommand.CommandText = "BEGIN EXCLUSIVE;";
+            await lockCommand.ExecuteNonQueryAsync();
+
+            SqliteException exception = await Assert.ThrowsAsync<SqliteException>(
+                () => repository.LoadAsync());
+
+            Assert.Contains(exception.SqliteErrorCode, new[] { 5, 6 });
+            Assert.True(File.Exists(databasePath));
+            Assert.Empty(Directory.GetFiles(directory, "*.bak"));
+        }
+
+        Assert.Equal(saved, (await repository.LoadAsync()).Settings);
+    }
+
+    [Fact]
+    public async Task Future_schema_version_is_rejected_without_downgrade_or_deletion()
+    {
+        string databasePath = Path.Combine(directory, "restcue.db");
+        Directory.CreateDirectory(directory);
+        await using (var connection = new SqliteConnection(
+                         $"Data Source={databasePath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            await using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = "PRAGMA user_version = 2;";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var repository = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+
+        await Assert.ThrowsAsync<UnsupportedSettingsSchemaException>(
+            () => repository.LoadAsync());
+
+        await using var verifyConnection = new SqliteConnection(
+            $"Data Source={databasePath};Pooling=False");
+        await verifyConnection.OpenAsync();
+        await using SqliteCommand verifyCommand = verifyConnection.CreateCommand();
+        verifyCommand.CommandText = "PRAGMA user_version;";
+        Assert.Equal(2L, await verifyCommand.ExecuteScalarAsync());
+        Assert.Empty(Directory.GetFiles(directory, "*.bak"));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(directory))

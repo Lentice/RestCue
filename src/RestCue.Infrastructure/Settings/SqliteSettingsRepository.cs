@@ -7,6 +7,8 @@ namespace RestCue.Infrastructure.Settings;
 public sealed class SqliteSettingsRepository : ISettingsRepository
 {
     private const int SchemaVersion = 1;
+    private const int SqliteCorrupt = 11;
+    private const int SqliteNotADatabase = 26;
     private const string AppSettingsKey = "app_settings";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
     private readonly string databasePath;
@@ -23,6 +25,7 @@ public sealed class SqliteSettingsRepository : ISettingsRepository
             DataSource = this.databasePath,
             Mode = SqliteOpenMode.ReadWriteCreate,
             Pooling = false,
+            DefaultTimeout = 1,
         }.ToString();
     }
 
@@ -98,6 +101,14 @@ public sealed class SqliteSettingsRepository : ISettingsRepository
         SqliteConnection connection,
         CancellationToken cancellationToken)
     {
+        await using SqliteCommand versionCommand = connection.CreateCommand();
+        versionCommand.CommandText = "PRAGMA user_version;";
+        long version = (long)(await versionCommand.ExecuteScalarAsync(cancellationToken) ?? 0L);
+        if (version > SchemaVersion)
+        {
+            throw new UnsupportedSettingsSchemaException(version, SchemaVersion);
+        }
+
         await using SqliteCommand command = connection.CreateCommand();
         command.CommandText =
             $"""
@@ -130,7 +141,10 @@ public sealed class SqliteSettingsRepository : ISettingsRepository
     }
 
     private static bool IsCorruptSettings(Exception exception) =>
-        exception is SqliteException or JsonException or NotSupportedException or SettingsValidationException;
+        exception is SqliteException
+        {
+            SqliteErrorCode: SqliteCorrupt or SqliteNotADatabase,
+        } or JsonException or NotSupportedException or SettingsValidationException;
 
     private string CreateCorruptBackupPath() =>
         $"{databasePath}.corrupt-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}.bak";

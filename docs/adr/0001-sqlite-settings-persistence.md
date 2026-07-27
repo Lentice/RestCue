@@ -24,6 +24,11 @@ to a timestamped `.bak` file, recreated with the current schema, and populated w
 validated defaults. Foreground process-name collection therefore remains off during
 recovery.
 
+Recovery is restricted to SQLite's `CORRUPT` and `NOTADB` result codes, plus an
+invalid serialized settings document. Operational failures such as `BUSY`, `LOCKED`,
+permissions, or I/O errors are propagated and never delete the database. A schema
+version newer than this application supports is also rejected without downgrade.
+
 ## Alternatives
 
 - A JSON settings file was rejected because the product contract specifies SQLite and
@@ -43,6 +48,8 @@ recovery.
   data is not discarded.
 - Startup currently loads and exposes settings; later feature slices inject them into
   timing and UI services.
+- Startup failure writes only a fixed, non-sensitive diagnostic and exits without
+  showing a modal window or taking focus.
 
 ## Review Trigger
 
