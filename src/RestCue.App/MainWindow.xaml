@@ -18,6 +18,12 @@
                                FontWeight="SemiBold"
                                AutomationProperties.Name="目前活動狀態"
                                Text="正在確認…" />
+                    <TextBlock x:Name="CyclePhaseText"
+                               Margin="0,4,0,0"
+                               FontSize="14"
+                               Foreground="#666666"
+                               AutomationProperties.Name="週期階段"
+                               Text="—" />
                 </StackPanel>
             </Border>
         </StackPanel>
