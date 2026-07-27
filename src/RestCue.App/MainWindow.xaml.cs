@@ -88,6 +88,10 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             {
                 workCycleTracker.Tick(sample.IdleDuration);
             }
+            else
+            {
+                workCycleTracker.TickActivityUnavailable();
+            }
 
             UpdateCycleStatus();
         }

@@ -362,6 +362,77 @@ public sealed class WorkCycleTrackerTests
         Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
     }
 
+    [Fact]
+    public void Unavailable_tick_in_Working_does_not_accumulate()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock, workInterval: TimeSpan.FromSeconds(60));
+
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(3));
+        tracker.Tick(TimeSpan.Zero);
+
+        var before = tracker.AccumulatedWorkTime;
+
+        tracker.TickActivityUnavailable();
+
+        Assert.Equal(before, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Unavailable_tick_in_Pending_does_not_trigger_natural_pause()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            naturalPause: TimeSpan.FromSeconds(5),
+            maxWait: TimeSpan.FromMinutes(3));
+
+        ReachPendingReminder(tracker, clock);
+
+        clock.Advance(TimeSpan.FromSeconds(6));
+        tracker.TickActivityUnavailable();
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Unavailable_tick_in_Pending_triggers_at_exact_max_wait()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            maxWait: TimeSpan.FromMinutes(3));
+
+        ReachPendingReminder(tracker, clock);
+
+        clock.Advance(TimeSpan.FromMinutes(3));
+        tracker.TickActivityUnavailable();
+
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Unavailable_tick_in_BreakInProgress_completes_and_resets()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            breakDuration: TimeSpan.FromSeconds(20));
+
+        ReachReminderVisible(tracker, clock);
+        tracker.StartBreak();
+        int fired = 0;
+        tracker.BreakCompleted += (_, _) => fired++;
+
+        clock.Advance(TimeSpan.FromSeconds(20));
+        tracker.TickActivityUnavailable();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+        Assert.Equal(1, fired);
+    }
+
     private static WorkCycleTracker CreateTracker(
         FakeClock? clock = null,
         TimeSpan? workInterval = null,

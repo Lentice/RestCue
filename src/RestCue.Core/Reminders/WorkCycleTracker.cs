@@ -76,6 +76,35 @@ public sealed class WorkCycleTracker
         }
     }
 
+    public void TickActivityUnavailable()
+    {
+        var now = clock.UtcNow;
+
+        switch (CurrentPhase)
+        {
+            case WorkCyclePhase.Working:
+                wasWorking = false;
+                lastTickUtc = now;
+                break;
+
+            case WorkCyclePhase.PendingReminder:
+                if (now - pendingSinceUtc!.Value >= maximumReminderWait)
+                {
+                    CurrentPhase = WorkCyclePhase.ReminderVisible;
+                    ReminderShown?.Invoke(this, EventArgs.Empty);
+                }
+                break;
+
+            case WorkCyclePhase.BreakInProgress:
+                if (now - breakStartUtc!.Value >= breakDuration)
+                {
+                    ResetCycle();
+                    BreakCompleted?.Invoke(this, EventArgs.Empty);
+                }
+                break;
+        }
+    }
+
     public void StartBreak()
     {
         if (CurrentPhase != WorkCyclePhase.ReminderVisible)
