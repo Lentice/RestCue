@@ -2,8 +2,8 @@
 
 此記錄可在 Windows 10/11 與 .NET 10 SDK 重現 Issue #1 的啟動、system tray 與退出驗收。
 
-> Issue #1 原始驗收條件寫為 .NET 8；repository 的 `AGENTS.md`、`global.json`、正式
-> product contract 與 CI 已統一採用 .NET 10 LTS，因此本 ticket 以 .NET 10 為準。
+> Repository 的 `AGENTS.md`、`global.json`、正式 product contract 與 CI
+> 皆以 .NET 10 LTS 為開發與驗證基準。
 
 ## Automated verification
 
