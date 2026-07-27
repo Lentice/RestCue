@@ -11,13 +11,14 @@ public sealed class WorkCycleTrackerTests
     private static readonly TimeSpan DefaultNaturalPause = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan DefaultMaxWait = TimeSpan.FromMinutes(3);
     private static readonly TimeSpan DefaultBreakDuration = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan DefaultPassiveBreak = TimeSpan.FromSeconds(20);
 
     [Fact]
     public void Constructor_throws_for_null_clock()
     {
         Assert.Throws<ArgumentNullException>(() => new WorkCycleTracker(
             null!, DefaultWorkInterval, DefaultIdleThreshold,
-            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration));
+            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration, DefaultPassiveBreak));
     }
 
     [Theory]
@@ -27,7 +28,7 @@ public sealed class WorkCycleTrackerTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new WorkCycleTracker(
             new FakeClock(), TimeSpan.FromSeconds(seconds), DefaultIdleThreshold,
-            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration));
+            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration, DefaultPassiveBreak));
     }
 
     [Fact]
@@ -433,13 +434,204 @@ public sealed class WorkCycleTrackerTests
         Assert.Equal(1, fired);
     }
 
+    [Fact]
+    public void Passive_break_in_PendingReminder_transitions_to_Working()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            passiveBreak: TimeSpan.FromSeconds(20));
+
+        ReachPendingReminder(tracker, clock);
+
+        clock.Advance(TimeSpan.FromSeconds(21));
+        tracker.Tick(TimeSpan.FromSeconds(21));
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Passive_break_in_ReminderVisible_transitions_to_Working()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            passiveBreak: TimeSpan.FromSeconds(20));
+
+        ReachReminderVisible(tracker, clock);
+        clock.Advance(TimeSpan.FromSeconds(25));
+
+        var passiveCompleted = false;
+        tracker.PassiveBreakCompleted += (_, _) => passiveCompleted = true;
+
+        tracker.Tick(TimeSpan.FromSeconds(25));
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.True(passiveCompleted);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Passive_break_in_PendingReminder_fires_separate_event()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            passiveBreak: TimeSpan.FromSeconds(20));
+
+        ReachPendingReminder(tracker, clock);
+
+        int passiveFired = 0;
+        int breakFired = 0;
+        tracker.PassiveBreakCompleted += (_, _) => passiveFired++;
+        tracker.BreakCompleted += (_, _) => breakFired++;
+
+        clock.Advance(TimeSpan.FromSeconds(21));
+        tracker.Tick(TimeSpan.FromSeconds(21));
+
+        Assert.Equal(1, passiveFired);
+        Assert.Equal(0, breakFired);
+    }
+
+    [Fact]
+    public void Passive_break_does_not_trigger_below_threshold_in_Pending()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            naturalPause: TimeSpan.FromSeconds(60),
+            passiveBreak: TimeSpan.FromSeconds(20));
+
+        ReachPendingReminder(tracker, clock);
+
+        clock.Advance(TimeSpan.FromSeconds(19));
+        tracker.Tick(TimeSpan.FromSeconds(19));
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Passive_break_does_not_trigger_in_Working_phase()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            passiveBreak: TimeSpan.FromSeconds(20));
+
+        tracker.Tick(TimeSpan.FromSeconds(25));
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Passive_break_does_not_trigger_in_BreakInProgress()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            passiveBreak: TimeSpan.FromSeconds(20),
+            breakDuration: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+        tracker.StartBreak();
+
+        int passiveFired = 0;
+        tracker.PassiveBreakCompleted += (_, _) => passiveFired++;
+
+        clock.Advance(TimeSpan.FromSeconds(25));
+        tracker.Tick(TimeSpan.FromSeconds(25));
+
+        Assert.Equal(0, passiveFired);
+        Assert.Equal(WorkCyclePhase.BreakInProgress, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Passive_break_at_exact_threshold_in_Pending()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            passiveBreak: TimeSpan.FromSeconds(20));
+
+        ReachPendingReminder(tracker, clock);
+
+        clock.Advance(TimeSpan.FromSeconds(20));
+        tracker.Tick(TimeSpan.FromSeconds(20));
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Passive_break_just_below_threshold_does_not_transition()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            naturalPause: TimeSpan.FromSeconds(60),
+            passiveBreak: TimeSpan.FromSeconds(20));
+
+        ReachPendingReminder(tracker, clock);
+
+        clock.Advance(TimeSpan.FromSeconds(20) - TimeSpan.FromMilliseconds(1));
+        tracker.Tick(TimeSpan.FromSeconds(20) - TimeSpan.FromMilliseconds(1));
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Passive_break_in_ReminderVisible_closes_reminder()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            passiveBreak: TimeSpan.FromSeconds(20));
+
+        ReachReminderVisible(tracker, clock);
+
+        clock.Advance(TimeSpan.FromSeconds(25));
+        tracker.Tick(TimeSpan.FromSeconds(25));
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Natural_pause_does_not_trigger_when_passive_break_threshold_met_first()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            naturalPause: TimeSpan.FromSeconds(3),
+            passiveBreak: TimeSpan.FromSeconds(20));
+
+        ReachPendingReminder(tracker, clock);
+
+        int reminderShown = 0;
+        tracker.ReminderShown += (_, _) => reminderShown++;
+
+        clock.Advance(TimeSpan.FromSeconds(25));
+        tracker.Tick(TimeSpan.FromSeconds(25));
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(0, reminderShown);
+    }
+
+    [Fact]
+    public void Constructor_throws_for_non_positive_passiveBreak()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new WorkCycleTracker(
+            new FakeClock(), DefaultWorkInterval, DefaultIdleThreshold,
+            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration, TimeSpan.Zero));
+    }
+
     private static WorkCycleTracker CreateTracker(
         FakeClock? clock = null,
         TimeSpan? workInterval = null,
         TimeSpan? idleThreshold = null,
         TimeSpan? naturalPause = null,
         TimeSpan? maxWait = null,
-        TimeSpan? breakDuration = null)
+        TimeSpan? breakDuration = null,
+        TimeSpan? passiveBreak = null)
     {
         return new WorkCycleTracker(
             clock ?? new FakeClock(),
@@ -447,7 +639,8 @@ public sealed class WorkCycleTrackerTests
             idleThreshold ?? DefaultIdleThreshold,
             naturalPause ?? DefaultNaturalPause,
             maxWait ?? DefaultMaxWait,
-            breakDuration ?? DefaultBreakDuration);
+            breakDuration ?? DefaultBreakDuration,
+            passiveBreak ?? DefaultPassiveBreak);
     }
 
     private static void ReachPendingReminder(

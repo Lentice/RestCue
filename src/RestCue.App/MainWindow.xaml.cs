@@ -43,10 +43,12 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             settings.IdleThreshold,
             settings.NaturalPauseThreshold,
             settings.MaximumReminderWait,
-            settings.BreakDuration);
+            settings.BreakDuration,
+            settings.PassiveBreakThreshold);
 
         workCycleTracker.ReminderShown += OnReminderShown;
         workCycleTracker.BreakCompleted += OnBreakCompleted;
+        workCycleTracker.PassiveBreakCompleted += OnPassiveBreakCompleted;
 
         RefreshActivityStatus(activityTracker.Refresh());
         activityTimer.Start();
@@ -134,6 +136,19 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             {
                 reminderWindow.CompleteBreak();
             }
+        });
+    }
+
+    private void OnPassiveBreakCompleted(object? sender, EventArgs e)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (reminderWindow != null)
+            {
+                reminderWindow.Close();
+                reminderWindow = null;
+            }
+            UpdateCycleStatus();
         });
     }
 

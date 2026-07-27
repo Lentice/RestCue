@@ -9,6 +9,7 @@ public sealed class WorkCycleTracker
     private readonly TimeSpan naturalPauseThreshold;
     private readonly TimeSpan maximumReminderWait;
     private readonly TimeSpan breakDuration;
+    private readonly TimeSpan passiveBreakThreshold;
 
     private DateTimeOffset? pendingSinceUtc;
     private DateTimeOffset? breakStartUtc;
@@ -23,7 +24,8 @@ public sealed class WorkCycleTracker
         TimeSpan idleThreshold,
         TimeSpan naturalPauseThreshold,
         TimeSpan maximumReminderWait,
-        TimeSpan breakDuration)
+        TimeSpan breakDuration,
+        TimeSpan passiveBreakThreshold)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ValidateThreshold(workInterval, nameof(workInterval));
@@ -31,6 +33,7 @@ public sealed class WorkCycleTracker
         ValidateThreshold(naturalPauseThreshold, nameof(naturalPauseThreshold));
         ValidateThreshold(maximumReminderWait, nameof(maximumReminderWait));
         ValidateThreshold(breakDuration, nameof(breakDuration));
+        ValidateThreshold(passiveBreakThreshold, nameof(passiveBreakThreshold));
 
         this.clock = clock;
         this.workInterval = workInterval;
@@ -38,6 +41,7 @@ public sealed class WorkCycleTracker
         this.naturalPauseThreshold = naturalPauseThreshold;
         this.maximumReminderWait = maximumReminderWait;
         this.breakDuration = breakDuration;
+        this.passiveBreakThreshold = passiveBreakThreshold;
     }
 
     public WorkCyclePhase CurrentPhase { get; private set; } = WorkCyclePhase.Working;
@@ -48,6 +52,7 @@ public sealed class WorkCycleTracker
 
     public event EventHandler? ReminderShown;
     public event EventHandler? BreakCompleted;
+    public event EventHandler? PassiveBreakCompleted;
 
     public void Tick(TimeSpan idleDuration)
     {
@@ -68,6 +73,7 @@ public sealed class WorkCycleTracker
                 break;
 
             case WorkCyclePhase.ReminderVisible:
+                TickReminderVisible(now, idleDuration);
                 break;
 
             case WorkCyclePhase.BreakInProgress:
@@ -142,7 +148,12 @@ public sealed class WorkCycleTracker
     {
         var elapsed = now - pendingSinceUtc!.Value;
 
-        if (idleDuration >= naturalPauseThreshold)
+        if (idleDuration >= passiveBreakThreshold)
+        {
+            ResetCycle();
+            PassiveBreakCompleted?.Invoke(this, EventArgs.Empty);
+        }
+        else if (idleDuration >= naturalPauseThreshold)
         {
             CurrentPhase = WorkCyclePhase.ReminderVisible;
             ReminderShown?.Invoke(this, EventArgs.Empty);
@@ -151,6 +162,15 @@ public sealed class WorkCycleTracker
         {
             CurrentPhase = WorkCyclePhase.ReminderVisible;
             ReminderShown?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private void TickReminderVisible(DateTimeOffset now, TimeSpan idleDuration)
+    {
+        if (idleDuration >= passiveBreakThreshold)
+        {
+            ResetCycle();
+            PassiveBreakCompleted?.Invoke(this, EventArgs.Empty);
         }
     }
 
