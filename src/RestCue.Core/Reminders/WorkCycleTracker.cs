@@ -1,3 +1,6 @@
+using RestCue.Core.Domain;
+using RestCue.Core.Events;
+using RestCue.Core.Policies;
 using RestCue.Core.Time;
 
 namespace RestCue.Core.Reminders;
@@ -27,12 +30,21 @@ public sealed class WorkCycleTracker
     private bool wasPassivePaused;
 
     private readonly TimeSpan workInterval;
+    private readonly TimeSpan debtLevel2Threshold;
+    private readonly TimeSpan debtLevel3Threshold;
+    private readonly TimeSpan debtLevel4Threshold;
     private TimeSpan effectiveWorkInterval;
+
+    private RestDebtLevel restDebtLevel;
 
     private bool isFullscreen;
     private bool isReminderSuppressed;
     private bool hasSuppressedReminder;
     private bool showTrayCue;
+
+    private static readonly TimeSpan DefaultDebtLevel2 = TimeSpan.FromMinutes(35);
+    private static readonly TimeSpan DefaultDebtLevel3 = TimeSpan.FromMinutes(45);
+    private static readonly TimeSpan DefaultDebtLevel4 = TimeSpan.FromMinutes(60);
 
     public WorkCycleTracker(
         IClock clock,
@@ -44,7 +56,10 @@ public sealed class WorkCycleTracker
         TimeSpan passiveBreakThreshold,
         TimeSpan snoozeDuration,
         TimeSpan reminderDisplayDuration,
-        TimeSpan retryCooldown)
+        TimeSpan retryCooldown,
+        TimeSpan debtLevel2 = default,
+        TimeSpan debtLevel3 = default,
+        TimeSpan debtLevel4 = default)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ValidateThreshold(workInterval, nameof(workInterval));
@@ -62,9 +77,18 @@ public sealed class WorkCycleTracker
                 nameof(passiveBreakThreshold), passiveBreakThreshold,
                 "Passive break threshold must be less than idle threshold.");
 
+        var l2 = debtLevel2 == default ? DefaultDebtLevel2 : debtLevel2;
+        var l3 = debtLevel3 == default ? DefaultDebtLevel3 : debtLevel3;
+        var l4 = debtLevel4 == default ? DefaultDebtLevel4 : debtLevel4;
+
+        DebtPolicy.ValidateThresholds(workInterval, l2, l3, l4);
+
         this.clock = clock;
         this.workInterval = workInterval;
         this.effectiveWorkInterval = workInterval;
+        this.debtLevel2Threshold = l2;
+        this.debtLevel3Threshold = l3;
+        this.debtLevel4Threshold = l4;
         this.idleThreshold = idleThreshold;
         this.naturalPauseThreshold = naturalPauseThreshold;
         this.maximumReminderWait = maximumReminderWait;
@@ -86,6 +110,10 @@ public sealed class WorkCycleTracker
     public TimeSpan RetryCooldown => retryCooldown;
 
     public DateTimeOffset? CooldownUntil => cooldownUntil;
+
+    public RestDebtLevel RestDebtLevel => restDebtLevel;
+
+    public event EventHandler<RestDebtLevelChangedEventArgs>? RestDebtLevelChanged;
 
     public void SetNextDebtDeadline(DateTimeOffset? deadline)
     {
@@ -120,6 +148,7 @@ public sealed class WorkCycleTracker
             CurrentPhase != WorkCyclePhase.Disabled)
         {
             AccumulateIfWorking(now, isWorking);
+            EvaluateDebtLevel();
         }
 
         switch (CurrentPhase)
@@ -583,6 +612,7 @@ public sealed class WorkCycleTracker
 
     private void EnterIdle()
     {
+        var previousLevel = restDebtLevel;
         CurrentPhase = WorkCyclePhase.Idle;
         AccumulatedWorkTime = TimeSpan.Zero;
         pendingSinceUtc = null;
@@ -594,6 +624,10 @@ public sealed class WorkCycleTracker
         wasPassivePaused = false;
         cooldownUntil = null;
         nextDebtDeadline = null;
+        restDebtLevel = RestDebtLevel.Level0;
+
+        if (previousLevel != RestDebtLevel.Level0)
+            RestDebtLevelChanged?.Invoke(this, new RestDebtLevelChangedEventArgs(previousLevel, RestDebtLevel.Level0));
     }
 
     private void EnterReminderVisible(DateTimeOffset now)
@@ -635,6 +669,7 @@ public sealed class WorkCycleTracker
 
     private void ResetCycle()
     {
+        var previousLevel = restDebtLevel;
         CurrentPhase = WorkCyclePhase.Working;
         AccumulatedWorkTime = TimeSpan.Zero;
         pendingSinceUtc = null;
@@ -649,6 +684,54 @@ public sealed class WorkCycleTracker
         showTrayCue = false;
         cooldownUntil = null;
         nextDebtDeadline = null;
+        restDebtLevel = RestDebtLevel.Level0;
+
+        if (previousLevel != RestDebtLevel.Level0)
+            RestDebtLevelChanged?.Invoke(this, new RestDebtLevelChangedEventArgs(previousLevel, RestDebtLevel.Level0));
+    }
+
+    private void EvaluateDebtLevel()
+    {
+        var newLevel = DebtPolicy.Evaluate(
+            AccumulatedWorkTime,
+            workInterval,
+            debtLevel2Threshold,
+            debtLevel3Threshold,
+            debtLevel4Threshold);
+
+        if (newLevel != restDebtLevel)
+        {
+            var previous = restDebtLevel;
+            restDebtLevel = newLevel;
+            RestDebtLevelChanged?.Invoke(this, new RestDebtLevelChangedEventArgs(previous, newLevel));
+            UpdateDebtDeadline();
+        }
+    }
+
+    private void UpdateDebtDeadline()
+    {
+        if (!cooldownUntil.HasValue)
+            return;
+
+        var nextThreshold = DebtPolicy.GetNextThreshold(
+            restDebtLevel,
+            workInterval,
+            debtLevel2Threshold,
+            debtLevel3Threshold,
+            debtLevel4Threshold);
+
+        if (nextThreshold.HasValue)
+        {
+            var remaining = nextThreshold.Value - AccumulatedWorkTime;
+            if (remaining > TimeSpan.Zero)
+                SetNextDebtDeadline(clock.UtcNow + remaining);
+            else
+                SetNextDebtDeadline(clock.UtcNow);
+        }
+        else
+        {
+            SetNextDebtDeadline(null);
+        }
     }
 
     private void ClearReminderState()

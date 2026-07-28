@@ -1,3 +1,4 @@
+using RestCue.Core.Domain;
 using RestCue.Core.Reminders;
 using RestCue.Core.Time;
 using Xunit;
@@ -570,6 +571,42 @@ public sealed class WorkCycleTrackerForegroundContextTests
         Assert.Equal(1, pauseFired);
         Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
         Assert.NotEqual(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void EffectiveWorkInterval_override_does_not_change_debt_level()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromMinutes(20),
+            naturalPause: TimeSpan.FromSeconds(60));
+
+        tracker.Tick(TimeSpan.Zero);
+
+        tracker.UpdateForegroundContext(
+            fullscreen: false,
+            suppressReminder: false,
+            showTrayCue: false,
+            effectiveWorkIntervalOverride: TimeSpan.FromMinutes(60));
+
+        int debtChanged = 0;
+        RestDebtLevel changedLevel = RestDebtLevel.Level0;
+        tracker.RestDebtLevelChanged += (_, args) =>
+        {
+            debtChanged++;
+            changedLevel = args.Current;
+        };
+
+        for (int i = 0; i < 25 * 60; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+
+        Assert.Equal(RestDebtLevel.Level1, tracker.RestDebtLevel);
+        Assert.Equal(1, debtChanged);
+        Assert.Equal(RestDebtLevel.Level1, changedLevel);
     }
 
     private static readonly TimeSpan DefaultRetryCooldown = TimeSpan.FromSeconds(1);

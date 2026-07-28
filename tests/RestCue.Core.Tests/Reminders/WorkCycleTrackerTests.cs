@@ -1,3 +1,5 @@
+using RestCue.Core.Domain;
+using RestCue.Core.Events;
 using RestCue.Core.Reminders;
 using RestCue.Core.Time;
 using Xunit;
@@ -711,6 +713,16 @@ public sealed class WorkCycleTrackerTests
             DefaultSnoozeDuration, DefaultReminderDisplayDuration, DefaultWorkInterval);
 
         Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Constructor_throws_when_debtLevel2_not_greater_than_workInterval()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new WorkCycleTracker(
+            new FakeClock(), DefaultWorkInterval, DefaultIdleThreshold,
+            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration, DefaultPassiveBreak,
+            DefaultSnoozeDuration, DefaultReminderDisplayDuration, DefaultRetryCooldown,
+            debtLevel2: DefaultWorkInterval));
     }
 
     [Fact]
@@ -2823,6 +2835,38 @@ public sealed class WorkCycleTrackerTests
     }
 
     [Fact]
+    public void Disable_preserves_debt_level_Enable_resets_to_Level0_with_event()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
+
+        for (int i = 0; i < 31; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+        Assert.Equal(RestDebtLevel.Level1, tracker.RestDebtLevel);
+
+        tracker.Disable();
+        Assert.Equal(RestDebtLevel.Level1, tracker.RestDebtLevel);
+
+        int fired = 0;
+        RestDebtLevel previous = RestDebtLevel.Level0;
+        tracker.RestDebtLevelChanged += (_, args) =>
+        {
+            previous = args.Previous;
+            fired++;
+        };
+
+        tracker.Enable();
+        Assert.Equal(RestDebtLevel.Level0, tracker.RestDebtLevel);
+        Assert.Equal(1, fired);
+        Assert.Equal(RestDebtLevel.Level1, previous);
+    }
+
+    [Fact]
     public void Resume_preserves_AccumulatedWorkTime()
     {
         var clock = new FakeClock();
@@ -2874,14 +2918,16 @@ public sealed class WorkCycleTrackerTests
             retryCooldown: TimeSpan.FromSeconds(30));
 
         ReachReminderVisible(tracker, clock);
+        Assert.Equal(RestDebtLevel.Level1, tracker.RestDebtLevel);
+
         tracker.Ignore();
         tracker.SetNextDebtDeadline(clock.UtcNow + TimeSpan.FromSeconds(15));
-        var before = clock.UtcNow + TimeSpan.FromSeconds(15);
 
         tracker.Pause();
         tracker.Resume();
 
         Assert.NotNull(tracker.CooldownUntil);
+        Assert.Equal(RestDebtLevel.Level1, tracker.RestDebtLevel);
     }
 
     [Fact]
@@ -3940,6 +3986,300 @@ public sealed class WorkCycleTrackerTests
 
         Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
         Assert.Null(tracker.CooldownUntil);
+    }
+
+    [Fact]
+    public void Starts_at_debt_Level0()
+    {
+        var tracker = CreateTracker();
+        Assert.Equal(RestDebtLevel.Level0, tracker.RestDebtLevel);
+    }
+
+    [Fact]
+    public void Debt_reaches_Level1_at_work_interval()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock, workInterval: TimeSpan.FromSeconds(30));
+
+        for (int i = 0; i < 31; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+
+        Assert.Equal(RestDebtLevel.Level1, tracker.RestDebtLevel);
+    }
+
+    [Fact]
+    public void Debt_fires_RestDebtLevelChanged_when_crossing_Level1()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock, workInterval: TimeSpan.FromSeconds(30));
+
+        RestDebtLevel previous = RestDebtLevel.Level0;
+        RestDebtLevel current = RestDebtLevel.Level0;
+        int fired = 0;
+        tracker.RestDebtLevelChanged += (_, args) =>
+        {
+            previous = args.Previous;
+            current = args.Current;
+            fired++;
+        };
+
+        for (int i = 0; i < 31; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+
+        Assert.Equal(1, fired);
+        Assert.Equal(RestDebtLevel.Level0, previous);
+        Assert.Equal(RestDebtLevel.Level1, current);
+    }
+
+    [Fact]
+    public void Debt_does_not_fire_event_when_level_unchanged()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock, workInterval: TimeSpan.FromSeconds(30));
+
+        ReachPendingReminder(tracker, clock);
+
+        int fired = 0;
+        tracker.RestDebtLevelChanged += (_, _) => fired++;
+
+        clock.Advance(TimeSpan.FromSeconds(5));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(0, fired);
+    }
+
+    [Fact]
+    public void Debt_resets_to_Level0_on_BreakCompleted_with_event()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30),
+            breakDuration: TimeSpan.FromSeconds(5));
+
+        ReachReminderVisible(tracker, clock);
+
+        Assert.Equal(RestDebtLevel.Level1, tracker.RestDebtLevel);
+
+        int fired = 0;
+        RestDebtLevel previous = RestDebtLevel.Level0;
+        RestDebtLevel current = RestDebtLevel.Level0;
+        tracker.RestDebtLevelChanged += (_, args) =>
+        {
+            previous = args.Previous;
+            current = args.Current;
+            fired++;
+        };
+
+        tracker.StartBreak();
+        clock.Advance(TimeSpan.FromSeconds(5));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(RestDebtLevel.Level0, tracker.RestDebtLevel);
+        Assert.Equal(1, fired);
+        Assert.Equal(RestDebtLevel.Level1, previous);
+        Assert.Equal(RestDebtLevel.Level0, current);
+    }
+
+    [Fact]
+    public void Debt_resets_to_Level0_on_Idle_with_event()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
+
+        ReachPendingReminder(tracker, clock);
+        Assert.Equal(RestDebtLevel.Level1, tracker.RestDebtLevel);
+
+        int fired = 0;
+        RestDebtLevel previous = RestDebtLevel.Level0;
+        tracker.RestDebtLevelChanged += (_, args) =>
+        {
+            previous = args.Previous;
+            fired++;
+        };
+
+        clock.Advance(DefaultIdleThreshold);
+        tracker.Tick(DefaultIdleThreshold);
+
+        Assert.Equal(RestDebtLevel.Level0, tracker.RestDebtLevel);
+        Assert.Equal(1, fired);
+        Assert.Equal(RestDebtLevel.Level1, previous);
+    }
+
+    [Fact]
+    public void Repeated_reset_at_Level0_emits_no_event()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+
+        Assert.Equal(RestDebtLevel.Level0, tracker.RestDebtLevel);
+
+        int fired = 0;
+        tracker.RestDebtLevelChanged += (_, _) => fired++;
+
+        clock.Advance(DefaultIdleThreshold);
+        tracker.Tick(DefaultIdleThreshold);
+        Assert.Equal(RestDebtLevel.Level0, tracker.RestDebtLevel);
+        Assert.Equal(0, fired);
+
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(RestDebtLevel.Level0, tracker.RestDebtLevel);
+        Assert.Equal(0, fired);
+    }
+
+    [Fact]
+    public void Large_clock_jump_fires_one_event_from_previous_to_final()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromMinutes(20),
+            breakDuration: TimeSpan.FromSeconds(20));
+
+        tracker.Tick(TimeSpan.Zero);
+
+        int fired = 0;
+        RestDebtLevel previous = RestDebtLevel.Level0;
+        RestDebtLevel current = RestDebtLevel.Level0;
+        tracker.RestDebtLevelChanged += (_, args) =>
+        {
+            previous = args.Previous;
+            current = args.Current;
+            fired++;
+        };
+
+        clock.Advance(TimeSpan.FromMinutes(65));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(1, fired);
+        Assert.Equal(RestDebtLevel.Level0, previous);
+        Assert.Equal(RestDebtLevel.Level4, current);
+        Assert.Equal(RestDebtLevel.Level4, tracker.RestDebtLevel);
+    }
+
+    [Fact]
+    public void Debt_reaches_Level2_at_exact_35_minutes()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromMinutes(20),
+            maxWait: TimeSpan.FromHours(2),
+            retryCooldown: TimeSpan.FromHours(2));
+
+        for (int i = 0; i < 35 * 60 + 1; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+        Assert.Equal(RestDebtLevel.Level2, tracker.RestDebtLevel);
+    }
+
+    [Fact]
+    public void Debt_reaches_Level3_at_exact_45_minutes()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromMinutes(20),
+            maxWait: TimeSpan.FromHours(2),
+            retryCooldown: TimeSpan.FromHours(2));
+
+        for (int i = 0; i < 45 * 60 + 1; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+        Assert.Equal(RestDebtLevel.Level3, tracker.RestDebtLevel);
+    }
+
+    [Fact]
+    public void Debt_sequential_Level0_to_Level1_to_Level2_fires_two_events()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromMinutes(20),
+            maxWait: TimeSpan.FromHours(2),
+            retryCooldown: TimeSpan.FromHours(2));
+
+        var events = new List<RestDebtLevelChangedEventArgs>();
+        tracker.RestDebtLevelChanged += (_, args) => events.Add(args);
+
+        for (int i = 0; i < 20 * 60 + 1; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+        Assert.Single(events);
+        Assert.Equal(RestDebtLevel.Level0, events[0].Previous);
+        Assert.Equal(RestDebtLevel.Level1, events[0].Current);
+
+        for (int i = 0; i < 15 * 60; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+        Assert.Equal(2, events.Count);
+        Assert.Equal(RestDebtLevel.Level1, events[1].Previous);
+        Assert.Equal(RestDebtLevel.Level2, events[1].Current);
+        Assert.Equal(RestDebtLevel.Level2, tracker.RestDebtLevel);
+    }
+
+    [Fact]
+    public void Debt_deadline_triggers_reminder_when_crossing_level_during_cooldown()
+    {
+        var clock = new FakeClock();
+        var tracker = new WorkCycleTracker(
+            clock,
+            workInterval: TimeSpan.FromSeconds(10),
+            idleThreshold: TimeSpan.FromHours(1),
+            naturalPauseThreshold: TimeSpan.FromSeconds(5),
+            maximumReminderWait: TimeSpan.FromHours(1),
+            breakDuration: TimeSpan.FromMinutes(10),
+            passiveBreakThreshold: TimeSpan.FromSeconds(30),
+            snoozeDuration: TimeSpan.FromMinutes(5),
+            reminderDisplayDuration: TimeSpan.FromSeconds(30),
+            retryCooldown: TimeSpan.FromSeconds(30),
+            debtLevel2: TimeSpan.FromSeconds(20),
+            debtLevel3: TimeSpan.FromHours(4),
+            debtLevel4: TimeSpan.FromHours(5));
+
+        for (int i = 0; i < 11; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+        Assert.Equal(RestDebtLevel.Level1, tracker.RestDebtLevel);
+
+        clock.Advance(TimeSpan.FromSeconds(6));
+        tracker.Tick(TimeSpan.FromSeconds(6));
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+
+        tracker.Ignore();
+
+        for (int i = 0; i < 10; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+        Assert.Equal(RestDebtLevel.Level2, tracker.RestDebtLevel);
+
+        for (int i = 0; i < 50; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
     }
 
     private sealed class FakeClock : IClock
