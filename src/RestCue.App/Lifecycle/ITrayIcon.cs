@@ -1,3 +1,5 @@
+using RestCue.Core.Domain;
+
 namespace RestCue.App.Lifecycle;
 
 public interface ITrayIcon : IDisposable
@@ -39,4 +41,6 @@ public interface ITrayIcon : IDisposable
     void SetBreakNowEnabled(bool enabled);
 
     void SetSuppressedState(bool isSuppressed);
+
+    void SetDebtLevel(RestDebtLevel level);
 }

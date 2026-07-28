@@ -640,7 +640,7 @@ public sealed class WorkCycleTrackerForegroundContextTests
         TimeSpan? reminderDisplayDuration = null,
         TimeSpan? retryCooldown = null)
     {
-        return new WorkCycleTracker(
+        var tracker = new WorkCycleTracker(
             clock ?? new FakeClock(),
             workInterval ?? DefaultWorkInterval,
             idleThreshold ?? DefaultIdleThreshold,
@@ -651,6 +651,8 @@ public sealed class WorkCycleTrackerForegroundContextTests
             snoozeDuration ?? DefaultSnoozeDuration,
             reminderDisplayDuration ?? DefaultReminderDisplayDuration,
             retryCooldown ?? DefaultRetryCooldown);
+        tracker.SetForceAllowPopup(true);
+        return tracker;
     }
 
     private static void ReachPendingReminder(

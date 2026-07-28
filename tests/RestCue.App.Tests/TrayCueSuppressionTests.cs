@@ -1,4 +1,5 @@
 using RestCue.App.Lifecycle;
+using RestCue.Core.Domain;
 using RestCue.Core.Reminders;
 using Xunit;
 
@@ -71,6 +72,8 @@ public sealed class TrayCueSuppressionTests
         public void SetSuppressedState(bool isSuppressed) => IsSuppressed = isSuppressed;
 
         public void SetStatusText(string text) => StatusText = text;
+
+        public void SetDebtLevel(RestDebtLevel level) { }
 
         public void Dispose() { }
         public void RequestOpen() => OpenRequested?.Invoke(this, EventArgs.Empty);

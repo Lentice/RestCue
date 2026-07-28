@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Windows;
 using RestCue.App.Lifecycle;
+using RestCue.Core.Domain;
+using RestCue.Core.Events;
 using RestCue.Core.Reminders;
 using RestCue.Core.Settings;
 using RestCue.Infrastructure.Activity;
@@ -14,6 +16,7 @@ public partial class App : System.Windows.Application
     private ApplicationStartup? _startup;
     private WindowsTrayIcon? _trayIcon;
     private MainWindow? _statusWindow;
+    private WorkCyclePhase _lastPhase;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -97,6 +100,7 @@ public partial class App : System.Windows.Application
         WireBreakNowCommand(_trayIcon, _statusWindow);
 
         _statusWindow.PhaseChanged += OnPhaseChanged;
+        _statusWindow.DebtLevelChanged += OnDebtLevelChanged;
         _statusWindow.LowInterruptionReminderRequested += (_, e) =>
         {
             if (e.ShowTrayCue)
@@ -112,7 +116,32 @@ public partial class App : System.Windows.Application
         };
     }
 
-    internal static void ApplyPhaseToTray(ITrayIcon tray, WorkCyclePhase phase)
+    internal static string GetStatusTextForPhase(WorkCyclePhase phase)
+    {
+        return phase switch
+        {
+            WorkCyclePhase.Paused => "RestCue – 已暫停",
+            WorkCyclePhase.FocusMode => "RestCue – 專注模式",
+            WorkCyclePhase.Disabled => "RestCue – 已停用",
+            WorkCyclePhase.Idle => "RestCue – 離開中",
+            WorkCyclePhase.BreakInProgress => "RestCue – 休息中",
+            _ => "RestCue – Eye Break Reminder"
+        };
+    }
+
+    internal static string GetStatusTextForDebtLevel(RestDebtLevel level)
+    {
+        return level switch
+        {
+            RestDebtLevel.Level1 => "RestCue – 輕微疲勞 (Level 1)",
+            RestDebtLevel.Level2 => "RestCue – 明顯疲勞 (Level 2)",
+            RestDebtLevel.Level3 => "RestCue – 需要休息 (Level 3)",
+            RestDebtLevel.Level4 => "RestCue – 急需休息 (Level 4)",
+            _ => "RestCue – 監視中 (Level 0)"
+        };
+    }
+
+    internal static void ApplyPhaseToTray(ITrayIcon tray, WorkCyclePhase phase, RestDebtLevel debtLevel)
     {
         tray.SetSuppressedState(false);
         tray.SetPauseText(false);
@@ -122,7 +151,8 @@ public partial class App : System.Windows.Application
         tray.SetDisableText(false);
         tray.SetDisableEnabled(true);
         tray.SetBreakNowEnabled(true);
-        tray.SetStatusText("RestCue – Eye Break Reminder");
+        tray.SetDebtLevel(debtLevel);
+        tray.SetStatusText(GetStatusTextForPhase(phase));
 
         switch (phase)
         {
@@ -151,19 +181,42 @@ public partial class App : System.Windows.Application
                 tray.SetPauseEnabled(false);
                 tray.SetFocusModeEnabled(false);
                 tray.SetBreakNowEnabled(false);
+                tray.SetStatusText("RestCue – 休息中");
                 break;
 
             case WorkCyclePhase.Idle:
                 tray.SetFocusModeEnabled(false);
                 tray.SetBreakNowEnabled(false);
+                tray.SetStatusText("RestCue – 離開中");
+                break;
+
+            case WorkCyclePhase.Working:
+            case WorkCyclePhase.PendingReminder:
+            case WorkCyclePhase.ReminderVisible:
+            case WorkCyclePhase.Snoozed:
+                tray.SetStatusText(GetStatusTextForDebtLevel(debtLevel));
                 break;
         }
     }
 
     private void OnPhaseChanged(object? sender, WorkCyclePhase phase)
     {
-        if (_trayIcon == null) return;
+        if (_trayIcon == null || _statusWindow == null) return;
 
-        ApplyPhaseToTray(_trayIcon, phase);
+        _lastPhase = phase;
+        ApplyPhaseToTray(_trayIcon, phase, _statusWindow.CurrentDebtLevel);
+    }
+
+    private void OnDebtLevelChanged(object? sender, RestDebtLevelChangedEventArgs e)
+    {
+        if (_trayIcon == null || _statusWindow == null) return;
+
+        _trayIcon.SetDebtLevel(e.Current);
+
+        if (_lastPhase is WorkCyclePhase.Working or WorkCyclePhase.PendingReminder
+            or WorkCyclePhase.ReminderVisible or WorkCyclePhase.Snoozed)
+        {
+            _trayIcon.SetStatusText(GetStatusTextForDebtLevel(e.Current));
+        }
     }
 }

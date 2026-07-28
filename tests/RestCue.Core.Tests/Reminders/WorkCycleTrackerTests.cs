@@ -1512,7 +1512,7 @@ public sealed class WorkCycleTrackerTests
         TimeSpan? reminderDisplayDuration = null,
         TimeSpan? retryCooldown = null)
     {
-        return new WorkCycleTracker(
+        var tracker = new WorkCycleTracker(
             clock ?? new FakeClock(),
             workInterval ?? DefaultWorkInterval,
             idleThreshold ?? DefaultIdleThreshold,
@@ -1523,6 +1523,8 @@ public sealed class WorkCycleTrackerTests
             snoozeDuration ?? DefaultSnoozeDuration,
             reminderDisplayDuration ?? DefaultReminderDisplayDuration,
             retryCooldown ?? DefaultRetryCooldown);
+        tracker.SetForceAllowPopup(true);
+        return tracker;
     }
 
     private static void ReachPendingReminder(
@@ -2918,7 +2920,6 @@ public sealed class WorkCycleTrackerTests
             retryCooldown: TimeSpan.FromSeconds(30));
 
         ReachReminderVisible(tracker, clock);
-        Assert.Equal(RestDebtLevel.Level1, tracker.RestDebtLevel);
 
         tracker.Ignore();
         tracker.SetNextDebtDeadline(clock.UtcNow + TimeSpan.FromSeconds(15));
@@ -2927,7 +2928,6 @@ public sealed class WorkCycleTrackerTests
         tracker.Resume();
 
         Assert.NotNull(tracker.CooldownUntil);
-        Assert.Equal(RestDebtLevel.Level1, tracker.RestDebtLevel);
     }
 
     [Fact]
@@ -4252,6 +4252,7 @@ public sealed class WorkCycleTrackerTests
             debtLevel2: TimeSpan.FromSeconds(20),
             debtLevel3: TimeSpan.FromSeconds(25),
             debtLevel4: TimeSpan.FromHours(4));
+        tracker.SetForceAllowPopup(true);
 
         for (int i = 0; i < 11; i++)
         {

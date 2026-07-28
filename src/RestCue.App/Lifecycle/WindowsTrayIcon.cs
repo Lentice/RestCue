@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Windows.Forms;
+using RestCue.Core.Domain;
 
 namespace RestCue.App.Lifecycle;
 
@@ -15,9 +16,14 @@ public sealed class WindowsTrayIcon : ITrayIcon
     private bool _isPaused;
     private bool _isFocusMode;
     private bool _isDisabled;
+    private RestDebtLevel _currentDebtLevel;
+    private bool _isSuppressed;
 
     private static readonly Icon NormalIcon = SystemIcons.Information;
     private static readonly Icon SuppressedIcon = SystemIcons.Exclamation;
+    private static readonly Icon Level1Icon = SystemIcons.Shield;
+    private static readonly Icon Level2Icon = SystemIcons.Warning;
+    private static readonly Icon Level4Icon = SystemIcons.Error;
 
     public WindowsTrayIcon()
     {
@@ -102,7 +108,36 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
     public void SetSuppressedState(bool isSuppressed)
     {
-        _notifyIcon.Icon = isSuppressed ? SuppressedIcon : NormalIcon;
+        _isSuppressed = isSuppressed;
+        _notifyIcon.Icon = GetIconForCurrentState();
+    }
+
+    public void SetDebtLevel(RestDebtLevel level)
+    {
+        _currentDebtLevel = level;
+        if (!_isSuppressed)
+        {
+            _notifyIcon.Icon = GetIconForDebtLevel(level);
+        }
+    }
+
+    private Icon GetIconForDebtLevel(RestDebtLevel level)
+    {
+        return level switch
+        {
+            RestDebtLevel.Level1 => Level1Icon,
+            RestDebtLevel.Level2 => Level2Icon,
+            RestDebtLevel.Level3 => SuppressedIcon,
+            RestDebtLevel.Level4 => Level4Icon,
+            _ => NormalIcon
+        };
+    }
+
+    private Icon GetIconForCurrentState()
+    {
+        if (_isSuppressed)
+            return SuppressedIcon;
+        return GetIconForDebtLevel(_currentDebtLevel);
     }
 
     private void TogglePause(object? sender, EventArgs e)

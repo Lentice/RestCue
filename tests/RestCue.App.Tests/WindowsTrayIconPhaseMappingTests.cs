@@ -1,5 +1,6 @@
 using System.Reflection;
 using RestCue.App.Lifecycle;
+using RestCue.Core.Domain;
 using RestCue.Core.Reminders;
 using Xunit;
 
@@ -25,7 +26,7 @@ public sealed class WindowsTrayIconPhaseMappingTests
     {
         var tray = new FakeTrayIcon();
 
-        App.ApplyPhaseToTray(tray, phase);
+        App.ApplyPhaseToTray(tray, phase, RestDebtLevel.Level0);
 
         Assert.Equal(expectPauseEnabled, tray.PauseEnabled);
         Assert.Equal(expectFocusEnabled, tray.FocusModeEnabled);
@@ -45,7 +46,7 @@ public sealed class WindowsTrayIconPhaseMappingTests
     public void DisableCommand_AlwaysEnabled(WorkCyclePhase phase)
     {
         var tray = new FakeTrayIcon();
-        App.ApplyPhaseToTray(tray, phase);
+        App.ApplyPhaseToTray(tray, phase, RestDebtLevel.Level0);
         Assert.True(tray.DisableEnabled);
     }
 
@@ -55,7 +56,7 @@ public sealed class WindowsTrayIconPhaseMappingTests
         var tray = new FakeTrayIcon();
         tray.SetSuppressedState(true);
 
-        App.ApplyPhaseToTray(tray, WorkCyclePhase.Paused);
+        App.ApplyPhaseToTray(tray, WorkCyclePhase.Paused, RestDebtLevel.Level0);
 
         Assert.False(tray.IsSuppressed);
         Assert.Equal("RestCue – 已暫停", tray.StatusText);
@@ -70,7 +71,7 @@ public sealed class WindowsTrayIconPhaseMappingTests
         var tray = new FakeTrayIcon();
         tray.SetSuppressedState(true);
 
-        App.ApplyPhaseToTray(tray, WorkCyclePhase.FocusMode);
+        App.ApplyPhaseToTray(tray, WorkCyclePhase.FocusMode, RestDebtLevel.Level0);
 
         Assert.False(tray.IsSuppressed);
         Assert.Equal("RestCue – 專注模式", tray.StatusText);
@@ -248,6 +249,8 @@ public sealed class WindowsTrayIconPhaseMappingTests
         public void SetStatusText(string text) => StatusText = text;
 
         public void SetSuppressedState(bool isSuppressed) => IsSuppressed = isSuppressed;
+
+        public void SetDebtLevel(RestDebtLevel level) { }
     }
 }
 

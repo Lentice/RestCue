@@ -42,6 +42,10 @@ public sealed class WorkCycleTracker
     private bool hasSuppressedReminder;
     private bool showTrayCue;
 
+    private PresentationIntensity _contextCap = PresentationIntensityPolicy.DefaultContextCap;
+    private PresentationIntensity _userCap = PresentationIntensityPolicy.DefaultUserCap;
+    private bool _forceAllowPopup;
+
     private static readonly TimeSpan DefaultDebtLevel2 = TimeSpan.FromMinutes(35);
     private static readonly TimeSpan DefaultDebtLevel3 = TimeSpan.FromMinutes(45);
     private static readonly TimeSpan DefaultDebtLevel4 = TimeSpan.FromMinutes(60);
@@ -118,6 +122,45 @@ public sealed class WorkCycleTracker
     public void SetNextDebtDeadline(DateTimeOffset? deadline)
     {
         nextDebtDeadline = cooldownUntil.HasValue ? deadline : null;
+    }
+
+    public void SetForceAllowPopup(bool force)
+    {
+        _forceAllowPopup = force;
+    }
+
+    public void SetIntensityCaps(PresentationIntensity contextCap, PresentationIntensity userCap)
+    {
+        var oldEffective = GetEffectiveIntensity();
+        _contextCap = Enum.IsDefined(contextCap) ? contextCap : PresentationIntensityPolicy.DefaultContextCap;
+        _userCap = Enum.IsDefined(userCap) ? userCap : PresentationIntensityPolicy.DefaultUserCap;
+
+        if (hasSuppressedReminder)
+        {
+            var newEffective = GetEffectiveIntensity();
+            if (newEffective >= PresentationIntensity.EdgePopup && oldEffective < PresentationIntensity.EdgePopup)
+            {
+                hasSuppressedReminder = false;
+                showTrayCue = false;
+                EnterReminderVisible(clock.UtcNow);
+            }
+            else
+            {
+                bool oldCue = oldEffective >= PresentationIntensity.TrayOnly;
+                bool newCue = newEffective >= PresentationIntensity.TrayOnly;
+                if (newCue != oldCue)
+                {
+                    showTrayCue = newCue;
+                    ReminderSuppressed?.Invoke(this, new ReminderSuppressedEventArgs(newCue));
+                }
+            }
+        }
+    }
+
+    private PresentationIntensity GetEffectiveIntensity()
+    {
+        var debtRec = PresentationIntensityPolicy.GetDebtRecommendation(restDebtLevel);
+        return PresentationIntensityPolicy.Effective(debtRec, _contextCap, _userCap);
     }
 
     public event EventHandler? ReminderShown;
@@ -634,6 +677,23 @@ public sealed class WorkCycleTracker
     {
         cooldownUntil = null;
         nextDebtDeadline = null;
+
+        if (!_forceAllowPopup)
+        {
+            var effective = GetEffectiveIntensity();
+
+            if (effective < PresentationIntensity.EdgePopup)
+            {
+                bool showCue = effective >= PresentationIntensity.TrayOnly;
+                if (!hasSuppressedReminder || showTrayCue != showCue)
+                {
+                    showTrayCue = showCue;
+                    hasSuppressedReminder = true;
+                    ReminderSuppressed?.Invoke(this, new ReminderSuppressedEventArgs(showCue));
+                }
+                return;
+            }
+        }
 
         if (isReminderSuppressed)
         {

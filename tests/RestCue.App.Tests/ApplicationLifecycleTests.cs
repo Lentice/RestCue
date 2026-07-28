@@ -1,4 +1,6 @@
 using RestCue.App.Lifecycle;
+using RestCue.Core.Domain;
+using RestCue.Core.Events;
 using Xunit;
 
 namespace RestCue.App.Tests;
@@ -160,6 +162,8 @@ public sealed class ApplicationLifecycleTests
         public void SetSuppressedState(bool isSuppressed)
         {
         }
+
+        public void SetDebtLevel(RestDebtLevel level) { }
     }
 
     [Fact]
@@ -196,6 +200,12 @@ public sealed class ApplicationLifecycleTests
 
     private sealed class FakeStatusWindow : IStatusWindow
     {
+#pragma warning disable CS0067
+        public event EventHandler<RestDebtLevelChangedEventArgs>? DebtLevelChanged;
+#pragma warning restore CS0067
+
+        public RestDebtLevel CurrentDebtLevel => RestDebtLevel.Level0;
+
         public int ShowOrActivateCount { get; private set; }
 
         public int StartBreakNowCount { get; private set; }

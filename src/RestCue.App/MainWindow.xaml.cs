@@ -4,6 +4,9 @@ using System.Windows.Threading;
 using Microsoft.Win32;
 using RestCue.App.Lifecycle;
 using RestCue.Core.Activity;
+using RestCue.Core.Domain;
+using RestCue.Core.Events;
+using RestCue.Core.Policies;
 using RestCue.Core.Reminders;
 using RestCue.Core.Settings;
 using RestCue.Core.Time;
@@ -34,6 +37,9 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
     public event EventHandler<WorkCyclePhase>? PhaseChanged;
     public event EventHandler<ReminderSuppressedEventArgs>? LowInterruptionReminderRequested;
+    public event EventHandler<RestDebtLevelChangedEventArgs>? DebtLevelChanged;
+
+    public RestDebtLevel CurrentDebtLevel { get; private set; }
 
     public void WireLifecycleEvents()
     {
@@ -86,6 +92,9 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         workCycleTracker.FocusModeEnded += OnFocusModeEnded;
         workCycleTracker.Disabled += OnDisabled;
         workCycleTracker.Enabled += OnEnabled;
+        workCycleTracker.RestDebtLevelChanged += OnRestDebtLevelChanged;
+
+        CurrentDebtLevel = workCycleTracker.RestDebtLevel;
 
         RefreshActivityStatus(activityTracker.Refresh());
         activityTimer.Start();
@@ -108,6 +117,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             workCycleTracker.FocusModeEnded -= OnFocusModeEnded;
             workCycleTracker.Disabled -= OnDisabled;
             workCycleTracker.Enabled -= OnEnabled;
+            workCycleTracker.RestDebtLevelChanged -= OnRestDebtLevelChanged;
         }
     }
 
@@ -325,6 +335,12 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         var context = foregroundContextProvider.GetCurrentContext();
         var rule = applicationRules?.Find(context.ProcessName);
         bool windowSuppression = context.FullscreenState != FullscreenState.NotFullscreen;
+
+        var fsCap = PresentationIntensityPolicy.FromFullscreenState(context.FullscreenState);
+        var ruleCap = PresentationIntensityPolicy.FromApplicationRuleType(rule?.RuleType ?? ApplicationRuleType.Normal);
+        var combinedCap = (PresentationIntensity)Math.Min((int)fsCap, (int)ruleCap);
+        workCycleTracker.SetIntensityCaps(combinedCap, PresentationIntensityPolicy.DefaultUserCap);
+
         workCycleTracker.UpdateForegroundContext(
             windowSuppression,
             rule?.IsSuppressingReminder ?? false,
@@ -440,6 +456,16 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     private void OnEnabled(object? sender, EventArgs e)
     {
         Dispatcher.Invoke(UpdateCycleStatus);
+    }
+
+    private void OnRestDebtLevelChanged(object? sender, RestDebtLevelChangedEventArgs e)
+    {
+        CurrentDebtLevel = e.Current;
+        Dispatcher.Invoke(() =>
+        {
+            DebtLevelChanged?.Invoke(this, e);
+            UpdateCycleStatus();
+        });
     }
 
     private void RefreshActivityStatus(UserActivityStatus status)
