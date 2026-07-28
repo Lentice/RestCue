@@ -2137,11 +2137,56 @@ public sealed class WorkCycleTrackerTests
         Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
     }
 
+    [Fact]
+    public void Pause_from_Snoozed_preserves_Need_and_abandons_snooze()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30),
+            snoozeDuration: TimeSpan.FromMinutes(5));
+
+        ReachReminderVisible(tracker, clock);
+        var need = tracker.AccumulatedWorkTime;
+        Assert.NotEqual(TimeSpan.Zero, need);
+
+        tracker.Snooze();
+        Assert.Equal(WorkCyclePhase.Snoozed, tracker.CurrentPhase);
+
+        int reminderShown = 0;
+        tracker.ReminderShown += (_, _) => reminderShown++;
+
+        tracker.Pause();
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+        Assert.Equal(need, tracker.AccumulatedWorkTime);
+
+        clock.Advance(TimeSpan.FromMinutes(10));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+        Assert.Equal(need, tracker.AccumulatedWorkTime);
+        Assert.Equal(0, reminderShown);
+
+        tracker.Resume();
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(need, tracker.AccumulatedWorkTime);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.Equal(0, reminderShown);
+
+        clock.Advance(TimeSpan.FromSeconds(6));
+        tracker.Tick(TimeSpan.FromSeconds(6));
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+        Assert.Equal(1, reminderShown);
+    }
+
     [Theory]
     [InlineData(WorkCyclePhase.Paused)]
     [InlineData(WorkCyclePhase.FocusMode)]
     [InlineData(WorkCyclePhase.Disabled)]
     [InlineData(WorkCyclePhase.BreakInProgress)]
+    [InlineData(WorkCyclePhase.Idle)]
     public void Pause_throws_from_invalid_phases(WorkCyclePhase phase)
     {
         var clock = new FakeClock();
@@ -2162,6 +2207,12 @@ public sealed class WorkCycleTrackerTests
                 break;
             case WorkCyclePhase.Disabled:
                 tracker.Disable();
+                break;
+            case WorkCyclePhase.Idle:
+                tracker.Snooze();
+                clock.Advance(TimeSpan.FromMinutes(3));
+                tracker.Tick(TimeSpan.FromMinutes(3));
+                Assert.Equal(WorkCyclePhase.Idle, tracker.CurrentPhase);
                 break;
         }
 
@@ -2268,6 +2319,159 @@ public sealed class WorkCycleTrackerTests
         tracker.StartFocusMode();
 
         Assert.Equal(WorkCyclePhase.FocusMode, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void FocusMode_from_ReminderVisible_accumulates_and_ends_at_most_Pending()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+        var needBefore = tracker.AccumulatedWorkTime;
+        Assert.NotEqual(TimeSpan.Zero, needBefore);
+
+        int reminderShown = 0;
+        tracker.ReminderShown += (_, _) => reminderShown++;
+
+        tracker.StartFocusMode();
+        Assert.Equal(WorkCyclePhase.FocusMode, tracker.CurrentPhase);
+        Assert.Equal(needBefore, tracker.AccumulatedWorkTime);
+        Assert.Equal(0, reminderShown);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(needBefore + TimeSpan.FromSeconds(10), tracker.AccumulatedWorkTime);
+        Assert.Equal(0, reminderShown);
+
+        tracker.EndFocusMode();
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.Equal(0, reminderShown);
+
+        clock.Advance(TimeSpan.FromSeconds(6));
+        tracker.Tick(TimeSpan.FromSeconds(6));
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+        Assert.Equal(1, reminderShown);
+    }
+
+    [Fact]
+    public void FocusMode_from_Snoozed_abandons_snooze_and_accumulates()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30),
+            snoozeDuration: TimeSpan.FromMinutes(5));
+
+        ReachReminderVisible(tracker, clock);
+        var needBefore = tracker.AccumulatedWorkTime;
+        tracker.Snooze();
+        Assert.Equal(WorkCyclePhase.Snoozed, tracker.CurrentPhase);
+
+        int reminderShown = 0;
+        tracker.ReminderShown += (_, _) => reminderShown++;
+
+        tracker.StartFocusMode();
+        Assert.Equal(WorkCyclePhase.FocusMode, tracker.CurrentPhase);
+        Assert.Equal(needBefore, tracker.AccumulatedWorkTime);
+        Assert.Equal(0, reminderShown);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromMinutes(10));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(needBefore + TimeSpan.FromMinutes(10), tracker.AccumulatedWorkTime);
+        Assert.Equal(0, reminderShown);
+
+        tracker.EndFocusMode();
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.Equal(0, reminderShown);
+
+        clock.Advance(TimeSpan.FromSeconds(6));
+        tracker.Tick(TimeSpan.FromSeconds(6));
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+        Assert.Equal(1, reminderShown);
+    }
+
+    [Fact]
+    public void Pause_clears_stale_suppressed_so_unsuppress_after_resume_uses_normal_timing()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(5),
+            naturalPause: TimeSpan.FromSeconds(3),
+            maxWait: TimeSpan.FromSeconds(60));
+
+        ReachPendingReminder(tracker, clock);
+        tracker.UpdateForegroundContext(true, true, false, null);
+
+        clock.Advance(TimeSpan.FromSeconds(6));
+        tracker.Tick(TimeSpan.FromSeconds(6));
+
+        tracker.Pause();
+
+        tracker.Resume();
+        clock.Advance(TimeSpan.FromSeconds(1));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+
+        int reminderShown = 0;
+        tracker.ReminderShown += (_, _) => reminderShown++;
+
+        tracker.UpdateForegroundContext(false, false, false, null);
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.Equal(0, reminderShown);
+
+        clock.Advance(TimeSpan.FromSeconds(6));
+        tracker.Tick(TimeSpan.FromSeconds(6));
+
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+        Assert.Equal(1, reminderShown);
+    }
+
+    [Fact]
+    public void FocusMode_clears_stale_suppressed_so_unsuppress_after_end_uses_normal_timing()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(5),
+            naturalPause: TimeSpan.FromSeconds(3),
+            maxWait: TimeSpan.FromSeconds(60));
+
+        ReachPendingReminder(tracker, clock);
+        tracker.UpdateForegroundContext(true, true, false, null);
+
+        clock.Advance(TimeSpan.FromSeconds(6));
+        tracker.Tick(TimeSpan.FromSeconds(6));
+
+        tracker.StartFocusMode();
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        tracker.Tick(TimeSpan.Zero);
+
+        tracker.EndFocusMode();
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+
+        int reminderShown = 0;
+        tracker.ReminderShown += (_, _) => reminderShown++;
+
+        tracker.UpdateForegroundContext(false, false, false, null);
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.Equal(0, reminderShown);
+
+        clock.Advance(TimeSpan.FromSeconds(6));
+        tracker.Tick(TimeSpan.FromSeconds(6));
+
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+        Assert.Equal(1, reminderShown);
     }
 
     [Theory]
@@ -2396,6 +2600,57 @@ public sealed class WorkCycleTrackerTests
         tracker.Tick(TimeSpan.Zero);
 
         Assert.Equal(TimeSpan.FromSeconds(20), tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void FocusMode_at_Idle_threshold_enters_Idle_and_resets_Need()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30),
+            idleThreshold: TimeSpan.FromSeconds(10),
+            passiveBreak: TimeSpan.FromSeconds(5));
+
+        tracker.Tick(TimeSpan.Zero);
+        tracker.StartFocusMode();
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(5));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.NotEqual(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        tracker.Tick(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(WorkCyclePhase.Idle, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void EndFocusMode_at_exact_work_interval_enters_one_PendingReminder()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
+
+        tracker.Tick(TimeSpan.Zero);
+        tracker.StartFocusMode();
+        tracker.Tick(TimeSpan.Zero);
+        for (int i = 0; i < 30; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+
+        int reminderShownCount = 0;
+        tracker.ReminderShown += (_, _) => reminderShownCount++;
+
+        tracker.EndFocusMode();
+
+        Assert.Equal(TimeSpan.FromSeconds(30), tracker.AccumulatedWorkTime);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.Equal(0, reminderShownCount);
     }
 
     [Fact]

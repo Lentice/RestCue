@@ -129,10 +129,9 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     public void Pause()
     {
         if (workCycleTracker == null) return;
-        CloseReminderIfOpen();
         try
         {
-            workCycleTracker.Pause();
+            App.ExecutePause(workCycleTracker, CloseReminderIfOpen);
             UpdateCycleStatus();
         }
         catch (InvalidOperationException)
@@ -156,10 +155,9 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     public void StartFocusMode()
     {
         if (workCycleTracker == null) return;
-        CloseReminderIfOpen();
         try
         {
-            workCycleTracker.StartFocusMode();
+            App.ExecuteStartFocusMode(workCycleTracker, CloseReminderIfOpen);
             UpdateCycleStatus();
         }
         catch (InvalidOperationException)

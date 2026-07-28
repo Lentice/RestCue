@@ -153,6 +153,10 @@ public sealed class WorkCycleTracker
                 break;
 
             case WorkCyclePhase.FocusMode:
+                if (!isWorking)
+                {
+                    EnterIdle();
+                }
                 break;
         }
     }
@@ -273,7 +277,8 @@ public sealed class WorkCycleTracker
 
     public void Pause()
     {
-        if (CurrentPhase is WorkCyclePhase.Paused or WorkCyclePhase.FocusMode or WorkCyclePhase.Disabled or WorkCyclePhase.BreakInProgress)
+        if (CurrentPhase is not (WorkCyclePhase.Working or WorkCyclePhase.PendingReminder
+            or WorkCyclePhase.ReminderVisible or WorkCyclePhase.Snoozed))
             throw new InvalidOperationException(
                 $"Cannot pause from phase {CurrentPhase}.");
 
@@ -655,6 +660,7 @@ public sealed class WorkCycleTracker
         lastTickUtc = null;
         wasWorking = false;
         wasPassivePaused = false;
+        hasSuppressedReminder = false;
     }
 
     private static DateTimeOffset? EarlierOf(DateTimeOffset? a, DateTimeOffset? b)

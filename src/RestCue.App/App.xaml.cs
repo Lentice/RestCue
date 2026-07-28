@@ -67,16 +67,33 @@ public partial class App : System.Windows.Application
         trayIcon.BreakNowRequested += (_, _) => statusWindow.StartBreakNow();
     }
 
+    internal static void WireModeCommands(ITrayIcon trayIcon, IStatusWindow statusWindow)
+    {
+        trayIcon.PauseRequested += (_, _) => statusWindow.Pause();
+        trayIcon.ResumeRequested += (_, _) => statusWindow.Resume();
+        trayIcon.FocusModeRequested += (_, _) => statusWindow.StartFocusMode();
+        trayIcon.EndFocusModeRequested += (_, _) => statusWindow.EndFocusMode();
+        trayIcon.DisableRequested += (_, _) => statusWindow.Disable();
+        trayIcon.EnableRequested += (_, _) => statusWindow.Enable();
+    }
+
+    internal static void ExecutePause(WorkCycleTracker tracker, Action closeReminder)
+    {
+        closeReminder();
+        tracker.Pause();
+    }
+
+    internal static void ExecuteStartFocusMode(WorkCycleTracker tracker, Action closeReminder)
+    {
+        closeReminder();
+        tracker.StartFocusMode();
+    }
+
     private void WireTrayCommands()
     {
         if (_trayIcon == null || _statusWindow == null) return;
 
-        _trayIcon.PauseRequested += (_, _) => _statusWindow.Pause();
-        _trayIcon.ResumeRequested += (_, _) => _statusWindow.Resume();
-        _trayIcon.FocusModeRequested += (_, _) => _statusWindow.StartFocusMode();
-        _trayIcon.EndFocusModeRequested += (_, _) => _statusWindow.EndFocusMode();
-        _trayIcon.DisableRequested += (_, _) => _statusWindow.Disable();
-        _trayIcon.EnableRequested += (_, _) => _statusWindow.Enable();
+        WireModeCommands(_trayIcon, _statusWindow);
         WireBreakNowCommand(_trayIcon, _statusWindow);
 
         _statusWindow.PhaseChanged += OnPhaseChanged;
@@ -95,53 +112,58 @@ public partial class App : System.Windows.Application
         };
     }
 
-    private void OnPhaseChanged(object? sender, WorkCyclePhase phase)
+    internal static void ApplyPhaseToTray(ITrayIcon tray, WorkCyclePhase phase)
     {
-        if (_trayIcon == null) return;
-
-        _trayIcon.SetSuppressedState(false);
-        _trayIcon.SetPauseText(false);
-        _trayIcon.SetPauseEnabled(true);
-        _trayIcon.SetFocusModeText(false);
-        _trayIcon.SetFocusModeEnabled(true);
-        _trayIcon.SetDisableText(false);
-        _trayIcon.SetDisableEnabled(true);
-        _trayIcon.SetBreakNowEnabled(true);
-        _trayIcon.SetStatusText("RestCue – Eye Break Reminder");
+        tray.SetSuppressedState(false);
+        tray.SetPauseText(false);
+        tray.SetPauseEnabled(true);
+        tray.SetFocusModeText(false);
+        tray.SetFocusModeEnabled(true);
+        tray.SetDisableText(false);
+        tray.SetDisableEnabled(true);
+        tray.SetBreakNowEnabled(true);
+        tray.SetStatusText("RestCue – Eye Break Reminder");
 
         switch (phase)
         {
             case WorkCyclePhase.Paused:
-                _trayIcon.SetPauseText(true);
-                _trayIcon.SetFocusModeEnabled(false);
-                _trayIcon.SetBreakNowEnabled(false);
-                _trayIcon.SetStatusText("RestCue – 已暫停");
+                tray.SetPauseText(true);
+                tray.SetFocusModeEnabled(false);
+                tray.SetBreakNowEnabled(false);
+                tray.SetStatusText("RestCue – 已暫停");
                 break;
 
             case WorkCyclePhase.FocusMode:
-                _trayIcon.SetFocusModeText(true);
-                _trayIcon.SetPauseEnabled(false);
-                _trayIcon.SetStatusText("RestCue – 專注模式");
+                tray.SetFocusModeText(true);
+                tray.SetPauseEnabled(false);
+                tray.SetStatusText("RestCue – 專注模式");
                 break;
 
             case WorkCyclePhase.Disabled:
-                _trayIcon.SetDisableText(true);
-                _trayIcon.SetPauseEnabled(false);
-                _trayIcon.SetFocusModeEnabled(false);
-                _trayIcon.SetBreakNowEnabled(false);
-                _trayIcon.SetStatusText("RestCue – 已停用");
+                tray.SetDisableText(true);
+                tray.SetPauseEnabled(false);
+                tray.SetFocusModeEnabled(false);
+                tray.SetBreakNowEnabled(false);
+                tray.SetStatusText("RestCue – 已停用");
                 break;
 
             case WorkCyclePhase.BreakInProgress:
-                _trayIcon.SetPauseEnabled(false);
-                _trayIcon.SetFocusModeEnabled(false);
-                _trayIcon.SetBreakNowEnabled(false);
+                tray.SetPauseEnabled(false);
+                tray.SetFocusModeEnabled(false);
+                tray.SetBreakNowEnabled(false);
                 break;
 
             case WorkCyclePhase.Idle:
-                _trayIcon.SetFocusModeEnabled(false);
-                _trayIcon.SetBreakNowEnabled(false);
+                tray.SetFocusModeEnabled(false);
+                tray.SetBreakNowEnabled(false);
                 break;
         }
+    }
+
+    private void OnPhaseChanged(object? sender, WorkCyclePhase phase)
+    {
+        if (_trayIcon == null) return;
+
+        ApplyPhaseToTray(_trayIcon, phase);
     }
 }

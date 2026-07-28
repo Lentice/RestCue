@@ -117,6 +117,18 @@ public sealed class ApplicationLifecycleTests
 
         public void RequestBreakNow() => BreakNowRequested?.Invoke(this, EventArgs.Empty);
 
+        public void RequestPause() => PauseRequested?.Invoke(this, EventArgs.Empty);
+
+        public void RequestResume() => ResumeRequested?.Invoke(this, EventArgs.Empty);
+
+        public void RequestFocusMode() => FocusModeRequested?.Invoke(this, EventArgs.Empty);
+
+        public void RequestEndFocusMode() => EndFocusModeRequested?.Invoke(this, EventArgs.Empty);
+
+        public void RequestDisable() => DisableRequested?.Invoke(this, EventArgs.Empty);
+
+        public void RequestEnable() => EnableRequested?.Invoke(this, EventArgs.Empty);
+
         public void Dispose() => IsDisposed = true;
 
         public void SetPauseEnabled(bool enabled) => PauseEnabled = enabled;
@@ -160,14 +172,60 @@ public sealed class ApplicationLifecycleTests
         Assert.Equal(1, window.StartBreakNowCount);
     }
 
+    [Fact]
+    public void WireModeCommands_binds_all_six_events()
+    {
+        var tray = new FakeTrayIcon();
+        var window = new FakeStatusWindow();
+        App.WireModeCommands(tray, window);
+
+        tray.RequestPause();
+        tray.RequestResume();
+        tray.RequestFocusMode();
+        tray.RequestEndFocusMode();
+        tray.RequestDisable();
+        tray.RequestEnable();
+
+        Assert.Equal(1, window.PauseCount);
+        Assert.Equal(1, window.ResumeCount);
+        Assert.Equal(1, window.StartFocusModeCount);
+        Assert.Equal(1, window.EndFocusModeCount);
+        Assert.Equal(1, window.DisableCount);
+        Assert.Equal(1, window.EnableCount);
+    }
+
     private sealed class FakeStatusWindow : IStatusWindow
     {
         public int ShowOrActivateCount { get; private set; }
 
         public int StartBreakNowCount { get; private set; }
 
+        public int PauseCount { get; private set; }
+
+        public int ResumeCount { get; private set; }
+
+        public int StartFocusModeCount { get; private set; }
+
+        public int EndFocusModeCount { get; private set; }
+
+        public int DisableCount { get; private set; }
+
+        public int EnableCount { get; private set; }
+
         public void ShowOrActivate() => ShowOrActivateCount++;
 
         public void StartBreakNow() => StartBreakNowCount++;
+
+        public void Pause() => PauseCount++;
+
+        public void Resume() => ResumeCount++;
+
+        public void StartFocusMode() => StartFocusModeCount++;
+
+        public void EndFocusMode() => EndFocusModeCount++;
+
+        public void Disable() => DisableCount++;
+
+        public void Enable() => EnableCount++;
     }
 }

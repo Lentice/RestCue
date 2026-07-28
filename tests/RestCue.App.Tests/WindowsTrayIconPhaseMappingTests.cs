@@ -25,7 +25,7 @@ public sealed class WindowsTrayIconPhaseMappingTests
     {
         var tray = new FakeTrayIcon();
 
-        ApplyPhaseToTray(tray, phase);
+        App.ApplyPhaseToTray(tray, phase);
 
         Assert.Equal(expectPauseEnabled, tray.PauseEnabled);
         Assert.Equal(expectFocusEnabled, tray.FocusModeEnabled);
@@ -45,8 +45,38 @@ public sealed class WindowsTrayIconPhaseMappingTests
     public void DisableCommand_AlwaysEnabled(WorkCyclePhase phase)
     {
         var tray = new FakeTrayIcon();
-        ApplyPhaseToTray(tray, phase);
+        App.ApplyPhaseToTray(tray, phase);
         Assert.True(tray.DisableEnabled);
+    }
+
+    [Fact]
+    public void Paused_clears_suppressed_state()
+    {
+        var tray = new FakeTrayIcon();
+        tray.SetSuppressedState(true);
+
+        App.ApplyPhaseToTray(tray, WorkCyclePhase.Paused);
+
+        Assert.False(tray.IsSuppressed);
+        Assert.Equal("RestCue – 已暫停", tray.StatusText);
+        Assert.True(tray.PauseEnabled);
+        Assert.False(tray.FocusModeEnabled);
+        Assert.False(tray.BreakNowEnabled);
+    }
+
+    [Fact]
+    public void FocusMode_clears_suppressed_state()
+    {
+        var tray = new FakeTrayIcon();
+        tray.SetSuppressedState(true);
+
+        App.ApplyPhaseToTray(tray, WorkCyclePhase.FocusMode);
+
+        Assert.False(tray.IsSuppressed);
+        Assert.Equal("RestCue – 專注模式", tray.StatusText);
+        Assert.False(tray.PauseEnabled);
+        Assert.True(tray.FocusModeEnabled);
+        Assert.True(tray.BreakNowEnabled);
     }
 
     [Fact]
@@ -124,50 +154,6 @@ public sealed class WindowsTrayIconPhaseMappingTests
         return (bool)enabledProp!.GetValue(menuItem)!;
     }
 
-    private static void ApplyPhaseToTray(FakeTrayIcon tray, WorkCyclePhase phase)
-    {
-        tray.SetSuppressedState(false);
-        tray.SetPauseText(false);
-        tray.SetPauseEnabled(true);
-        tray.SetFocusModeText(false);
-        tray.SetFocusModeEnabled(true);
-        tray.SetDisableText(false);
-        tray.SetDisableEnabled(true);
-        tray.SetBreakNowEnabled(true);
-
-        switch (phase)
-        {
-            case WorkCyclePhase.FocusMode:
-                tray.SetFocusModeText(true);
-                tray.SetPauseEnabled(false);
-                break;
-
-            case WorkCyclePhase.Disabled:
-                tray.SetDisableText(true);
-                tray.SetPauseEnabled(false);
-                tray.SetFocusModeEnabled(false);
-                tray.SetBreakNowEnabled(false);
-                break;
-
-            case WorkCyclePhase.BreakInProgress:
-                tray.SetPauseEnabled(false);
-                tray.SetFocusModeEnabled(false);
-                tray.SetBreakNowEnabled(false);
-                break;
-
-            case WorkCyclePhase.Paused:
-                tray.SetPauseText(true);
-                tray.SetFocusModeEnabled(false);
-                tray.SetBreakNowEnabled(false);
-                break;
-
-            case WorkCyclePhase.Idle:
-                tray.SetFocusModeEnabled(false);
-                tray.SetBreakNowEnabled(false);
-                break;
-        }
-    }
-
     [Fact]
     public void BreakNowRequested_event_invokes_wired_handler()
     {
@@ -214,6 +200,10 @@ public sealed class WindowsTrayIconPhaseMappingTests
 
         public bool BreakNowEnabled { get; private set; } = true;
 
+        public bool IsSuppressed { get; private set; }
+
+        public string? StatusText { get; private set; }
+
         public bool Visible
         {
             get => _visible;
@@ -255,13 +245,9 @@ public sealed class WindowsTrayIconPhaseMappingTests
         {
         }
 
-        public void SetStatusText(string text)
-        {
-        }
+        public void SetStatusText(string text) => StatusText = text;
 
-        public void SetSuppressedState(bool isSuppressed)
-        {
-        }
+        public void SetSuppressedState(bool isSuppressed) => IsSuppressed = isSuppressed;
     }
 }
 
