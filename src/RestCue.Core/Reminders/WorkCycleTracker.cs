@@ -24,6 +24,12 @@ public sealed class WorkCycleTracker
     private bool isSleeping;
 
     private readonly TimeSpan workInterval;
+    private TimeSpan effectiveWorkInterval;
+
+    private bool isFullscreen;
+    private bool isReminderSuppressed;
+    private bool hasSuppressedReminder;
+    private bool showTrayCue;
 
     public WorkCycleTracker(
         IClock clock,
@@ -48,6 +54,7 @@ public sealed class WorkCycleTracker
 
         this.clock = clock;
         this.workInterval = workInterval;
+        this.effectiveWorkInterval = workInterval;
         this.idleThreshold = idleThreshold;
         this.naturalPauseThreshold = naturalPauseThreshold;
         this.maximumReminderWait = maximumReminderWait;
@@ -75,6 +82,7 @@ public sealed class WorkCycleTracker
     public event EventHandler? FocusModeEnded;
     public event EventHandler? Disabled;
     public event EventHandler? Enabled;
+    public event EventHandler<ReminderSuppressedEventArgs>? ReminderSuppressed;
 
     public void Tick(TimeSpan idleDuration)
     {
@@ -265,7 +273,7 @@ public sealed class WorkCycleTracker
             throw new InvalidOperationException(
                 $"Cannot end focus mode from phase {CurrentPhase}.");
 
-        if (AccumulatedWorkTime - (lastReminderWorkTime ?? TimeSpan.Zero) >= workInterval)
+        if (AccumulatedWorkTime - (lastReminderWorkTime ?? TimeSpan.Zero) >= effectiveWorkInterval)
         {
             CurrentPhase = WorkCyclePhase.PendingReminder;
             pendingSinceUtc = clock.UtcNow;
@@ -296,6 +304,32 @@ public sealed class WorkCycleTracker
 
         ResetCycle();
         Enabled?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void UpdateForegroundContext(bool fullscreen, bool suppressReminder, bool showTrayCue, TimeSpan? effectiveWorkIntervalOverride)
+    {
+        bool wasSuppressed = isReminderSuppressed;
+        bool previousShowTrayCue = this.showTrayCue;
+        isFullscreen = fullscreen;
+        isReminderSuppressed = fullscreen || suppressReminder;
+        this.showTrayCue = showTrayCue;
+
+        if (effectiveWorkIntervalOverride.HasValue)
+            effectiveWorkInterval = effectiveWorkIntervalOverride.Value;
+        else
+            effectiveWorkInterval = workInterval;
+
+        if (wasSuppressed && !isReminderSuppressed && hasSuppressedReminder && CurrentPhase == WorkCyclePhase.PendingReminder)
+        {
+            var now = clock.UtcNow;
+            hasSuppressedReminder = false;
+            EnterReminderVisible(now);
+        }
+        else if (hasSuppressedReminder && isReminderSuppressed && this.showTrayCue != previousShowTrayCue
+                 && CurrentPhase == WorkCyclePhase.PendingReminder)
+        {
+            ReminderSuppressed?.Invoke(this, new ReminderSuppressedEventArgs(this.showTrayCue));
+        }
     }
 
     public void HandleLock()
@@ -370,8 +404,8 @@ public sealed class WorkCycleTracker
     private void TickWorking(DateTimeOffset now, bool isWorking)
     {
         if (isWorking &&
-            workInterval > TimeSpan.Zero &&
-            AccumulatedWorkTime - (lastReminderWorkTime ?? TimeSpan.Zero) >= workInterval)
+            effectiveWorkInterval > TimeSpan.Zero &&
+            AccumulatedWorkTime - (lastReminderWorkTime ?? TimeSpan.Zero) >= effectiveWorkInterval)
         {
             CurrentPhase = WorkCyclePhase.PendingReminder;
             pendingSinceUtc = now;
@@ -448,9 +482,20 @@ public sealed class WorkCycleTracker
 
     private void EnterReminderVisible(DateTimeOffset now)
     {
+        lastReminderWorkTime = AccumulatedWorkTime;
+
+        if (isReminderSuppressed)
+        {
+            if (!hasSuppressedReminder)
+            {
+                hasSuppressedReminder = true;
+                ReminderSuppressed?.Invoke(this, new ReminderSuppressedEventArgs(showTrayCue));
+            }
+            return;
+        }
+
         CurrentPhase = WorkCyclePhase.ReminderVisible;
         reminderVisibleSinceUtc = now;
-        lastReminderWorkTime = AccumulatedWorkTime;
         ReminderShown?.Invoke(this, EventArgs.Empty);
     }
 
@@ -482,6 +527,9 @@ public sealed class WorkCycleTracker
         reminderVisibleSinceUtc = null;
         snoozeUntilUtc = null;
         lastReminderWorkTime = null;
+        isReminderSuppressed = false;
+        hasSuppressedReminder = false;
+        showTrayCue = false;
     }
 
     private void ClearReminderState()

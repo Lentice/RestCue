@@ -33,4 +33,6 @@ public interface ITrayIcon : IDisposable
     void SetFocusModeEnabled(bool enabled);
 
     void SetDisableEnabled(bool enabled);
+
+    void SetSuppressedState(bool isSuppressed);
 }

@@ -15,6 +15,9 @@ public sealed class WindowsTrayIcon : ITrayIcon
     private bool _isFocusMode;
     private bool _isDisabled;
 
+    private static readonly Icon NormalIcon = SystemIcons.Information;
+    private static readonly Icon SuppressedIcon = SystemIcons.Exclamation;
+
     public WindowsTrayIcon()
     {
         _pauseItem = new ToolStripMenuItem("暫停提醒", null, TogglePause);
@@ -33,7 +36,7 @@ public sealed class WindowsTrayIcon : ITrayIcon
         _notifyIcon = new NotifyIcon
         {
             ContextMenuStrip = menu,
-            Icon = SystemIcons.Information,
+            Icon = NormalIcon,
             Text = "RestCue – Eye Break Reminder"
         };
         _notifyIcon.DoubleClick += (_, _) => OpenRequested?.Invoke(this, EventArgs.Empty);
@@ -89,6 +92,11 @@ public sealed class WindowsTrayIcon : ITrayIcon
     public void SetFocusModeEnabled(bool enabled) => _focusItem.Enabled = enabled;
 
     public void SetDisableEnabled(bool enabled) => _disableItem.Enabled = enabled;
+
+    public void SetSuppressedState(bool isSuppressed)
+    {
+        _notifyIcon.Icon = isSuppressed ? SuppressedIcon : NormalIcon;
+    }
 
     private void TogglePause(object? sender, EventArgs e)
     {

@@ -136,6 +136,10 @@ public sealed class ApplicationLifecycleTests
         public void SetStatusText(string text)
         {
         }
+
+        public void SetSuppressedState(bool isSuppressed)
+        {
+        }
     }
 
     private sealed class FakeStatusWindow : IStatusWindow

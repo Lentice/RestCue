@@ -34,7 +34,10 @@ public partial class App : System.Windows.Application
             await _startup.InitializeAsync();
             _statusWindow.StartActivityTracking(
                 new WindowsUserActivityMonitor(),
-                _startup.CurrentSettings);
+                _startup.CurrentSettings,
+                foregroundContextProvider: new WindowsForegroundContextProvider(
+                    _startup.CurrentSettings.CollectForegroundProcessNames),
+                applicationRules: RestCue.Core.Reminders.DefaultApplicationRules.All);
 
             _statusWindow.WireLifecycleEvents();
             WireTrayCommands();
@@ -71,12 +74,26 @@ public partial class App : System.Windows.Application
         _trayIcon.EnableRequested += (_, _) => _statusWindow.Enable();
 
         _statusWindow.PhaseChanged += OnPhaseChanged;
+        _statusWindow.LowInterruptionReminderRequested += (_, e) =>
+        {
+            if (e.ShowTrayCue)
+            {
+                _trayIcon?.SetSuppressedState(true);
+                _trayIcon?.SetStatusText("RestCue – 休息提醒待處理");
+            }
+            else
+            {
+                _trayIcon?.SetSuppressedState(false);
+                _trayIcon?.SetStatusText("RestCue – Eye Break Reminder");
+            }
+        };
     }
 
     private void OnPhaseChanged(object? sender, WorkCyclePhase phase)
     {
         if (_trayIcon == null) return;
 
+        _trayIcon.SetSuppressedState(false);
         _trayIcon.SetPauseText(false);
         _trayIcon.SetPauseEnabled(true);
         _trayIcon.SetFocusModeText(false);

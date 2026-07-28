@@ -91,6 +91,7 @@ public sealed class WindowsTrayIconPhaseMappingTests
 
     private static void ApplyPhaseToTray(FakeTrayIcon tray, WorkCyclePhase phase)
     {
+        tray.SetSuppressedState(false);
         tray.SetPauseText(false);
         tray.SetPauseEnabled(true);
         tray.SetFocusModeText(false);
@@ -197,6 +198,10 @@ public sealed class WindowsTrayIconPhaseMappingTests
         }
 
         public void SetStatusText(string text)
+        {
+        }
+
+        public void SetSuppressedState(bool isSuppressed)
         {
         }
     }

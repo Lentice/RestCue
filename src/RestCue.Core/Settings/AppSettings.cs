@@ -23,4 +23,5 @@ public sealed record AppSettings
     public double ReminderOpacity { get; init; } = 0.7;
 
     public bool CollectForegroundProcessNames { get; init; }
+
 }

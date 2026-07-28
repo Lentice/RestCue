@@ -17,6 +17,8 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     private IUserActivityMonitor? activityMonitor;
     private UserActivityStatusTracker? activityTracker;
     private WorkCycleTracker? workCycleTracker;
+    private IForegroundContextProvider? foregroundContextProvider;
+    private ApplicationRuleSet? applicationRules;
     private ReminderWindow? reminderWindow;
     private TimeSpan snoozeDuration;
 
@@ -31,6 +33,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     }
 
     public event EventHandler<WorkCyclePhase>? PhaseChanged;
+    public event EventHandler<ReminderSuppressedEventArgs>? LowInterruptionReminderRequested;
 
     public void WireLifecycleEvents()
     {
@@ -47,7 +50,9 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     public void StartActivityTracking(
         IUserActivityMonitor activityMonitor,
         AppSettings settings,
-        IClock? clock = null)
+        IClock? clock = null,
+        IForegroundContextProvider? foregroundContextProvider = null,
+        IEnumerable<ApplicationRule>? applicationRules = null)
     {
         this.activityMonitor = activityMonitor;
         activityTracker = new UserActivityStatusTracker(
@@ -55,6 +60,8 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             new UserActivityStatusEvaluator(settings.IdleThreshold));
 
         snoozeDuration = settings.SnoozeDuration;
+        this.foregroundContextProvider = foregroundContextProvider;
+        this.applicationRules = new ApplicationRuleSet(applicationRules);
 
         workCycleTracker = new WorkCycleTracker(
             clock ?? new SystemClock(),
@@ -68,6 +75,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             settings.ReminderDisplayDuration);
 
         workCycleTracker.ReminderShown += OnReminderShown;
+        workCycleTracker.ReminderSuppressed += OnReminderSuppressed;
         workCycleTracker.BreakCompleted += OnBreakCompleted;
         workCycleTracker.PassiveBreakCompleted += OnPassiveBreakCompleted;
         workCycleTracker.ReminderDismissed += OnReminderDismissed;
@@ -89,6 +97,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         if (workCycleTracker != null)
         {
             workCycleTracker.ReminderShown -= OnReminderShown;
+            workCycleTracker.ReminderSuppressed -= OnReminderSuppressed;
             workCycleTracker.BreakCompleted -= OnBreakCompleted;
             workCycleTracker.PassiveBreakCompleted -= OnPassiveBreakCompleted;
             workCycleTracker.ReminderDismissed -= OnReminderDismissed;
@@ -267,6 +276,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
         if (workCycleTracker != null)
         {
+            ApplyForegroundContext();
             if (sample.IsAvailable)
             {
                 workCycleTracker.Tick(sample.IdleDuration);
@@ -278,6 +288,20 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
             UpdateCycleStatus();
         }
+    }
+
+    private void ApplyForegroundContext()
+    {
+        if (workCycleTracker == null || foregroundContextProvider == null) return;
+
+        var context = foregroundContextProvider.GetCurrentContext();
+        var rule = applicationRules?.Find(context.ProcessName);
+        bool windowSuppression = context.FullscreenState != FullscreenState.NotFullscreen;
+        workCycleTracker.UpdateForegroundContext(
+            windowSuppression,
+            rule?.IsSuppressingReminder ?? false,
+            !windowSuppression && rule?.RuleType == ApplicationRuleType.TrayOnly,
+            rule?.RuleType == ApplicationRuleType.CustomInterval ? rule.CustomInterval : null);
     }
 
     private void OnReminderShown(object? sender, EventArgs e)
@@ -298,6 +322,11 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             reminderWindow.BreakDuration = workCycleTracker!.BreakDuration;
             reminderWindow.ShowReminder();
         });
+    }
+
+    private void OnReminderSuppressed(object? sender, ReminderSuppressedEventArgs e)
+    {
+        Dispatcher.Invoke(() => LowInterruptionReminderRequested?.Invoke(this, e));
     }
 
     private void OnBreakRequested(object? sender, EventArgs e)
