@@ -76,6 +76,11 @@ public sealed class WorkCycleTracker
         var now = clock.UtcNow;
         bool isWorking = idleDuration < idleThreshold;
 
+        if (CurrentPhase != WorkCyclePhase.BreakInProgress)
+        {
+            AccumulateIfWorking(now, isWorking);
+        }
+
         switch (CurrentPhase)
         {
             case WorkCyclePhase.Working:
@@ -103,12 +108,12 @@ public sealed class WorkCycleTracker
     public void TickActivityUnavailable()
     {
         var now = clock.UtcNow;
+        wasWorking = false;
+        lastTickUtc = now;
 
         switch (CurrentPhase)
         {
             case WorkCyclePhase.Working:
-                wasWorking = false;
-                lastTickUtc = now;
                 break;
 
             case WorkCyclePhase.PendingReminder:
@@ -180,27 +185,28 @@ public sealed class WorkCycleTracker
         ReminderDismissed?.Invoke(this, new ReminderDismissedEventArgs(ReminderResult.Ignored));
     }
 
-    private void TickWorking(DateTimeOffset now, bool isWorking)
+    private void AccumulateIfWorking(DateTimeOffset now, bool isWorking)
     {
-        if (isWorking)
+        if (isWorking && wasWorking && lastTickUtc.HasValue)
         {
-            if (wasWorking && lastTickUtc.HasValue)
-            {
-                var delta = now - lastTickUtc.Value;
-                if (delta > TimeSpan.Zero)
-                    AccumulatedWorkTime += delta;
-            }
-
-            if (workInterval > TimeSpan.Zero &&
-                AccumulatedWorkTime - (lastReminderWorkTime ?? TimeSpan.Zero) >= workInterval)
-            {
-                CurrentPhase = WorkCyclePhase.PendingReminder;
-                pendingSinceUtc = now;
-            }
+            var delta = now - lastTickUtc.Value;
+            if (delta > TimeSpan.Zero)
+                AccumulatedWorkTime += delta;
         }
 
         wasWorking = isWorking;
         lastTickUtc = now;
+    }
+
+    private void TickWorking(DateTimeOffset now, bool isWorking)
+    {
+        if (isWorking &&
+            workInterval > TimeSpan.Zero &&
+            AccumulatedWorkTime - (lastReminderWorkTime ?? TimeSpan.Zero) >= workInterval)
+        {
+            CurrentPhase = WorkCyclePhase.PendingReminder;
+            pendingSinceUtc = now;
+        }
     }
 
     private void TickPending(DateTimeOffset now, bool isWorking, TimeSpan idleDuration)

@@ -826,7 +826,7 @@ public sealed class WorkCycleTrackerTests
         tracker.Tick(TimeSpan.Zero);
 
         Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
-        Assert.Equal(before, tracker.AccumulatedWorkTime);
+        Assert.Equal(before + TimeSpan.FromSeconds(30), tracker.AccumulatedWorkTime);
     }
 
     [Fact]
@@ -1062,6 +1062,129 @@ public sealed class WorkCycleTrackerTests
         tracker.Ignore();
 
         Assert.Equal(accumulated, tracker.AccumulatedWorkTime);
+    }
+
+    [Theory]
+    [InlineData(WorkCyclePhase.PendingReminder)]
+    [InlineData(WorkCyclePhase.ReminderVisible)]
+    [InlineData(WorkCyclePhase.Snoozed)]
+    public void Accumulates_work_time_in_non_break_phases(WorkCyclePhase phase)
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30),
+            maxWait: TimeSpan.FromSeconds(10),
+            snoozeDuration: TimeSpan.FromMinutes(10),
+            reminderDisplayDuration: TimeSpan.FromSeconds(60));
+
+        for (int i = 0; i < 31; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+
+        if (phase >= WorkCyclePhase.ReminderVisible)
+        {
+            clock.Advance(TimeSpan.FromSeconds(10));
+            tracker.Tick(TimeSpan.Zero);
+            Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+        }
+
+        if (phase == WorkCyclePhase.Snoozed)
+        {
+            tracker.Snooze();
+        }
+
+        var before = tracker.AccumulatedWorkTime;
+
+        clock.Advance(TimeSpan.FromSeconds(5));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(before + TimeSpan.FromSeconds(5), tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Does_not_accumulate_work_time_in_BreakInProgress()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30),
+            maxWait: TimeSpan.FromSeconds(10),
+            breakDuration: TimeSpan.FromSeconds(20));
+
+        for (int i = 0; i < 31; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+
+        tracker.StartBreak();
+        var before = tracker.AccumulatedWorkTime;
+
+        clock.Advance(TimeSpan.FromSeconds(5));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(before, tracker.AccumulatedWorkTime);
+    }
+
+    [Theory]
+    [InlineData(WorkCyclePhase.Working)]
+    [InlineData(WorkCyclePhase.PendingReminder)]
+    [InlineData(WorkCyclePhase.ReminderVisible)]
+    [InlineData(WorkCyclePhase.Snoozed)]
+    public void Unavailable_gap_not_backfilled_after_recovery(WorkCyclePhase phase)
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30),
+            maxWait: TimeSpan.FromMinutes(10),
+            snoozeDuration: TimeSpan.FromMinutes(10),
+            reminderDisplayDuration: TimeSpan.FromSeconds(60));
+
+        if (phase == WorkCyclePhase.Working)
+        {
+            tracker.Tick(TimeSpan.Zero);
+            clock.Advance(TimeSpan.FromSeconds(5));
+            tracker.Tick(TimeSpan.Zero);
+        }
+        else
+        {
+            for (int i = 0; i < 31; i++)
+            {
+                clock.Advance(TimeSpan.FromSeconds(1));
+                tracker.Tick(TimeSpan.Zero);
+            }
+
+            if (phase >= WorkCyclePhase.ReminderVisible)
+            {
+                clock.Advance(TimeSpan.FromSeconds(6));
+                tracker.Tick(TimeSpan.FromSeconds(6));
+            }
+
+            if (phase == WorkCyclePhase.Snoozed)
+            {
+                tracker.Snooze();
+            }
+        }
+
+        var before = tracker.AccumulatedWorkTime;
+
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.TickActivityUnavailable();
+
+        clock.Advance(TimeSpan.FromSeconds(3));
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(2));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(before + TimeSpan.FromSeconds(2), tracker.AccumulatedWorkTime);
     }
 
     private static WorkCycleTracker CreateTracker(
