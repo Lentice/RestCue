@@ -1,6 +1,8 @@
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using RestCue.Core.Settings;
 using RestCue.Infrastructure.Settings;
+using RestCue.Infrastructure.UsageEvents;
 using Xunit;
 
 namespace RestCue.Infrastructure.Tests.Settings;
@@ -157,6 +159,40 @@ public sealed class SqliteSettingsRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task Invalid_settings_json_recovers_settings_only_preserving_usage_events()
+    {
+        string databasePath = Path.Combine(directory, "restcue.db");
+        var repository = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+        await repository.SaveAsync(AppSettings.Default);
+
+        var eventRepo = new SqliteUsageEventRepository(databasePath);
+        await eventRepo.WriteAsync(Core.UsageEvents.UsageEventType.BreakCompleted,
+            new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+
+        await using (var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText =
+                "UPDATE settings SET value = 'not valid json' WHERE key = 'app_settings';";
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        SettingsLoadResult result = await repository.LoadAsync();
+
+        Assert.Equal(AppSettings.Default, result.Settings);
+        Assert.True(result.RecoveredFromCorruption);
+
+        var events = await eventRepo.QueryAsync(
+            new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        Assert.Single(events);
+        Assert.Equal(Core.UsageEvents.UsageEventType.BreakCompleted, events[0].EventType);
+
+        Assert.Empty(Directory.GetFiles(directory, "*.bak"));
+    }
+
+    [Fact]
     public async Task Future_schema_version_is_rejected_without_downgrade_or_deletion()
     {
         string databasePath = Path.Combine(directory, "restcue.db");
@@ -166,7 +202,7 @@ public sealed class SqliteSettingsRepositoryTests : IDisposable
         {
             await connection.OpenAsync();
             await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = "PRAGMA user_version = 2;";
+            command.CommandText = "PRAGMA user_version = 3;";
             await command.ExecuteNonQueryAsync();
         }
 
@@ -180,7 +216,7 @@ public sealed class SqliteSettingsRepositoryTests : IDisposable
         await verifyConnection.OpenAsync();
         await using SqliteCommand verifyCommand = verifyConnection.CreateCommand();
         verifyCommand.CommandText = "PRAGMA user_version;";
-        Assert.Equal(2L, await verifyCommand.ExecuteScalarAsync());
+        Assert.Equal(3L, await verifyCommand.ExecuteScalarAsync());
         Assert.Empty(Directory.GetFiles(directory, "*.bak"));
     }
 

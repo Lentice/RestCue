@@ -41,6 +41,8 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
     public RestDebtLevel CurrentDebtLevel { get; private set; }
 
+    public WorkCycleTracker? WorkCycleTracker => workCycleTracker;
+
     public void WireLifecycleEvents()
     {
         SystemEvents.SessionSwitch += OnSessionSwitch;

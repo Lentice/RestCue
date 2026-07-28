@@ -164,9 +164,15 @@ public sealed class WorkCycleTracker
     }
 
     public event EventHandler? ReminderShown;
+    public event EventHandler? BreakStarted;
     public event EventHandler? BreakCompleted;
+    public event EventHandler? BreakCancelled;
     public event EventHandler? PassivePauseDetected;
     public event EventHandler<ReminderDismissedEventArgs>? ReminderDismissed;
+    public event EventHandler? IdleStarted;
+    public event EventHandler? IdleEnded;
+    public event EventHandler? CooldownStarted;
+    public event EventHandler? CooldownEnded;
     public event EventHandler? Paused;
     public event EventHandler? Resumed;
     public event EventHandler? FocusModeStarted;
@@ -237,6 +243,7 @@ public sealed class WorkCycleTracker
     {
         if (isWorking)
         {
+            IdleEnded?.Invoke(this, EventArgs.Empty);
             ResetCycle();
         }
     }
@@ -300,6 +307,7 @@ public sealed class WorkCycleTracker
         CurrentPhase = WorkCyclePhase.BreakInProgress;
         breakStartUtc = clock.UtcNow;
         reminderVisibleSinceUtc = null;
+        BreakStarted?.Invoke(this, EventArgs.Empty);
     }
 
     public void ManualStartBreak()
@@ -316,6 +324,7 @@ public sealed class WorkCycleTracker
         reminderVisibleSinceUtc = null;
         snoozeUntilUtc = null;
         wasPassivePaused = false;
+        BreakStarted?.Invoke(this, EventArgs.Empty);
     }
 
     public void Snooze()
@@ -344,6 +353,7 @@ public sealed class WorkCycleTracker
         lastTickUtc = null;
         wasWorking = false;
         cooldownUntil = clock.UtcNow + retryCooldown;
+        CooldownStarted?.Invoke(this, EventArgs.Empty);
         ReminderDismissed?.Invoke(this, new ReminderDismissedEventArgs(ReminderResult.Ignored));
     }
 
@@ -403,10 +413,13 @@ public sealed class WorkCycleTracker
         if (CurrentPhase == WorkCyclePhase.Disabled)
             throw new InvalidOperationException("Already disabled.");
 
+        bool wasCooldownActive = cooldownUntil.HasValue;
         CurrentPhase = WorkCyclePhase.Disabled;
         ClearReminderState();
         cooldownUntil = null;
         nextDebtDeadline = null;
+        if (wasCooldownActive)
+            CooldownEnded?.Invoke(this, EventArgs.Empty);
         Disabled?.Invoke(this, EventArgs.Empty);
     }
 
@@ -469,6 +482,8 @@ public sealed class WorkCycleTracker
             }
             else
             {
+                if (CurrentPhase == WorkCyclePhase.BreakInProgress)
+                    BreakCancelled?.Invoke(this, EventArgs.Empty);
                 ResetCycle();
             }
         }
@@ -497,6 +512,8 @@ public sealed class WorkCycleTracker
             }
             else
             {
+                if (CurrentPhase == WorkCyclePhase.BreakInProgress)
+                    BreakCancelled?.Invoke(this, EventArgs.Empty);
                 ResetCycle();
             }
         }
@@ -538,6 +555,7 @@ public sealed class WorkCycleTracker
 
             cooldownUntil = null;
             nextDebtDeadline = null;
+            CooldownEnded?.Invoke(this, EventArgs.Empty);
 
             if (wasDebtDeadline)
             {
@@ -655,7 +673,10 @@ public sealed class WorkCycleTracker
 
     private void EnterIdle()
     {
+        var wasCooldownActive = cooldownUntil.HasValue;
+        var wasInBreak = CurrentPhase == WorkCyclePhase.BreakInProgress;
         var previousLevel = restDebtLevel;
+
         CurrentPhase = WorkCyclePhase.Idle;
         AccumulatedWorkTime = TimeSpan.Zero;
         pendingSinceUtc = null;
@@ -669,14 +690,23 @@ public sealed class WorkCycleTracker
         nextDebtDeadline = null;
         restDebtLevel = RestDebtLevel.Level0;
 
+        if (wasInBreak)
+            BreakCancelled?.Invoke(this, EventArgs.Empty);
+        if (wasCooldownActive)
+            CooldownEnded?.Invoke(this, EventArgs.Empty);
+        IdleStarted?.Invoke(this, EventArgs.Empty);
+
         if (previousLevel != RestDebtLevel.Level0)
             RestDebtLevelChanged?.Invoke(this, new RestDebtLevelChangedEventArgs(previousLevel, RestDebtLevel.Level0));
     }
 
     private void EnterReminderVisible(DateTimeOffset now)
     {
+        bool wasCooldownActive = cooldownUntil.HasValue;
         cooldownUntil = null;
         nextDebtDeadline = null;
+        if (wasCooldownActive)
+            CooldownEnded?.Invoke(this, EventArgs.Empty);
 
         if (!_forceAllowPopup)
         {
@@ -723,6 +753,7 @@ public sealed class WorkCycleTracker
             reminderVisibleSinceUtc = null;
             snoozeUntilUtc = null;
             cooldownUntil = now + retryCooldown;
+            CooldownStarted?.Invoke(this, EventArgs.Empty);
             ReminderDismissed?.Invoke(this, new ReminderDismissedEventArgs(ReminderResult.AutoDismissed));
         }
     }
@@ -730,6 +761,7 @@ public sealed class WorkCycleTracker
     private void ResetCycle()
     {
         var previousLevel = restDebtLevel;
+        bool wasCooldownActive = cooldownUntil.HasValue;
         CurrentPhase = WorkCyclePhase.Working;
         AccumulatedWorkTime = TimeSpan.Zero;
         pendingSinceUtc = null;
@@ -745,6 +777,9 @@ public sealed class WorkCycleTracker
         cooldownUntil = null;
         nextDebtDeadline = null;
         restDebtLevel = RestDebtLevel.Level0;
+
+        if (wasCooldownActive)
+            CooldownEnded?.Invoke(this, EventArgs.Empty);
 
         if (previousLevel != RestDebtLevel.Level0)
             RestDebtLevelChanged?.Invoke(this, new RestDebtLevelChangedEventArgs(previousLevel, RestDebtLevel.Level0));

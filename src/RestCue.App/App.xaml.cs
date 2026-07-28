@@ -1,12 +1,15 @@
 using System.Diagnostics;
 using System.Windows;
 using RestCue.App.Lifecycle;
+using RestCue.App.UsageEvents;
 using RestCue.Core.Domain;
 using RestCue.Core.Events;
 using RestCue.Core.Reminders;
 using RestCue.Core.Settings;
+using RestCue.Core.UsageEvents;
 using RestCue.Infrastructure.Activity;
 using RestCue.Infrastructure.Settings;
+using RestCue.Infrastructure.UsageEvents;
 
 namespace RestCue.App;
 
@@ -16,6 +19,8 @@ public partial class App : System.Windows.Application
     private ApplicationStartup? _startup;
     private WindowsTrayIcon? _trayIcon;
     private MainWindow? _statusWindow;
+    private BackgroundUsageEventWriter? _eventWriter;
+    private WorkCycleTracker? _tracker;
     private WorkCyclePhase _lastPhase;
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -43,6 +48,7 @@ public partial class App : System.Windows.Application
                 applicationRules: RestCue.Core.Reminders.DefaultApplicationRules.All);
 
             _statusWindow.WireLifecycleEvents();
+            WireUsageEventPersistence();
             WireTrayCommands();
         }
         catch (Exception exception)
@@ -61,6 +67,7 @@ public partial class App : System.Windows.Application
             _statusWindow.UnwireLifecycleEvents();
             _statusWindow.StopActivityTracking();
         }
+        UnwireUsageEventPersistence();
         _lifecycle?.Dispose();
         base.OnExit(e);
     }
@@ -115,6 +122,100 @@ public partial class App : System.Windows.Application
             }
         };
     }
+
+    private void WireUsageEventPersistence()
+    {
+        _tracker = _statusWindow?.WorkCycleTracker;
+        if (_tracker == null) return;
+
+        IUsageEventRepository? repo = null;
+        try
+        {
+            repo = new SqliteUsageEventRepository(
+                LocalSettingsPaths.DatabaseFile);
+        }
+        catch
+        {
+            Trace.TraceError("RestCue: failed to create usage event repository.");
+            return;
+        }
+
+        _eventWriter = new BackgroundUsageEventWriter(
+            repo,
+            msg => Trace.TraceError(msg));
+
+        _tracker.ReminderShown += OnReminderShown;
+        _tracker.BreakStarted += OnBreakStartedEvent;
+        _tracker.BreakCompleted += OnBreakCompletedEvent;
+        _tracker.BreakCancelled += OnBreakCancelledEvent;
+        _tracker.PassivePauseDetected += OnPassivePauseDetectedEvent;
+        _tracker.ReminderDismissed += OnReminderDismissedEvent;
+        _tracker.IdleStarted += OnIdleStarted;
+        _tracker.IdleEnded += OnIdleEnded;
+        _tracker.CooldownStarted += OnCooldownStarted;
+        _tracker.CooldownEnded += OnCooldownEnded;
+        _tracker.Paused += OnPausedEvent;
+        _tracker.Resumed += OnResumedEvent;
+        _tracker.FocusModeStarted += OnFocusModeStartedEvent;
+        _tracker.FocusModeEnded += OnFocusModeEndedEvent;
+        _tracker.Disabled += OnDisabledEvent;
+        _tracker.Enabled += OnEnabledEvent;
+        _tracker.RestDebtLevelChanged += OnRestDebtLevelChangedEvent;
+    }
+
+    private void UnwireUsageEventPersistence()
+    {
+        if (_tracker == null) return;
+
+        _tracker.ReminderShown -= OnReminderShown;
+        _tracker.BreakStarted -= OnBreakStartedEvent;
+        _tracker.BreakCompleted -= OnBreakCompletedEvent;
+        _tracker.BreakCancelled -= OnBreakCancelledEvent;
+        _tracker.PassivePauseDetected -= OnPassivePauseDetectedEvent;
+        _tracker.ReminderDismissed -= OnReminderDismissedEvent;
+        _tracker.IdleStarted -= OnIdleStarted;
+        _tracker.IdleEnded -= OnIdleEnded;
+        _tracker.CooldownStarted -= OnCooldownStarted;
+        _tracker.CooldownEnded -= OnCooldownEnded;
+        _tracker.Paused -= OnPausedEvent;
+        _tracker.Resumed -= OnResumedEvent;
+        _tracker.FocusModeStarted -= OnFocusModeStartedEvent;
+        _tracker.FocusModeEnded -= OnFocusModeEndedEvent;
+        _tracker.Disabled -= OnDisabledEvent;
+        _tracker.Enabled -= OnEnabledEvent;
+        _tracker.RestDebtLevelChanged -= OnRestDebtLevelChangedEvent;
+
+        _eventWriter?.Dispose();
+        _eventWriter = null;
+        _tracker = null;
+    }
+
+    private void OnReminderShown(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.ReminderShown);
+    private void OnBreakStartedEvent(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.BreakStarted);
+    private void OnBreakCompletedEvent(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.BreakCompleted);
+    private void OnBreakCancelledEvent(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.BreakCancelled);
+    private void OnPassivePauseDetectedEvent(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.PassivePauseDetected);
+    private void OnIdleStarted(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.IdleStarted);
+    private void OnIdleEnded(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.IdleEnded);
+    private void OnCooldownStarted(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.CooldownStarted);
+    private void OnCooldownEnded(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.CooldownEnded);
+    private void OnPausedEvent(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.Paused);
+    private void OnResumedEvent(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.Resumed);
+    private void OnFocusModeStartedEvent(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.FocusModeStarted);
+    private void OnFocusModeEndedEvent(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.FocusModeEnded);
+    private void OnDisabledEvent(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.Disabled);
+    private void OnEnabledEvent(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.Enabled);
+
+    private void OnReminderDismissedEvent(object? sender, ReminderDismissedEventArgs e) =>
+        _eventWriter?.Write(UsageEventType.ReminderDismissed, DateTimeOffset.UtcNow,
+            new ReminderDismissedPayload(e.Result));
+
+    private void OnRestDebtLevelChangedEvent(object? sender, RestDebtLevelChangedEventArgs e) =>
+        _eventWriter?.Write(UsageEventType.RestDebtLevelChanged, DateTimeOffset.UtcNow,
+            new RestDebtLevelChangedPayload(e.Previous, e.Current));
+
+    private void WriteUsageEvent(UsageEventType type) =>
+        _eventWriter?.Write(type, DateTimeOffset.UtcNow);
 
     internal static string GetStatusTextForPhase(WorkCyclePhase phase)
     {
