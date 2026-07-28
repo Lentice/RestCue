@@ -21,11 +21,11 @@ public sealed class AppSettingsValidator : ISettingsValidator
             errors.Add(new(nameof(settings.ReminderOpacity), "Reminder opacity must be between 20% and 100%."));
         }
 
-        if (settings.PassiveBreakThreshold > settings.IdleThreshold)
+        if (settings.PassiveBreakThreshold >= settings.IdleThreshold)
         {
             errors.Add(new(
                 nameof(settings.PassiveBreakThreshold),
-                "Passive break threshold must be less than or equal to idle threshold."));
+                "Passive break threshold must be less than idle threshold."));
         }
 
         return errors;

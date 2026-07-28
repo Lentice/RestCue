@@ -253,7 +253,7 @@ public sealed class TrayCommandSafetyTests
             new RestCue.Infrastructure.Time.SystemClock(),
             TimeSpan.FromMinutes(25), TimeSpan.FromMinutes(3),
             TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(30),
-            TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(10),
+            TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(30),
             TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(30));
     }
 }

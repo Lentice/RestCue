@@ -83,7 +83,7 @@ public sealed class WorkCycleTrackerForegroundContextTests
 
         tracker.UpdateForegroundContext(fullscreen: false, suppressReminder: false, showTrayCue: false, effectiveWorkIntervalOverride: null);
 
-        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
         Assert.Equal(0, reminderShownCount);
         Assert.Equal(0, suppressedCount);
     }
@@ -551,7 +551,7 @@ public sealed class WorkCycleTrackerForegroundContextTests
     }
 
     [Fact]
-    public void Passive_break_still_works_during_fullscreen()
+    public void Passive_pause_detected_during_fullscreen()
     {
         var clock = new FakeClock();
         var tracker = CreateTracker(
@@ -561,14 +561,15 @@ public sealed class WorkCycleTrackerForegroundContextTests
         ReachPendingReminder(tracker, clock);
         tracker.UpdateForegroundContext(fullscreen: true, suppressReminder: false, showTrayCue: false, effectiveWorkIntervalOverride: null);
 
-        int passiveFired = 0;
-        tracker.PassiveBreakCompleted += (_, _) => passiveFired++;
+        int pauseFired = 0;
+        tracker.PassivePauseDetected += (_, _) => pauseFired++;
 
         clock.Advance(TimeSpan.FromSeconds(21));
         tracker.Tick(TimeSpan.FromSeconds(21));
 
-        Assert.Equal(1, passiveFired);
-        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(1, pauseFired);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.NotEqual(TimeSpan.Zero, tracker.AccumulatedWorkTime);
     }
 
     private static WorkCycleTracker CreateTracker(

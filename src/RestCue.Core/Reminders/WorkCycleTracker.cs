@@ -22,6 +22,7 @@ public sealed class WorkCycleTracker
     private TimeSpan? lastReminderWorkTime;
     private bool isLocked;
     private bool isSleeping;
+    private bool wasPassivePaused;
 
     private readonly TimeSpan workInterval;
     private TimeSpan effectiveWorkInterval;
@@ -52,6 +53,11 @@ public sealed class WorkCycleTracker
         ValidateThreshold(snoozeDuration, nameof(snoozeDuration));
         ValidateThreshold(reminderDisplayDuration, nameof(reminderDisplayDuration));
 
+        if (passiveBreakThreshold >= idleThreshold)
+            throw new ArgumentOutOfRangeException(
+                nameof(passiveBreakThreshold), passiveBreakThreshold,
+                "Passive break threshold must be less than idle threshold.");
+
         this.clock = clock;
         this.workInterval = workInterval;
         this.effectiveWorkInterval = workInterval;
@@ -74,7 +80,7 @@ public sealed class WorkCycleTracker
 
     public event EventHandler? ReminderShown;
     public event EventHandler? BreakCompleted;
-    public event EventHandler? PassiveBreakCompleted;
+    public event EventHandler? PassivePauseDetected;
     public event EventHandler<ReminderDismissedEventArgs>? ReminderDismissed;
     public event EventHandler? Paused;
     public event EventHandler? Resumed;
@@ -403,6 +409,12 @@ public sealed class WorkCycleTracker
 
     private void TickWorking(DateTimeOffset now, bool isWorking)
     {
+        if (!isWorking)
+        {
+            EnterIdle();
+            return;
+        }
+
         if (isWorking &&
             effectiveWorkInterval > TimeSpan.Zero &&
             AccumulatedWorkTime - (lastReminderWorkTime ?? TimeSpan.Zero) >= effectiveWorkInterval)
@@ -414,14 +426,30 @@ public sealed class WorkCycleTracker
 
     private void TickPending(DateTimeOffset now, bool isWorking, TimeSpan idleDuration)
     {
-        var elapsed = now - pendingSinceUtc!.Value;
+        if (idleDuration >= idleThreshold)
+        {
+            EnterIdle();
+            return;
+        }
 
         if (idleDuration >= passiveBreakThreshold)
         {
-            ResetCycle();
-            PassiveBreakCompleted?.Invoke(this, EventArgs.Empty);
+            if (!wasPassivePaused)
+            {
+                wasPassivePaused = true;
+                PassivePauseDetected?.Invoke(this, EventArgs.Empty);
+            }
+
             return;
         }
+
+        if (wasPassivePaused)
+        {
+            pendingSinceUtc = now;
+            wasPassivePaused = false;
+        }
+
+        var elapsed = now - pendingSinceUtc!.Value;
 
         if (idleDuration >= naturalPauseThreshold)
         {
@@ -437,10 +465,19 @@ public sealed class WorkCycleTracker
 
     private void TickReminderVisible(DateTimeOffset now, TimeSpan idleDuration)
     {
+        if (idleDuration >= idleThreshold)
+        {
+            EnterIdle();
+            return;
+        }
+
         if (idleDuration >= passiveBreakThreshold)
         {
-            ResetCycle();
-            PassiveBreakCompleted?.Invoke(this, EventArgs.Empty);
+            CurrentPhase = WorkCyclePhase.PendingReminder;
+            pendingSinceUtc = now;
+            reminderVisibleSinceUtc = null;
+            wasPassivePaused = true;
+            PassivePauseDetected?.Invoke(this, EventArgs.Empty);
             return;
         }
 
@@ -451,15 +488,7 @@ public sealed class WorkCycleTracker
     {
         if (!isWorking && idleDuration >= idleThreshold)
         {
-            CurrentPhase = WorkCyclePhase.Idle;
-            AccumulatedWorkTime = TimeSpan.Zero;
-            pendingSinceUtc = null;
-            breakStartUtc = null;
-            lastTickUtc = null;
-            wasWorking = false;
-            reminderVisibleSinceUtc = null;
-            snoozeUntilUtc = null;
-            lastReminderWorkTime = null;
+            EnterIdle();
             return;
         }
 
@@ -478,6 +507,20 @@ public sealed class WorkCycleTracker
             ResetCycle();
             BreakCompleted?.Invoke(this, EventArgs.Empty);
         }
+    }
+
+    private void EnterIdle()
+    {
+        CurrentPhase = WorkCyclePhase.Idle;
+        AccumulatedWorkTime = TimeSpan.Zero;
+        pendingSinceUtc = null;
+        breakStartUtc = null;
+        lastTickUtc = null;
+        wasWorking = false;
+        reminderVisibleSinceUtc = null;
+        snoozeUntilUtc = null;
+        lastReminderWorkTime = null;
+        wasPassivePaused = false;
     }
 
     private void EnterReminderVisible(DateTimeOffset now)
@@ -527,6 +570,7 @@ public sealed class WorkCycleTracker
         reminderVisibleSinceUtc = null;
         snoozeUntilUtc = null;
         lastReminderWorkTime = null;
+        wasPassivePaused = false;
         isReminderSuppressed = false;
         hasSuppressedReminder = false;
         showTrayCue = false;
@@ -541,6 +585,7 @@ public sealed class WorkCycleTracker
         lastTickUtc = null;
         wasWorking = false;
         lastReminderWorkTime = null;
+        wasPassivePaused = false;
     }
 
     private static void ValidateThreshold(TimeSpan value, string paramName)

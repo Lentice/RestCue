@@ -77,7 +77,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         workCycleTracker.ReminderShown += OnReminderShown;
         workCycleTracker.ReminderSuppressed += OnReminderSuppressed;
         workCycleTracker.BreakCompleted += OnBreakCompleted;
-        workCycleTracker.PassiveBreakCompleted += OnPassiveBreakCompleted;
+        workCycleTracker.PassivePauseDetected += OnPassivePauseDetected;
         workCycleTracker.ReminderDismissed += OnReminderDismissed;
         workCycleTracker.Paused += OnPaused;
         workCycleTracker.Resumed += OnResumed;
@@ -99,7 +99,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             workCycleTracker.ReminderShown -= OnReminderShown;
             workCycleTracker.ReminderSuppressed -= OnReminderSuppressed;
             workCycleTracker.BreakCompleted -= OnBreakCompleted;
-            workCycleTracker.PassiveBreakCompleted -= OnPassiveBreakCompleted;
+            workCycleTracker.PassivePauseDetected -= OnPassivePauseDetected;
             workCycleTracker.ReminderDismissed -= OnReminderDismissed;
             workCycleTracker.Paused -= OnPaused;
             workCycleTracker.Resumed -= OnResumed;
@@ -352,7 +352,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         });
     }
 
-    private void OnPassiveBreakCompleted(object? sender, EventArgs e)
+    private void OnPassivePauseDetected(object? sender, EventArgs e)
     {
         Dispatcher.Invoke(() =>
         {

@@ -32,4 +32,20 @@ public sealed class AppSettingsValidatorTests
         SettingsValidationError error = Assert.Single(errors);
         Assert.Equal("PassiveBreakThreshold", error.Field);
     }
+
+    [Fact]
+    public void Passive_break_threshold_equal_to_idle_threshold_is_invalid()
+    {
+        AppSettings settings = AppSettings.Default with
+        {
+            PassiveBreakThreshold = TimeSpan.FromMinutes(1),
+            IdleThreshold = TimeSpan.FromMinutes(1),
+        };
+        var validator = new AppSettingsValidator();
+
+        IReadOnlyList<SettingsValidationError> errors = validator.Validate(settings);
+
+        SettingsValidationError error = Assert.Single(errors);
+        Assert.Equal("PassiveBreakThreshold", error.Field);
+    }
 }

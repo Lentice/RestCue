@@ -85,7 +85,21 @@ public sealed class WorkCycleTrackerTests
     }
 
     [Fact]
-    public void Skips_gap_when_resuming_after_idle()
+    public void Working_transitions_to_Idle_at_exact_idleThreshold()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(DefaultIdleThreshold);
+        tracker.Tick(DefaultIdleThreshold);
+
+        Assert.Equal(WorkCyclePhase.Idle, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Resumes_a_fresh_cycle_after_idle()
     {
         var clock = new FakeClock();
         var tracker = CreateTracker(clock: clock);
@@ -98,7 +112,7 @@ public sealed class WorkCycleTrackerTests
         clock.Advance(TimeSpan.FromSeconds(10));
         tracker.Tick(TimeSpan.Zero);
 
-        Assert.Equal(TimeSpan.FromSeconds(5), tracker.AccumulatedWorkTime);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
     }
 
     [Fact]
@@ -439,7 +453,7 @@ public sealed class WorkCycleTrackerTests
     }
 
     [Fact]
-    public void Passive_break_in_PendingReminder_transitions_to_Working()
+    public void Passive_pause_in_PendingReminder_preserves_phase_and_debt()
     {
         var clock = new FakeClock();
         var tracker = CreateTracker(
@@ -451,12 +465,12 @@ public sealed class WorkCycleTrackerTests
         clock.Advance(TimeSpan.FromSeconds(21));
         tracker.Tick(TimeSpan.FromSeconds(21));
 
-        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
-        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.NotEqual(TimeSpan.Zero, tracker.AccumulatedWorkTime);
     }
 
     [Fact]
-    public void Passive_break_in_ReminderVisible_transitions_to_Working()
+    public void Passive_pause_in_ReminderVisible_hides_reminder_and_preserves_debt()
     {
         var clock = new FakeClock();
         var tracker = CreateTracker(
@@ -466,18 +480,18 @@ public sealed class WorkCycleTrackerTests
         ReachReminderVisible(tracker, clock);
         clock.Advance(TimeSpan.FromSeconds(25));
 
-        var passiveCompleted = false;
-        tracker.PassiveBreakCompleted += (_, _) => passiveCompleted = true;
+        var pauseDetected = false;
+        tracker.PassivePauseDetected += (_, _) => pauseDetected = true;
 
         tracker.Tick(TimeSpan.FromSeconds(25));
 
-        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
-        Assert.True(passiveCompleted);
-        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.True(pauseDetected);
+        Assert.NotEqual(TimeSpan.Zero, tracker.AccumulatedWorkTime);
     }
 
     [Fact]
-    public void Passive_break_in_PendingReminder_fires_separate_event()
+    public void Passive_pause_in_PendingReminder_fires_PassivePauseDetected_not_BreakCompleted()
     {
         var clock = new FakeClock();
         var tracker = CreateTracker(
@@ -486,20 +500,21 @@ public sealed class WorkCycleTrackerTests
 
         ReachPendingReminder(tracker, clock);
 
-        int passiveFired = 0;
+        int pauseFired = 0;
         int breakFired = 0;
-        tracker.PassiveBreakCompleted += (_, _) => passiveFired++;
+        tracker.PassivePauseDetected += (_, _) => pauseFired++;
         tracker.BreakCompleted += (_, _) => breakFired++;
 
         clock.Advance(TimeSpan.FromSeconds(21));
         tracker.Tick(TimeSpan.FromSeconds(21));
 
-        Assert.Equal(1, passiveFired);
+        Assert.Equal(1, pauseFired);
         Assert.Equal(0, breakFired);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
     }
 
     [Fact]
-    public void Passive_break_does_not_trigger_below_threshold_in_Pending()
+    public void Passive_pause_does_not_trigger_below_threshold_in_Pending()
     {
         var clock = new FakeClock();
         var tracker = CreateTracker(
@@ -516,7 +531,7 @@ public sealed class WorkCycleTrackerTests
     }
 
     [Fact]
-    public void Passive_break_does_not_trigger_in_Working_phase()
+    public void Passive_pause_does_not_trigger_in_Working_phase()
     {
         var clock = new FakeClock();
         var tracker = CreateTracker(
@@ -529,7 +544,7 @@ public sealed class WorkCycleTrackerTests
     }
 
     [Fact]
-    public void Passive_break_does_not_trigger_in_BreakInProgress()
+    public void Passive_pause_does_not_trigger_in_BreakInProgress()
     {
         var clock = new FakeClock();
         var tracker = CreateTracker(
@@ -540,18 +555,18 @@ public sealed class WorkCycleTrackerTests
         ReachReminderVisible(tracker, clock);
         tracker.StartBreak();
 
-        int passiveFired = 0;
-        tracker.PassiveBreakCompleted += (_, _) => passiveFired++;
+        int pauseFired = 0;
+        tracker.PassivePauseDetected += (_, _) => pauseFired++;
 
         clock.Advance(TimeSpan.FromSeconds(25));
         tracker.Tick(TimeSpan.FromSeconds(25));
 
-        Assert.Equal(0, passiveFired);
+        Assert.Equal(0, pauseFired);
         Assert.Equal(WorkCyclePhase.BreakInProgress, tracker.CurrentPhase);
     }
 
     [Fact]
-    public void Passive_break_at_exact_threshold_in_Pending()
+    public void Passive_pause_at_exact_threshold_in_Pending()
     {
         var clock = new FakeClock();
         var tracker = CreateTracker(
@@ -560,14 +575,19 @@ public sealed class WorkCycleTrackerTests
 
         ReachPendingReminder(tracker, clock);
 
+        int pauseFired = 0;
+        tracker.PassivePauseDetected += (_, _) => pauseFired++;
+
         clock.Advance(TimeSpan.FromSeconds(20));
         tracker.Tick(TimeSpan.FromSeconds(20));
 
-        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(1, pauseFired);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.NotEqual(TimeSpan.Zero, tracker.AccumulatedWorkTime);
     }
 
     [Fact]
-    public void Passive_break_just_below_threshold_does_not_transition()
+    public void Passive_pause_just_below_threshold_does_not_fire()
     {
         var clock = new FakeClock();
         var tracker = CreateTracker(
@@ -577,14 +597,18 @@ public sealed class WorkCycleTrackerTests
 
         ReachPendingReminder(tracker, clock);
 
+        int pauseFired = 0;
+        tracker.PassivePauseDetected += (_, _) => pauseFired++;
+
         clock.Advance(TimeSpan.FromSeconds(20) - TimeSpan.FromMilliseconds(1));
         tracker.Tick(TimeSpan.FromSeconds(20) - TimeSpan.FromMilliseconds(1));
 
+        Assert.Equal(0, pauseFired);
         Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
     }
 
     [Fact]
-    public void Passive_break_in_ReminderVisible_closes_reminder()
+    public void Passive_pause_in_ReminderVisible_returns_to_PendingReminder()
     {
         var clock = new FakeClock();
         var tracker = CreateTracker(
@@ -593,14 +617,19 @@ public sealed class WorkCycleTrackerTests
 
         ReachReminderVisible(tracker, clock);
 
+        int pauseFired = 0;
+        tracker.PassivePauseDetected += (_, _) => pauseFired++;
+
         clock.Advance(TimeSpan.FromSeconds(25));
         tracker.Tick(TimeSpan.FromSeconds(25));
 
-        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(1, pauseFired);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.NotEqual(TimeSpan.Zero, tracker.AccumulatedWorkTime);
     }
 
     [Fact]
-    public void Natural_pause_does_not_trigger_when_passive_break_threshold_met_first()
+    public void Natural_pause_does_not_trigger_when_passive_pause_threshold_met_first()
     {
         var clock = new FakeClock();
         var tracker = CreateTracker(
@@ -613,11 +642,16 @@ public sealed class WorkCycleTrackerTests
         int reminderShown = 0;
         tracker.ReminderShown += (_, _) => reminderShown++;
 
+        int pauseFired = 0;
+        tracker.PassivePauseDetected += (_, _) => pauseFired++;
+
         clock.Advance(TimeSpan.FromSeconds(25));
         tracker.Tick(TimeSpan.FromSeconds(25));
 
-        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(1, pauseFired);
         Assert.Equal(0, reminderShown);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.NotEqual(TimeSpan.Zero, tracker.AccumulatedWorkTime);
     }
 
     [Fact]
@@ -645,6 +679,37 @@ public sealed class WorkCycleTrackerTests
             new FakeClock(), DefaultWorkInterval, DefaultIdleThreshold,
             DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration, DefaultPassiveBreak,
             DefaultSnoozeDuration, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void Constructor_throws_when_passiveBreakThreshold_equals_idleThreshold()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new WorkCycleTracker(
+            new FakeClock(), DefaultWorkInterval, DefaultIdleThreshold,
+            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration, DefaultIdleThreshold,
+            DefaultSnoozeDuration, DefaultReminderDisplayDuration));
+    }
+
+    [Fact]
+    public void Constructor_throws_when_passiveBreakThreshold_exceeds_idleThreshold()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new WorkCycleTracker(
+            new FakeClock(), DefaultWorkInterval, DefaultIdleThreshold,
+            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration,
+            DefaultIdleThreshold + TimeSpan.FromSeconds(1),
+            DefaultSnoozeDuration, DefaultReminderDisplayDuration));
+    }
+
+    [Fact]
+    public void Constructor_accepts_passiveBreakThreshold_below_idleThreshold()
+    {
+        var tracker = new WorkCycleTracker(
+            new FakeClock(), DefaultWorkInterval, DefaultIdleThreshold,
+            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration,
+            TimeSpan.FromSeconds(20),
+            DefaultSnoozeDuration, DefaultReminderDisplayDuration);
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
     }
 
     [Fact]
@@ -923,7 +988,7 @@ public sealed class WorkCycleTrackerTests
     }
 
     [Fact]
-    public void Passive_break_takes_priority_over_AutoDismissed()
+    public void Passive_pause_takes_priority_over_AutoDismissed()
     {
         var clock = new FakeClock();
         var tracker = CreateTracker(
@@ -936,7 +1001,7 @@ public sealed class WorkCycleTrackerTests
         clock.Advance(TimeSpan.FromSeconds(35));
         tracker.Tick(TimeSpan.FromSeconds(35));
 
-        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
     }
 
     [Fact]
@@ -953,7 +1018,7 @@ public sealed class WorkCycleTrackerTests
         int passiveBreakCount = 0;
         int dismissCount = 0;
         tracker.BreakCompleted += (_, _) => breakCompletedCount++;
-        tracker.PassiveBreakCompleted += (_, _) => passiveBreakCount++;
+        tracker.PassivePauseDetected += (_, _) => passiveBreakCount++;
         tracker.ReminderDismissed += (_, _) => dismissCount++;
 
         tracker.Ignore();
@@ -983,7 +1048,7 @@ public sealed class WorkCycleTrackerTests
         int dismissCount = 0;
         int reminderShownCount = 0;
         tracker.BreakCompleted += (_, _) => breakCompletedCount++;
-        tracker.PassiveBreakCompleted += (_, _) => passiveBreakCount++;
+        tracker.PassivePauseDetected += (_, _) => passiveBreakCount++;
         tracker.ReminderDismissed += (_, _) => dismissCount++;
         tracker.ReminderShown += (_, _) => reminderShownCount++;
 
@@ -1017,7 +1082,7 @@ public sealed class WorkCycleTrackerTests
         int passiveBreakCount = 0;
         int dismissCount = 0;
         tracker.BreakCompleted += (_, _) => breakCompletedCount++;
-        tracker.PassiveBreakCompleted += (_, _) => passiveBreakCount++;
+        tracker.PassivePauseDetected += (_, _) => passiveBreakCount++;
         tracker.ReminderDismissed += (_, _) => dismissCount++;
 
         clock.Advance(TimeSpan.FromSeconds(30));
@@ -2607,6 +2672,165 @@ public sealed class WorkCycleTrackerTests
         tracker.TickActivityUnavailable();
 
         Assert.Equal(WorkCyclePhase.Disabled, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Passive_pause_preserves_debt_across_multiple_ticks()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            passiveBreak: TimeSpan.FromSeconds(20));
+
+        ReachPendingReminder(tracker, clock);
+
+        int pauseDetected = 0;
+        tracker.PassivePauseDetected += (_, _) => pauseDetected++;
+
+        clock.Advance(TimeSpan.FromSeconds(25));
+        tracker.Tick(TimeSpan.FromSeconds(25));
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.NotEqual(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+        Assert.Equal(1, pauseDetected);
+
+        clock.Advance(TimeSpan.FromSeconds(5));
+        tracker.Tick(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.NotEqual(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+        Assert.Equal(1, pauseDetected);
+    }
+
+    [Fact]
+    public void Passive_pause_work_resumes_after_user_returns()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            passiveBreak: TimeSpan.FromSeconds(20),
+            workInterval: TimeSpan.FromSeconds(60));
+
+        ReachPendingReminder(tracker, clock);
+
+        clock.Advance(TimeSpan.FromSeconds(25));
+        tracker.Tick(TimeSpan.FromSeconds(25));
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+
+        var afterPause = tracker.AccumulatedWorkTime;
+
+        clock.Advance(TimeSpan.FromSeconds(3));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.True(tracker.AccumulatedWorkTime > afterPause);
+    }
+
+    [Fact]
+    public void Passive_pause_in_ReminderVisible_next_natural_pause_shows_reminder_again()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            naturalPause: TimeSpan.FromSeconds(5),
+            passiveBreak: TimeSpan.FromSeconds(20));
+
+        ReachReminderVisible(tracker, clock);
+
+        clock.Advance(TimeSpan.FromSeconds(25));
+        tracker.Tick(TimeSpan.FromSeconds(25));
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+
+        int reminderShown = 0;
+        tracker.ReminderShown += (_, _) => reminderShown++;
+
+        clock.Advance(TimeSpan.FromSeconds(6));
+        tracker.Tick(TimeSpan.FromSeconds(6));
+
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+        Assert.Equal(1, reminderShown);
+    }
+
+    [Fact]
+    public void PendingReminder_transitions_to_Idle_when_idle_exceeds_idleThreshold()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            passiveBreak: TimeSpan.FromSeconds(20),
+            idleThreshold: TimeSpan.FromMinutes(2));
+
+        ReachPendingReminder(tracker, clock);
+
+        int breakCompleted = 0;
+        int pauseDetected = 0;
+        tracker.BreakCompleted += (_, _) => breakCompleted++;
+        tracker.PassivePauseDetected += (_, _) => pauseDetected++;
+
+        clock.Advance(TimeSpan.FromMinutes(3));
+        tracker.Tick(TimeSpan.FromMinutes(3));
+
+        Assert.Equal(WorkCyclePhase.Idle, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+        Assert.Equal(0, breakCompleted);
+        Assert.Equal(0, pauseDetected);
+    }
+
+    [Fact]
+    public void ReminderVisible_transitions_to_Idle_when_idle_exceeds_idleThreshold()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            passiveBreak: TimeSpan.FromSeconds(20),
+            idleThreshold: TimeSpan.FromMinutes(2));
+
+        ReachReminderVisible(tracker, clock);
+
+        int breakCompleted = 0;
+        int pauseDetected = 0;
+        tracker.BreakCompleted += (_, _) => breakCompleted++;
+        tracker.PassivePauseDetected += (_, _) => pauseDetected++;
+
+        clock.Advance(TimeSpan.FromMinutes(3));
+        tracker.Tick(TimeSpan.FromMinutes(3));
+
+        Assert.Equal(WorkCyclePhase.Idle, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+        Assert.Equal(0, breakCompleted);
+        Assert.Equal(0, pauseDetected);
+    }
+
+    [Fact]
+    public void Passive_pause_recovery_does_not_show_reminder_immediately()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(1),
+            passiveBreak: TimeSpan.FromSeconds(5),
+            naturalPause: TimeSpan.FromSeconds(60),
+            maxWait: TimeSpan.FromSeconds(10),
+            idleThreshold: TimeSpan.FromSeconds(30));
+
+        ReachPendingReminder(tracker, clock);
+
+        int reminderShown = 0;
+        int pauseFired = 0;
+        tracker.ReminderShown += (_, _) => reminderShown++;
+        tracker.PassivePauseDetected += (_, _) => pauseFired++;
+
+        clock.Advance(TimeSpan.FromSeconds(15));
+        tracker.Tick(TimeSpan.FromSeconds(15));
+        Assert.Equal(1, pauseFired);
+        Assert.Equal(0, reminderShown);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.Equal(0, reminderShown);
     }
 
     private sealed class FakeClock : IClock
