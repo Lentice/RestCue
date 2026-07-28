@@ -1512,6 +1512,1103 @@ public sealed class WorkCycleTrackerTests
         tracker.Tick(TimeSpan.FromSeconds(6));
     }
 
+    [Fact]
+    public void HandleLock_from_PendingReminder_clears_stale_reminder()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachPendingReminder(tracker, clock);
+
+        tracker.HandleLock();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void HandleLock_from_ReminderVisible_clears_stale_reminder()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachReminderVisible(tracker, clock);
+
+        tracker.HandleLock();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void HandleLock_from_Snoozed_clears_stale_reminder()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachReminderVisible(tracker, clock);
+        tracker.Snooze();
+
+        tracker.HandleLock();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void HandleLock_from_Working_resets_cycle()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock, workInterval: TimeSpan.FromSeconds(30));
+
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(5));
+        tracker.Tick(TimeSpan.Zero);
+
+        tracker.HandleLock();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void HandleLock_from_BreakInProgress_preserves_state()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock, breakDuration: TimeSpan.FromSeconds(20));
+
+        ReachReminderVisible(tracker, clock);
+        tracker.StartBreak();
+        var before = tracker.AccumulatedWorkTime;
+
+        tracker.HandleLock();
+
+        Assert.Equal(WorkCyclePhase.BreakInProgress, tracker.CurrentPhase);
+        Assert.Equal(before, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void HandleLock_from_FocusMode_resets_cycle()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock, workInterval: TimeSpan.FromSeconds(30));
+
+        tracker.Tick(TimeSpan.Zero);
+        tracker.StartFocusMode();
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.Tick(TimeSpan.Zero);
+
+        tracker.HandleLock();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void HandleLock_from_Working_blocks_accumulation_during_lock()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock, workInterval: TimeSpan.FromSeconds(30));
+
+        tracker.HandleLock();
+
+        clock.Advance(TimeSpan.FromMinutes(10));
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void HandleLock_from_Working_blocks_reminder_during_lock()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock, workInterval: TimeSpan.FromSeconds(30));
+
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(5));
+        tracker.Tick(TimeSpan.Zero);
+
+        int reminderShown = 0;
+        tracker.ReminderShown += (_, _) => reminderShown++;
+
+        tracker.HandleLock();
+
+        for (int i = 0; i < 50; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+
+        Assert.Equal(0, reminderShown);
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void HandleLock_from_FocusMode_blocks_accumulation_during_lock()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock, workInterval: TimeSpan.FromSeconds(30));
+
+        tracker.Tick(TimeSpan.Zero);
+        tracker.StartFocusMode();
+        clock.Advance(TimeSpan.FromSeconds(5));
+        tracker.Tick(TimeSpan.Zero);
+
+        tracker.HandleLock();
+
+        clock.Advance(TimeSpan.FromMinutes(10));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void HandleLock_from_FocusMode_HandleUnlock_starts_fresh()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock, workInterval: TimeSpan.FromSeconds(30));
+
+        tracker.Tick(TimeSpan.Zero);
+        tracker.StartFocusMode();
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.Tick(TimeSpan.Zero);
+
+        tracker.HandleLock();
+        tracker.HandleUnlock();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void HandleUnlock_resets_to_Working()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachReminderVisible(tracker, clock);
+
+        tracker.HandleLock();
+        tracker.HandleUnlock();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void HandleSleep_resets_cycle_independently()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachPendingReminder(tracker, clock);
+
+        tracker.HandleSleep();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void HandleResume_after_sleep_resets_cycle()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachReminderVisible(tracker, clock);
+
+        tracker.HandleSleep();
+        tracker.HandleResume();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Sleep_then_lock_HandleResume_does_not_clear_lock_suppression()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachReminderVisible(tracker, clock);
+
+        tracker.HandleSleep();
+        tracker.HandleLock();
+        tracker.HandleResume();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+
+        clock.Advance(TimeSpan.FromMinutes(10));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Sleep_then_lock_HandleUnlock_does_not_clear_sleep_suppression()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachReminderVisible(tracker, clock);
+
+        tracker.HandleSleep();
+        tracker.HandleLock();
+        tracker.HandleUnlock();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+
+        clock.Advance(TimeSpan.FromMinutes(10));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Sleep_then_lock_HandleBoth_clears_all_suppression()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachReminderVisible(tracker, clock);
+
+        tracker.HandleSleep();
+        tracker.HandleLock();
+        tracker.HandleResume();
+        tracker.HandleUnlock();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Lock_then_sleep_HandleResume_does_not_clear_lock_suppression()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachReminderVisible(tracker, clock);
+
+        tracker.HandleLock();
+        tracker.HandleSleep();
+        tracker.HandleResume();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+
+        clock.Advance(TimeSpan.FromMinutes(10));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Lock_then_sleep_HandleUnlock_does_not_clear_sleep_suppression()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachReminderVisible(tracker, clock);
+
+        tracker.HandleLock();
+        tracker.HandleSleep();
+        tracker.HandleUnlock();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+
+        clock.Advance(TimeSpan.FromMinutes(10));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Lock_then_sleep_HandleBoth_clears_all_suppression()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachReminderVisible(tracker, clock);
+
+        tracker.HandleLock();
+        tracker.HandleSleep();
+        tracker.HandleUnlock();
+        tracker.HandleResume();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void HandleSleep_blocks_TickActivityUnavailable()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+
+        tracker.HandleSleep();
+
+        clock.Advance(TimeSpan.FromMinutes(10));
+        tracker.TickActivityUnavailable();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Unlock_after_lock_does_not_immediately_show_stale_reminder()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
+
+        for (int i = 0; i < 31; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+
+        tracker.HandleLock();
+        tracker.HandleUnlock();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void HandleLock_from_Paused_preserves_state()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.Tick(TimeSpan.Zero);
+        var accumulated = tracker.AccumulatedWorkTime;
+        tracker.Pause();
+
+        tracker.HandleLock();
+
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+        Assert.Equal(accumulated, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void HandleLock_from_Disabled_preserves_state()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.Tick(TimeSpan.Zero);
+        var accumulated = tracker.AccumulatedWorkTime;
+        tracker.Disable();
+
+        tracker.HandleLock();
+
+        Assert.Equal(WorkCyclePhase.Disabled, tracker.CurrentPhase);
+        Assert.Equal(accumulated, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void HandleUnlock_from_Paused_preserves_state()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.Tick(TimeSpan.Zero);
+        var accumulated = tracker.AccumulatedWorkTime;
+        tracker.Pause();
+
+        tracker.HandleLock();
+        tracker.HandleUnlock();
+
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+        Assert.Equal(accumulated, tracker.AccumulatedWorkTime);
+
+        clock.Advance(TimeSpan.FromMinutes(30));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void HandleUnlock_from_Disabled_preserves_state()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.Tick(TimeSpan.Zero);
+        var accumulated = tracker.AccumulatedWorkTime;
+        tracker.Disable();
+
+        tracker.HandleLock();
+        tracker.HandleUnlock();
+
+        Assert.Equal(WorkCyclePhase.Disabled, tracker.CurrentPhase);
+        Assert.Equal(accumulated, tracker.AccumulatedWorkTime);
+
+        clock.Advance(TimeSpan.FromMinutes(30));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.Disabled, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Paused_lock_unlock_legal_recovery_via_Resume()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.Tick(TimeSpan.Zero);
+        tracker.Pause();
+
+        tracker.HandleLock();
+        tracker.HandleUnlock();
+
+        int resumed = 0;
+        tracker.Resumed += (_, _) => resumed++;
+
+        tracker.Resume();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(1, resumed);
+    }
+
+    [Fact]
+    public void Disabled_lock_unlock_legal_recovery_via_Enable()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Disable();
+
+        tracker.HandleLock();
+        tracker.HandleUnlock();
+
+        int enabled = 0;
+        tracker.Enabled += (_, _) => enabled++;
+
+        tracker.Enable();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(1, enabled);
+    }
+
+    [Fact]
+    public void Paused_sleep_resume_no_unexpected_transition()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.Tick(TimeSpan.Zero);
+        var accumulated = tracker.AccumulatedWorkTime;
+        tracker.Pause();
+
+        tracker.HandleSleep();
+        tracker.HandleResume();
+
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+        Assert.Equal(accumulated, tracker.AccumulatedWorkTime);
+
+        clock.Advance(TimeSpan.FromMinutes(30));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Disabled_sleep_resume_no_unexpected_transition()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Disable();
+
+        tracker.HandleSleep();
+        tracker.HandleResume();
+
+        Assert.Equal(WorkCyclePhase.Disabled, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+
+        clock.Advance(TimeSpan.FromMinutes(30));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.Disabled, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void HandleUnlock_from_Paused_fires_no_lifecycle_events()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Pause();
+
+        int fired = 0;
+        tracker.Paused += (_, _) => fired++;
+        tracker.Resumed += (_, _) => fired++;
+        tracker.Disabled += (_, _) => fired++;
+        tracker.Enabled += (_, _) => fired++;
+        tracker.ReminderShown += (_, _) => fired++;
+
+        tracker.HandleLock();
+        tracker.HandleUnlock();
+
+        Assert.Equal(0, fired);
+    }
+
+    [Fact]
+    public void HandleUnlock_from_Disabled_fires_no_lifecycle_events()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Disable();
+
+        int fired = 0;
+        tracker.Paused += (_, _) => fired++;
+        tracker.Resumed += (_, _) => fired++;
+        tracker.Disabled += (_, _) => fired++;
+        tracker.Enabled += (_, _) => fired++;
+        tracker.ReminderShown += (_, _) => fired++;
+
+        tracker.HandleLock();
+        tracker.HandleUnlock();
+
+        Assert.Equal(0, fired);
+    }
+
+    [Fact]
+    public void Pause_transitions_from_Working()
+    {
+        var tracker = CreateTracker();
+        tracker.Pause();
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Pause_transitions_from_PendingReminder()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachPendingReminder(tracker, clock);
+
+        tracker.Pause();
+
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Pause_transitions_from_ReminderVisible()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachReminderVisible(tracker, clock);
+
+        tracker.Pause();
+
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+    }
+
+    [Theory]
+    [InlineData(WorkCyclePhase.Paused)]
+    [InlineData(WorkCyclePhase.FocusMode)]
+    [InlineData(WorkCyclePhase.Disabled)]
+    [InlineData(WorkCyclePhase.BreakInProgress)]
+    public void Pause_throws_from_invalid_phases(WorkCyclePhase phase)
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+
+        if (phase != WorkCyclePhase.Paused)
+            ReachReminderVisible(tracker, clock);
+        if (phase == WorkCyclePhase.BreakInProgress)
+            tracker.StartBreak();
+
+        switch (phase)
+        {
+            case WorkCyclePhase.Paused:
+                tracker.Pause();
+                break;
+            case WorkCyclePhase.FocusMode:
+                tracker.StartFocusMode();
+                break;
+            case WorkCyclePhase.Disabled:
+                tracker.Disable();
+                break;
+        }
+
+        Assert.Throws<InvalidOperationException>(() => tracker.Pause());
+    }
+
+    [Fact]
+    public void Resume_transitions_to_Working()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Pause();
+
+        tracker.Resume();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Resume_throws_when_not_paused()
+    {
+        var tracker = CreateTracker();
+        Assert.Throws<InvalidOperationException>(() => tracker.Resume());
+    }
+
+    [Fact]
+    public void Pause_fires_Paused_event()
+    {
+        var tracker = CreateTracker();
+        int fired = 0;
+        tracker.Paused += (_, _) => fired++;
+
+        tracker.Pause();
+
+        Assert.Equal(1, fired);
+    }
+
+    [Fact]
+    public void Resume_fires_Resumed_event()
+    {
+        var tracker = CreateTracker();
+        tracker.Pause();
+
+        int fired = 0;
+        tracker.Resumed += (_, _) => fired++;
+
+        tracker.Resume();
+
+        Assert.Equal(1, fired);
+    }
+
+    [Fact]
+    public void No_accumulation_while_paused()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(5));
+        tracker.Tick(TimeSpan.Zero);
+        var before = tracker.AccumulatedWorkTime;
+
+        tracker.Pause();
+
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(before, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Tick_in_Paused_does_not_transition()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Pause();
+
+        clock.Advance(TimeSpan.FromMinutes(30));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void StartFocusMode_transitions_from_Working()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Tick(TimeSpan.Zero);
+
+        tracker.StartFocusMode();
+
+        Assert.Equal(WorkCyclePhase.FocusMode, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void StartFocusMode_transitions_from_PendingReminder()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachPendingReminder(tracker, clock);
+
+        tracker.StartFocusMode();
+
+        Assert.Equal(WorkCyclePhase.FocusMode, tracker.CurrentPhase);
+    }
+
+    [Theory]
+    [InlineData(WorkCyclePhase.Paused)]
+    [InlineData(WorkCyclePhase.FocusMode)]
+    [InlineData(WorkCyclePhase.Disabled)]
+    [InlineData(WorkCyclePhase.BreakInProgress)]
+    [InlineData(WorkCyclePhase.Idle)]
+    public void StartFocusMode_throws_from_invalid_phases(WorkCyclePhase phase)
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+
+        switch (phase)
+        {
+            case WorkCyclePhase.Paused:
+                tracker.Pause();
+                break;
+            case WorkCyclePhase.FocusMode:
+                tracker.StartFocusMode();
+                break;
+            case WorkCyclePhase.Disabled:
+                tracker.Disable();
+                break;
+            case WorkCyclePhase.BreakInProgress:
+                ReachReminderVisible(tracker, clock);
+                tracker.StartBreak();
+                break;
+            case WorkCyclePhase.Idle:
+                ReachReminderVisible(tracker, clock);
+                tracker.Snooze();
+                clock.Advance(TimeSpan.FromMinutes(3));
+                tracker.Tick(TimeSpan.FromMinutes(3));
+                Assert.Equal(WorkCyclePhase.Idle, tracker.CurrentPhase);
+                break;
+        }
+
+        Assert.Throws<InvalidOperationException>(() => tracker.StartFocusMode());
+    }
+
+    [Fact]
+    public void EndFocusMode_transitions_to_PendingReminder_when_threshold_exceeded()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
+
+        tracker.Tick(TimeSpan.Zero);
+        tracker.StartFocusMode();
+
+        for (int i = 0; i < 31; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+
+        tracker.EndFocusMode();
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void EndFocusMode_transitions_to_Working_when_threshold_not_exceeded()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
+
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(5));
+        tracker.Tick(TimeSpan.Zero);
+
+        tracker.StartFocusMode();
+        tracker.EndFocusMode();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void EndFocusMode_fires_at_most_one_reminder()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(20));
+
+        tracker.Tick(TimeSpan.Zero);
+        tracker.StartFocusMode();
+
+        for (int i = 0; i < 61; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+
+        int reminderShownCount = 0;
+        tracker.ReminderShown += (_, _) => reminderShownCount++;
+
+        tracker.EndFocusMode();
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+
+        clock.Advance(TimeSpan.FromSeconds(6));
+        tracker.Tick(TimeSpan.FromSeconds(6));
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+        Assert.Equal(1, reminderShownCount);
+    }
+
+    [Fact]
+    public void Work_accumulates_during_FocusMode()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
+
+        tracker.Tick(TimeSpan.Zero);
+        tracker.StartFocusMode();
+
+        clock.Advance(TimeSpan.FromSeconds(5));
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(TimeSpan.FromSeconds(20), tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void EndFocusMode_does_not_transition_to_ReminderVisible_directly()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
+
+        tracker.Tick(TimeSpan.Zero);
+        tracker.StartFocusMode();
+
+        for (int i = 0; i < 31; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+
+        int reminderShownCount = 0;
+        tracker.ReminderShown += (_, _) => reminderShownCount++;
+
+        tracker.EndFocusMode();
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.Equal(0, reminderShownCount);
+    }
+
+    [Fact]
+    public void StartFocusMode_fires_FocusModeStarted_event()
+    {
+        var tracker = CreateTracker();
+        int fired = 0;
+        tracker.FocusModeStarted += (_, _) => fired++;
+
+        tracker.StartFocusMode();
+
+        Assert.Equal(1, fired);
+    }
+
+    [Fact]
+    public void EndFocusMode_fires_FocusModeEnded_event()
+    {
+        var tracker = CreateTracker();
+        tracker.StartFocusMode();
+
+        int fired = 0;
+        tracker.FocusModeEnded += (_, _) => fired++;
+
+        tracker.EndFocusMode();
+
+        Assert.Equal(1, fired);
+    }
+
+    [Fact]
+    public void Disable_transitions_to_Disabled()
+    {
+        var tracker = CreateTracker();
+        tracker.Disable();
+        Assert.Equal(WorkCyclePhase.Disabled, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Disable_throws_when_already_disabled()
+    {
+        var tracker = CreateTracker();
+        tracker.Disable();
+        Assert.Throws<InvalidOperationException>(() => tracker.Disable());
+    }
+
+    [Fact]
+    public void Enable_transitions_to_Working()
+    {
+        var tracker = CreateTracker();
+        tracker.Disable();
+
+        tracker.Enable();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Enable_throws_when_not_disabled()
+    {
+        var tracker = CreateTracker();
+        Assert.Throws<InvalidOperationException>(() => tracker.Enable());
+    }
+
+    [Fact]
+    public void No_accumulation_while_disabled()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromSeconds(5));
+        tracker.Tick(TimeSpan.Zero);
+        var before = tracker.AccumulatedWorkTime;
+
+        tracker.Disable();
+
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(before, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void Tick_in_Disabled_does_not_transition()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Disable();
+
+        clock.Advance(TimeSpan.FromMinutes(30));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.Disabled, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Disable_fires_Disabled_event()
+    {
+        var tracker = CreateTracker();
+        int fired = 0;
+        tracker.Disabled += (_, _) => fired++;
+
+        tracker.Disable();
+
+        Assert.Equal(1, fired);
+    }
+
+    [Fact]
+    public void Enable_fires_Enabled_event()
+    {
+        var tracker = CreateTracker();
+        tracker.Disable();
+
+        int fired = 0;
+        tracker.Enabled += (_, _) => fired++;
+
+        tracker.Enable();
+
+        Assert.Equal(1, fired);
+    }
+
+    [Fact]
+    public void Disable_from_PendingReminder_clears_reminder_state()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachPendingReminder(tracker, clock);
+
+        tracker.Disable();
+
+        Assert.Equal(WorkCyclePhase.Disabled, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Disable_from_ReminderVisible_clears_reminder_state()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        ReachReminderVisible(tracker, clock);
+
+        tracker.Disable();
+
+        Assert.Equal(WorkCyclePhase.Disabled, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Resume_after_pause_starts_fresh_cycle()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
+
+        for (int i = 0; i < 25; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+        Assert.NotEqual(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+
+        tracker.Pause();
+        tracker.Resume();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void TickActivityUnavailable_in_Paused_preserves_phase()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Pause();
+
+        clock.Advance(TimeSpan.FromMinutes(5));
+        tracker.TickActivityUnavailable();
+
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void TickActivityUnavailable_in_FocusMode_preserves_phase()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.StartFocusMode();
+
+        clock.Advance(TimeSpan.FromMinutes(5));
+        tracker.TickActivityUnavailable();
+
+        Assert.Equal(WorkCyclePhase.FocusMode, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void TickActivityUnavailable_in_Disabled_preserves_phase()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Disable();
+
+        clock.Advance(TimeSpan.FromMinutes(5));
+        tracker.TickActivityUnavailable();
+
+        Assert.Equal(WorkCyclePhase.Disabled, tracker.CurrentPhase);
+    }
+
     private sealed class FakeClock : IClock
     {
         private DateTimeOffset _utcNow = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);

@@ -7,10 +7,26 @@ public sealed class WindowsTrayIcon : ITrayIcon
 {
     private readonly NotifyIcon _notifyIcon;
 
+    private readonly ToolStripMenuItem _pauseItem;
+    private readonly ToolStripMenuItem _focusItem;
+    private readonly ToolStripMenuItem _disableItem;
+
+    private bool _isPaused;
+    private bool _isFocusMode;
+    private bool _isDisabled;
+
     public WindowsTrayIcon()
     {
+        _pauseItem = new ToolStripMenuItem("暫停提醒", null, TogglePause);
+        _focusItem = new ToolStripMenuItem("專注模式", null, ToggleFocusMode);
+        _disableItem = new ToolStripMenuItem("停用提醒", null, ToggleDisable);
+
         var menu = new ContextMenuStrip();
         menu.Items.Add("開啟 RestCue", null, (_, _) => OpenRequested?.Invoke(this, EventArgs.Empty));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(_pauseItem);
+        menu.Items.Add(_focusItem);
+        menu.Items.Add(_disableItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("結束 RestCue", null, (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty));
 
@@ -27,10 +43,87 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
     public event EventHandler? ExitRequested;
 
+    public event EventHandler? PauseRequested;
+
+    public event EventHandler? ResumeRequested;
+
+    public event EventHandler? FocusModeRequested;
+
+    public event EventHandler? EndFocusModeRequested;
+
+    public event EventHandler? DisableRequested;
+
+    public event EventHandler? EnableRequested;
+
     public bool Visible
     {
         get => _notifyIcon.Visible;
         set => _notifyIcon.Visible = value;
+    }
+
+    public void SetPauseText(bool isPaused)
+    {
+        _isPaused = isPaused;
+        _pauseItem.Text = isPaused ? "繼續提醒" : "暫停提醒";
+    }
+
+    public void SetFocusModeText(bool isFocusMode)
+    {
+        _isFocusMode = isFocusMode;
+        _focusItem.Text = isFocusMode ? "結束專注模式" : "專注模式";
+    }
+
+    public void SetDisableText(bool isDisabled)
+    {
+        _isDisabled = isDisabled;
+        _disableItem.Text = isDisabled ? "啟用提醒" : "停用提醒";
+    }
+
+    public void SetStatusText(string text)
+    {
+        _notifyIcon.Text = text;
+    }
+
+    public void SetPauseEnabled(bool enabled) => _pauseItem.Enabled = enabled;
+
+    public void SetFocusModeEnabled(bool enabled) => _focusItem.Enabled = enabled;
+
+    public void SetDisableEnabled(bool enabled) => _disableItem.Enabled = enabled;
+
+    private void TogglePause(object? sender, EventArgs e)
+    {
+        if (_isPaused)
+        {
+            ResumeRequested?.Invoke(this, EventArgs.Empty);
+        }
+        else
+        {
+            PauseRequested?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private void ToggleFocusMode(object? sender, EventArgs e)
+    {
+        if (_isFocusMode)
+        {
+            EndFocusModeRequested?.Invoke(this, EventArgs.Empty);
+        }
+        else
+        {
+            FocusModeRequested?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private void ToggleDisable(object? sender, EventArgs e)
+    {
+        if (_isDisabled)
+        {
+            EnableRequested?.Invoke(this, EventArgs.Empty);
+        }
+        else
+        {
+            DisableRequested?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     public void Dispose() => _notifyIcon.Dispose();

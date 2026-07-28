@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using RestCue.App.Lifecycle;
 using RestCue.Core.Activity;
 using RestCue.Core.Reminders;
@@ -29,9 +30,24 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         activityTimer.Tick += OnActivityTimerTick;
     }
 
+    public event EventHandler<WorkCyclePhase>? PhaseChanged;
+
+    public void WireLifecycleEvents()
+    {
+        SystemEvents.SessionSwitch += OnSessionSwitch;
+        SystemEvents.PowerModeChanged += OnPowerModeChanged;
+    }
+
+    public void UnwireLifecycleEvents()
+    {
+        SystemEvents.SessionSwitch -= OnSessionSwitch;
+        SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+    }
+
     public void StartActivityTracking(
         IUserActivityMonitor activityMonitor,
-        AppSettings settings)
+        AppSettings settings,
+        IClock? clock = null)
     {
         this.activityMonitor = activityMonitor;
         activityTracker = new UserActivityStatusTracker(
@@ -41,7 +57,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         snoozeDuration = settings.SnoozeDuration;
 
         workCycleTracker = new WorkCycleTracker(
-            new SystemClock(),
+            clock ?? new SystemClock(),
             settings.WorkInterval,
             settings.IdleThreshold,
             settings.NaturalPauseThreshold,
@@ -55,9 +71,34 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         workCycleTracker.BreakCompleted += OnBreakCompleted;
         workCycleTracker.PassiveBreakCompleted += OnPassiveBreakCompleted;
         workCycleTracker.ReminderDismissed += OnReminderDismissed;
+        workCycleTracker.Paused += OnPaused;
+        workCycleTracker.Resumed += OnResumed;
+        workCycleTracker.FocusModeStarted += OnFocusModeStarted;
+        workCycleTracker.FocusModeEnded += OnFocusModeEnded;
+        workCycleTracker.Disabled += OnDisabled;
+        workCycleTracker.Enabled += OnEnabled;
 
         RefreshActivityStatus(activityTracker.Refresh());
         activityTimer.Start();
+    }
+
+    public void StopActivityTracking()
+    {
+        activityTimer.Stop();
+
+        if (workCycleTracker != null)
+        {
+            workCycleTracker.ReminderShown -= OnReminderShown;
+            workCycleTracker.BreakCompleted -= OnBreakCompleted;
+            workCycleTracker.PassiveBreakCompleted -= OnPassiveBreakCompleted;
+            workCycleTracker.ReminderDismissed -= OnReminderDismissed;
+            workCycleTracker.Paused -= OnPaused;
+            workCycleTracker.Resumed -= OnResumed;
+            workCycleTracker.FocusModeStarted -= OnFocusModeStarted;
+            workCycleTracker.FocusModeEnded -= OnFocusModeEnded;
+            workCycleTracker.Disabled -= OnDisabled;
+            workCycleTracker.Enabled -= OnEnabled;
+        }
     }
 
     public void ShowOrActivate()
@@ -75,11 +116,145 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         Activate();
     }
 
+    public void Pause()
+    {
+        if (workCycleTracker == null) return;
+        CloseReminderIfOpen();
+        try
+        {
+            workCycleTracker.Pause();
+            UpdateCycleStatus();
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    public void Resume()
+    {
+        if (workCycleTracker == null) return;
+        try
+        {
+            workCycleTracker.Resume();
+            UpdateCycleStatus();
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    public void StartFocusMode()
+    {
+        if (workCycleTracker == null) return;
+        CloseReminderIfOpen();
+        try
+        {
+            workCycleTracker.StartFocusMode();
+            UpdateCycleStatus();
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    public void EndFocusMode()
+    {
+        if (workCycleTracker == null) return;
+        try
+        {
+            workCycleTracker.EndFocusMode();
+            UpdateCycleStatus();
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    public void Disable()
+    {
+        if (workCycleTracker == null) return;
+        CloseReminderIfOpen();
+        try
+        {
+            workCycleTracker.Disable();
+            UpdateCycleStatus();
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    public void Enable()
+    {
+        if (workCycleTracker == null) return;
+        try
+        {
+            workCycleTracker.Enable();
+            UpdateCycleStatus();
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
     protected override void OnClosing(CancelEventArgs e)
     {
         e.Cancel = true;
         Hide();
         base.OnClosing(e);
+    }
+
+    private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (workCycleTracker == null) return;
+
+            switch (e.Reason)
+            {
+                case SessionSwitchReason.SessionLock:
+                    CloseReminderIfOpen();
+                    workCycleTracker.HandleLock();
+                    UpdateCycleStatus();
+                    break;
+
+                case SessionSwitchReason.SessionUnlock:
+                    workCycleTracker.HandleUnlock();
+                    UpdateCycleStatus();
+                    break;
+            }
+        });
+    }
+
+    private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (workCycleTracker == null) return;
+
+            switch (e.Mode)
+            {
+                case PowerModes.Suspend:
+                    CloseReminderIfOpen();
+                    workCycleTracker.HandleSleep();
+                    UpdateCycleStatus();
+                    break;
+
+                case PowerModes.Resume:
+                    workCycleTracker.HandleResume();
+                    UpdateCycleStatus();
+                    break;
+            }
+        });
+    }
+
+    private void CloseReminderIfOpen()
+    {
+        if (reminderWindow != null)
+        {
+            reminderWindow.Close();
+            reminderWindow = null;
+        }
     }
 
     private void OnActivityTimerTick(object? sender, EventArgs e)
@@ -152,11 +327,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     {
         Dispatcher.Invoke(() =>
         {
-            if (reminderWindow != null)
-            {
-                reminderWindow.Close();
-                reminderWindow = null;
-            }
+            CloseReminderIfOpen();
             UpdateCycleStatus();
         });
     }
@@ -165,12 +336,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     {
         Dispatcher.Invoke(() =>
         {
-            if (reminderWindow != null)
-            {
-                reminderWindow.Close();
-                reminderWindow = null;
-            }
-
+            CloseReminderIfOpen();
             UpdateCycleStatus();
         });
     }
@@ -178,17 +344,45 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     private void OnSnoozeRequested(object? sender, EventArgs e)
     {
         workCycleTracker?.Snooze();
-        reminderWindow?.Close();
-        reminderWindow = null;
+        CloseReminderIfOpen();
         UpdateCycleStatus();
     }
 
     private void OnIgnoreRequested(object? sender, EventArgs e)
     {
         workCycleTracker?.Ignore();
-        reminderWindow?.Close();
-        reminderWindow = null;
+        CloseReminderIfOpen();
         UpdateCycleStatus();
+    }
+
+    private void OnPaused(object? sender, EventArgs e)
+    {
+        Dispatcher.Invoke(UpdateCycleStatus);
+    }
+
+    private void OnResumed(object? sender, EventArgs e)
+    {
+        Dispatcher.Invoke(UpdateCycleStatus);
+    }
+
+    private void OnFocusModeStarted(object? sender, EventArgs e)
+    {
+        Dispatcher.Invoke(UpdateCycleStatus);
+    }
+
+    private void OnFocusModeEnded(object? sender, EventArgs e)
+    {
+        Dispatcher.Invoke(UpdateCycleStatus);
+    }
+
+    private void OnDisabled(object? sender, EventArgs e)
+    {
+        Dispatcher.Invoke(UpdateCycleStatus);
+    }
+
+    private void OnEnabled(object? sender, EventArgs e)
+    {
+        Dispatcher.Invoke(UpdateCycleStatus);
     }
 
     private void RefreshActivityStatus(UserActivityStatus status)
@@ -201,11 +395,25 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         };
     }
 
+    private WorkCyclePhase? lastReportedPhase;
+
     private void UpdateCycleStatus()
     {
         if (workCycleTracker == null) return;
 
-        CyclePhaseText.Text = workCycleTracker.CurrentPhase switch
+        var phase = workCycleTracker.CurrentPhase;
+
+        if (phase != lastReportedPhase)
+        {
+            lastReportedPhase = phase;
+            PhaseChanged?.Invoke(this, phase);
+            Dispatcher.Invoke(() => UpdateCyclePhaseText(phase));
+        }
+    }
+
+    private void UpdateCyclePhaseText(WorkCyclePhase phase)
+    {
+        CyclePhaseText.Text = phase switch
         {
             WorkCyclePhase.Working => "累積工作中",
             WorkCyclePhase.PendingReminder => "等待停頓中",
@@ -213,6 +421,9 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             WorkCyclePhase.BreakInProgress => "休息中",
             WorkCyclePhase.Snoozed => "延後中",
             WorkCyclePhase.Idle => "離開中",
+            WorkCyclePhase.Paused => "已暫停",
+            WorkCyclePhase.FocusMode => "專注模式",
+            WorkCyclePhase.Disabled => "已停用",
             _ => "未知"
         };
     }

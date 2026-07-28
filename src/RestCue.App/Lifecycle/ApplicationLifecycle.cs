@@ -30,6 +30,8 @@ public sealed class ApplicationLifecycle : IApplicationLifecycle
         _started = true;
     }
 
+    public ITrayIcon TrayIcon => _trayIcon;
+
     public void Dispose()
     {
         if (_disposed)

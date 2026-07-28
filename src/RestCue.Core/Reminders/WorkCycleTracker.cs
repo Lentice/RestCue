@@ -20,6 +20,8 @@ public sealed class WorkCycleTracker
     private DateTimeOffset? snoozeUntilUtc;
     private bool wasWorking;
     private TimeSpan? lastReminderWorkTime;
+    private bool isLocked;
+    private bool isSleeping;
 
     private readonly TimeSpan workInterval;
 
@@ -67,16 +69,27 @@ public sealed class WorkCycleTracker
     public event EventHandler? BreakCompleted;
     public event EventHandler? PassiveBreakCompleted;
     public event EventHandler<ReminderDismissedEventArgs>? ReminderDismissed;
+    public event EventHandler? Paused;
+    public event EventHandler? Resumed;
+    public event EventHandler? FocusModeStarted;
+    public event EventHandler? FocusModeEnded;
+    public event EventHandler? Disabled;
+    public event EventHandler? Enabled;
 
     public void Tick(TimeSpan idleDuration)
     {
+        if (isLocked || isSleeping)
+            return;
+
         if (idleDuration < TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(idleDuration), "Idle duration cannot be negative.");
 
         var now = clock.UtcNow;
         bool isWorking = idleDuration < idleThreshold;
 
-        if (CurrentPhase != WorkCyclePhase.BreakInProgress)
+        if (CurrentPhase != WorkCyclePhase.BreakInProgress &&
+            CurrentPhase != WorkCyclePhase.Paused &&
+            CurrentPhase != WorkCyclePhase.Disabled)
         {
             AccumulateIfWorking(now, isWorking);
         }
@@ -106,6 +119,13 @@ public sealed class WorkCycleTracker
             case WorkCyclePhase.Idle:
                 TickIdle(now, isWorking);
                 break;
+
+            case WorkCyclePhase.Paused:
+            case WorkCyclePhase.Disabled:
+                break;
+
+            case WorkCyclePhase.FocusMode:
+                break;
         }
     }
 
@@ -119,6 +139,9 @@ public sealed class WorkCycleTracker
 
     public void TickActivityUnavailable()
     {
+        if (isLocked || isSleeping)
+            return;
+
         var now = clock.UtcNow;
         wasWorking = false;
         lastTickUtc = now;
@@ -126,6 +149,7 @@ public sealed class WorkCycleTracker
         switch (CurrentPhase)
         {
             case WorkCyclePhase.Working:
+            case WorkCyclePhase.FocusMode:
                 break;
 
             case WorkCyclePhase.PendingReminder:
@@ -157,6 +181,8 @@ public sealed class WorkCycleTracker
                 break;
 
             case WorkCyclePhase.Idle:
+            case WorkCyclePhase.Paused:
+            case WorkCyclePhase.Disabled:
                 break;
         }
     }
@@ -199,6 +225,133 @@ public sealed class WorkCycleTracker
         lastTickUtc = null;
         wasWorking = false;
         ReminderDismissed?.Invoke(this, new ReminderDismissedEventArgs(ReminderResult.Ignored));
+    }
+
+    public void Pause()
+    {
+        if (CurrentPhase is WorkCyclePhase.Paused or WorkCyclePhase.FocusMode or WorkCyclePhase.Disabled or WorkCyclePhase.BreakInProgress)
+            throw new InvalidOperationException(
+                $"Cannot pause from phase {CurrentPhase}.");
+
+        CurrentPhase = WorkCyclePhase.Paused;
+        ClearReminderState();
+        Paused?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void Resume()
+    {
+        if (CurrentPhase != WorkCyclePhase.Paused)
+            throw new InvalidOperationException(
+                $"Cannot resume from phase {CurrentPhase}.");
+
+        ResetCycle();
+        Resumed?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void StartFocusMode()
+    {
+        if (CurrentPhase is WorkCyclePhase.Paused or WorkCyclePhase.FocusMode or WorkCyclePhase.Disabled or WorkCyclePhase.BreakInProgress or WorkCyclePhase.Idle)
+            throw new InvalidOperationException(
+                $"Cannot start focus mode from phase {CurrentPhase}.");
+
+        CurrentPhase = WorkCyclePhase.FocusMode;
+        ClearReminderState();
+        FocusModeStarted?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void EndFocusMode()
+    {
+        if (CurrentPhase != WorkCyclePhase.FocusMode)
+            throw new InvalidOperationException(
+                $"Cannot end focus mode from phase {CurrentPhase}.");
+
+        if (AccumulatedWorkTime - (lastReminderWorkTime ?? TimeSpan.Zero) >= workInterval)
+        {
+            CurrentPhase = WorkCyclePhase.PendingReminder;
+            pendingSinceUtc = clock.UtcNow;
+        }
+        else
+        {
+            CurrentPhase = WorkCyclePhase.Working;
+        }
+
+        FocusModeEnded?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void Disable()
+    {
+        if (CurrentPhase == WorkCyclePhase.Disabled)
+            throw new InvalidOperationException("Already disabled.");
+
+        CurrentPhase = WorkCyclePhase.Disabled;
+        ClearReminderState();
+        Disabled?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void Enable()
+    {
+        if (CurrentPhase != WorkCyclePhase.Disabled)
+            throw new InvalidOperationException(
+                $"Cannot enable from phase {CurrentPhase}.");
+
+        ResetCycle();
+        Enabled?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void HandleLock()
+    {
+        isLocked = true;
+
+        if (CurrentPhase is WorkCyclePhase.PendingReminder or WorkCyclePhase.ReminderVisible or WorkCyclePhase.Snoozed
+            or WorkCyclePhase.Working or WorkCyclePhase.FocusMode)
+        {
+            ResetCycle();
+        }
+    }
+
+    public void HandleUnlock()
+    {
+        isLocked = false;
+
+        if (!isSleeping)
+        {
+            if (CurrentPhase is WorkCyclePhase.Paused or WorkCyclePhase.Disabled)
+            {
+                ClearReminderState();
+            }
+            else
+            {
+                ResetCycle();
+            }
+        }
+    }
+
+    public void HandleSleep()
+    {
+        isSleeping = true;
+
+        if (CurrentPhase is WorkCyclePhase.PendingReminder or WorkCyclePhase.ReminderVisible or WorkCyclePhase.Snoozed
+            or WorkCyclePhase.Working or WorkCyclePhase.FocusMode)
+        {
+            ResetCycle();
+        }
+    }
+
+    public void HandleResume()
+    {
+        isSleeping = false;
+
+        if (!isLocked)
+        {
+            if (CurrentPhase is WorkCyclePhase.Paused or WorkCyclePhase.Disabled)
+            {
+                ClearReminderState();
+            }
+            else
+            {
+                ResetCycle();
+            }
+        }
     }
 
     private void AccumulateIfWorking(DateTimeOffset now, bool isWorking)
@@ -328,6 +481,17 @@ public sealed class WorkCycleTracker
         wasWorking = false;
         reminderVisibleSinceUtc = null;
         snoozeUntilUtc = null;
+        lastReminderWorkTime = null;
+    }
+
+    private void ClearReminderState()
+    {
+        pendingSinceUtc = null;
+        breakStartUtc = null;
+        reminderVisibleSinceUtc = null;
+        snoozeUntilUtc = null;
+        lastTickUtc = null;
+        wasWorking = false;
         lastReminderWorkTime = null;
     }
 

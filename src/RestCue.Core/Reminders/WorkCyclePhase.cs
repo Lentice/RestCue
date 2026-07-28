@@ -7,5 +7,8 @@ public enum WorkCyclePhase
     ReminderVisible,
     BreakInProgress,
     Snoozed,
-    Idle
+    Idle,
+    Paused,
+    FocusMode,
+    Disabled
 }

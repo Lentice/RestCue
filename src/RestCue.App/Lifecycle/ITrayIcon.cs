@@ -6,5 +6,31 @@ public interface ITrayIcon : IDisposable
 
     event EventHandler? ExitRequested;
 
+    event EventHandler? PauseRequested;
+
+    event EventHandler? ResumeRequested;
+
+    event EventHandler? FocusModeRequested;
+
+    event EventHandler? EndFocusModeRequested;
+
+    event EventHandler? DisableRequested;
+
+    event EventHandler? EnableRequested;
+
     bool Visible { get; set; }
+
+    void SetPauseText(bool isPaused);
+
+    void SetFocusModeText(bool isFocusMode);
+
+    void SetDisableText(bool isDisabled);
+
+    void SetStatusText(string text);
+
+    void SetPauseEnabled(bool enabled);
+
+    void SetFocusModeEnabled(bool enabled);
+
+    void SetDisableEnabled(bool enabled);
 }
