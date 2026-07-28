@@ -16,7 +16,8 @@ public partial class ReminderWindow : Window
     public event EventHandler? SnoozeRequested;
     public event EventHandler? IgnoreRequested;
 
-    public TimeSpan SnoozeDuration { get; set; } = TimeSpan.FromMinutes(5);
+    public TimeSpan SnoozeDuration { get; set; }
+    public TimeSpan BreakDuration { get; set; }
 
     public ReminderWindow()
     {
@@ -34,9 +35,7 @@ public partial class ReminderWindow : Window
     {
         PhaseText.Text = "Look at something\n6 meters away.";
         CountdownText.Text = "";
-        ActionButton.Content = "Start 20s Break";
-        ActionButton.IsEnabled = true;
-        ActionButton.Visibility = Visibility.Visible;
+        ActionButton.Content = $"Start Break ({(int)BreakDuration.TotalSeconds}s)";
         SnoozeButton.Content = $"Snooze {(int)SnoozeDuration.TotalMinutes}min";
         SnoozeButton.Visibility = Visibility.Visible;
         IgnoreButton.Visibility = Visibility.Visible;
@@ -44,9 +43,9 @@ public partial class ReminderWindow : Window
         Show();
     }
 
-    public void StartBreakCountdown(int durationSeconds)
+    public void StartBreakCountdown()
     {
-        countdownSeconds = durationSeconds;
+        countdownSeconds = (int)BreakDuration.TotalSeconds;
         CountdownText.Text = $"{countdownSeconds}s";
         PhaseText.Text = "Break in progress...";
         ActionButton.IsEnabled = false;

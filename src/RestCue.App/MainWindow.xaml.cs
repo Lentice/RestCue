@@ -120,6 +120,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             }
 
             reminderWindow.SnoozeDuration = snoozeDuration;
+            reminderWindow.BreakDuration = workCycleTracker!.BreakDuration;
             reminderWindow.ShowReminder();
         });
     }
@@ -127,8 +128,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     private void OnBreakRequested(object? sender, EventArgs e)
     {
         workCycleTracker?.StartBreak();
-        reminderWindow?.StartBreakCountdown(
-            (int)(workCycleTracker?.BreakDuration.TotalSeconds ?? 20));
+        reminderWindow?.StartBreakCountdown();
     }
 
     private void OnReminderBreakCompleted(object? sender, EventArgs e)
@@ -170,6 +170,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
                 reminderWindow.Close();
                 reminderWindow = null;
             }
+
             UpdateCycleStatus();
         });
     }
@@ -211,6 +212,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             WorkCyclePhase.ReminderVisible => "提醒顯示中",
             WorkCyclePhase.BreakInProgress => "休息中",
             WorkCyclePhase.Snoozed => "延後中",
+            WorkCyclePhase.Idle => "離開中",
             _ => "未知"
         };
     }

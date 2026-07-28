@@ -45,7 +45,6 @@
 
             <StackPanel Grid.Row="2" HorizontalAlignment="Center">
                 <Button x:Name="ActionButton"
-                        Content="Start 20s Break"
                         FontSize="14"
                         Height="36"
                         Width="160"

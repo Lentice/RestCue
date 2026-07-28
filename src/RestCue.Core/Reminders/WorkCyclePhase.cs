@@ -6,5 +6,6 @@ public enum WorkCyclePhase
     PendingReminder,
     ReminderVisible,
     BreakInProgress,
-    Snoozed
+    Snoozed,
+    Idle
 }

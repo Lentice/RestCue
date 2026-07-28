@@ -100,8 +100,20 @@ public sealed class WorkCycleTracker
                 break;
 
             case WorkCyclePhase.Snoozed:
-                TickSnoozed(now);
+                TickSnoozed(now, isWorking, idleDuration);
                 break;
+
+            case WorkCyclePhase.Idle:
+                TickIdle(now, isWorking);
+                break;
+        }
+    }
+
+    private void TickIdle(DateTimeOffset now, bool isWorking)
+    {
+        if (isWorking)
+        {
+            ResetCycle();
         }
     }
 
@@ -143,6 +155,9 @@ public sealed class WorkCycleTracker
                     snoozeUntilUtc = null;
                 }
                 break;
+
+            case WorkCyclePhase.Idle:
+                break;
         }
     }
 
@@ -175,6 +190,7 @@ public sealed class WorkCycleTracker
             throw new InvalidOperationException(
                 $"Cannot ignore from phase {CurrentPhase}.");
 
+        lastReminderWorkTime = AccumulatedWorkTime;
         CurrentPhase = WorkCyclePhase.Working;
         pendingSinceUtc = null;
         breakStartUtc = null;
@@ -217,12 +233,16 @@ public sealed class WorkCycleTracker
         {
             ResetCycle();
             PassiveBreakCompleted?.Invoke(this, EventArgs.Empty);
+            return;
         }
-        else if (idleDuration >= naturalPauseThreshold)
+
+        if (idleDuration >= naturalPauseThreshold)
         {
             EnterReminderVisible(now);
+            return;
         }
-        else if (elapsed >= maximumReminderWait)
+
+        if (elapsed >= maximumReminderWait)
         {
             EnterReminderVisible(now);
         }
@@ -240,8 +260,22 @@ public sealed class WorkCycleTracker
         TryAutoDismiss(now);
     }
 
-    private void TickSnoozed(DateTimeOffset now)
+    private void TickSnoozed(DateTimeOffset now, bool isWorking, TimeSpan idleDuration)
     {
+        if (!isWorking && idleDuration >= idleThreshold)
+        {
+            CurrentPhase = WorkCyclePhase.Idle;
+            AccumulatedWorkTime = TimeSpan.Zero;
+            pendingSinceUtc = null;
+            breakStartUtc = null;
+            lastTickUtc = null;
+            wasWorking = false;
+            reminderVisibleSinceUtc = null;
+            snoozeUntilUtc = null;
+            lastReminderWorkTime = null;
+            return;
+        }
+
         if (now >= snoozeUntilUtc!.Value)
         {
             CurrentPhase = WorkCyclePhase.PendingReminder;
@@ -272,6 +306,7 @@ public sealed class WorkCycleTracker
         var visibleElapsed = now - reminderVisibleSinceUtc!.Value;
         if (visibleElapsed >= reminderDisplayDuration)
         {
+            lastReminderWorkTime = AccumulatedWorkTime;
             CurrentPhase = WorkCyclePhase.Working;
             pendingSinceUtc = null;
             breakStartUtc = null;
