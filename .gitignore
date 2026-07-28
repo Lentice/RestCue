@@ -12,3 +12,5 @@ artifacts/
 *.log
 .tmp/
 .opencode-data/
+.opencode-cache/
+node_modules/
