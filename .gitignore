@@ -11,3 +11,4 @@ artifacts/
 *.db-wal
 *.log
 .tmp/
+.opencode-data/
