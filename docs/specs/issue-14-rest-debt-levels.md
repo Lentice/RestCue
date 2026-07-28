@@ -67,7 +67,8 @@ Intensity 必須保持獨立。
 
 - [x] Core targeted tests
 - [x] `dotnet build RestCue.sln`
-- [x] `dotnet test RestCue.sln --no-build` — 369/369 passed (304 Core + 45 App + 20 Infrastructure)
+- [x] `dotnet test RestCue.sln --no-build` — 371/371 passed in an isolated
+  issue-14 snapshot (306 Core + 45 App + 20 Infrastructure)
 - [x] `git diff --check`
 
 ## Data/schema impact
@@ -97,16 +98,20 @@ Intensity 必須保持獨立。
 - `tests/RestCue.Core.Tests/Policies/DebtPolicyTests.cs` — 19 tests covering
   Evaluate for each level at exact boundary/below/above, GetNextThreshold for
   each level, ValidateThresholds for strictly increasing and invalid inputs
-- `tests/RestCue.Core.Tests/Reminders/WorkCycleTrackerTests.cs` — 16 integration
-  tests: initial 8 (Starts_at_Level0, Level1 at work interval,
-  RestDebtLevelChanged on Level1, no event when unchanged, BreakCompleted reset
-  with event, Idle reset with event, repeated reset at Level0, large clock jump
-  single event) + 8 review additions (Level2 boundary, Level3 boundary,
-  sequential Level0→Level1→Level2 two events, debt deadline end-to-end with
-  cooldown, Disable preserves debt/Enable resets with event, constructor
-  rejects invalid debt thresholds, Resume preserves RestDebtLevel,
-  effectiveWorkInterval override does not affect debt)
-- All 304 Core tests pass (26 new + 278 existing)
+- `tests/RestCue.Core.Tests/Reminders/WorkCycleTrackerTests.cs` — 19 integration
+  tests: initial 8 (Starts_at_Level0, Level1, RestDebtLevelChanged, no event
+  when unchanged, BreakCompleted reset with event, Idle reset with event,
+  repeated reset at Level0, large clock jump single event) + 9 review additions
+  (Level2 boundary, Level3 boundary, sequential Level0→Level1→Level2 two events,
+  debt deadline end-to-end with cooldown — now uses L3=25s and
+  TickActivityUnavailable to prove debt deadline fires before cooldown, Disable
+  preserves debt/Enable resets with event, constructor rejects invalid debt
+  thresholds, Resume preserves RestDebtLevel, effectiveWorkInterval override
+  does not affect debt) + 2 review-2 additions (Level4 exact 60-min boundary,
+  wall-clock regression does not regress debt)
+- `tests/RestCue.Core.Tests/Reminders/WorkCycleTrackerForegroundContextTests.cs`
+  — 2 tests: effectiveWorkInterval override does not change Level1 or Level2
+- All 306 Core tests pass (28 new + 278 existing)
 
 ### Known limitations
 

@@ -4250,8 +4250,8 @@ public sealed class WorkCycleTrackerTests
             reminderDisplayDuration: TimeSpan.FromSeconds(30),
             retryCooldown: TimeSpan.FromSeconds(30),
             debtLevel2: TimeSpan.FromSeconds(20),
-            debtLevel3: TimeSpan.FromHours(4),
-            debtLevel4: TimeSpan.FromHours(5));
+            debtLevel3: TimeSpan.FromSeconds(25),
+            debtLevel4: TimeSpan.FromHours(4));
 
         for (int i = 0; i < 11; i++)
         {
@@ -4264,22 +4264,74 @@ public sealed class WorkCycleTrackerTests
         tracker.Tick(TimeSpan.FromSeconds(6));
         Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
 
+        var cooldownBeforeIgnore = clock.UtcNow;
         tracker.Ignore();
+        var cooldownUntil = cooldownBeforeIgnore + TimeSpan.FromSeconds(30);
 
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < 5; i++)
         {
             clock.Advance(TimeSpan.FromSeconds(1));
             tracker.Tick(TimeSpan.Zero);
         }
         Assert.Equal(RestDebtLevel.Level2, tracker.RestDebtLevel);
+        Assert.Equal(cooldownUntil, tracker.CooldownUntil);
 
-        for (int i = 0; i < 50; i++)
+        for (int i = 0; i < 6; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.TickActivityUnavailable();
+        }
+        Assert.Equal(cooldownUntil, tracker.CooldownUntil);
+
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.Null(tracker.CooldownUntil);
+    }
+
+    [Fact]
+    public void Debt_reaches_Level4_at_exact_60_minutes()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromMinutes(20),
+            maxWait: TimeSpan.FromHours(2),
+            retryCooldown: TimeSpan.FromHours(2));
+
+        for (int i = 0; i < 60 * 60 + 1; i++)
         {
             clock.Advance(TimeSpan.FromSeconds(1));
             tracker.Tick(TimeSpan.Zero);
         }
 
-        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.Equal(RestDebtLevel.Level4, tracker.RestDebtLevel);
+    }
+
+    [Fact]
+    public void Wall_clock_regression_does_not_regress_debt()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
+
+        for (int i = 0; i < 31; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+
+        var savedLevel = tracker.RestDebtLevel;
+        var savedAccum = tracker.AccumulatedWorkTime;
+        Assert.Equal(RestDebtLevel.Level1, savedLevel);
+        Assert.NotEqual(TimeSpan.Zero, savedAccum);
+
+        clock.Advance(TimeSpan.FromSeconds(-10));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(savedLevel, tracker.RestDebtLevel);
+        Assert.Equal(savedAccum, tracker.AccumulatedWorkTime);
     }
 
     private sealed class FakeClock : IClock

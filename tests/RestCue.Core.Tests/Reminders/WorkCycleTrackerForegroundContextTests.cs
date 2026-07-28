@@ -577,10 +577,17 @@ public sealed class WorkCycleTrackerForegroundContextTests
     public void EffectiveWorkInterval_override_does_not_change_debt_level()
     {
         var clock = new FakeClock();
-        var tracker = CreateTracker(
-            clock: clock,
+        var tracker = new WorkCycleTracker(
+            clock,
             workInterval: TimeSpan.FromMinutes(20),
-            naturalPause: TimeSpan.FromSeconds(60));
+            idleThreshold: TimeSpan.FromHours(2),
+            naturalPauseThreshold: TimeSpan.FromHours(1),
+            maximumReminderWait: TimeSpan.FromHours(3),
+            breakDuration: TimeSpan.FromSeconds(20),
+            passiveBreakThreshold: TimeSpan.FromSeconds(20),
+            snoozeDuration: TimeSpan.FromMinutes(5),
+            reminderDisplayDuration: TimeSpan.FromSeconds(30),
+            retryCooldown: TimeSpan.FromHours(4));
 
         tracker.Tick(TimeSpan.Zero);
 
@@ -598,7 +605,7 @@ public sealed class WorkCycleTrackerForegroundContextTests
             changedLevel = args.Current;
         };
 
-        for (int i = 0; i < 25 * 60; i++)
+        for (int i = 0; i < 21 * 60; i++)
         {
             clock.Advance(TimeSpan.FromSeconds(1));
             tracker.Tick(TimeSpan.Zero);
@@ -607,6 +614,16 @@ public sealed class WorkCycleTrackerForegroundContextTests
         Assert.Equal(RestDebtLevel.Level1, tracker.RestDebtLevel);
         Assert.Equal(1, debtChanged);
         Assert.Equal(RestDebtLevel.Level1, changedLevel);
+
+        for (int i = 0; i < 16 * 60; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+
+        Assert.Equal(RestDebtLevel.Level2, tracker.RestDebtLevel);
+        Assert.Equal(2, debtChanged);
+        Assert.Equal(RestDebtLevel.Level2, changedLevel);
     }
 
     private static readonly TimeSpan DefaultRetryCooldown = TimeSpan.FromSeconds(1);
