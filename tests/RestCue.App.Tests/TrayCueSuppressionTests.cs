@@ -60,6 +60,8 @@ public sealed class TrayCueSuppressionTests
         public event EventHandler? EndFocusModeRequested;
         public event EventHandler? DisableRequested;
         public event EventHandler? EnableRequested;
+
+        public event EventHandler? BreakNowRequested;
 #pragma warning restore CS0067
 
         public bool Visible { get; set; }
@@ -76,6 +78,7 @@ public sealed class TrayCueSuppressionTests
         public void SetPauseEnabled(bool enabled) { }
         public void SetFocusModeEnabled(bool enabled) { }
         public void SetDisableEnabled(bool enabled) { }
+        public void SetBreakNowEnabled(bool enabled) { }
         public void SetPauseText(bool isPaused) { }
         public void SetFocusModeText(bool isFocusMode) { }
         public void SetDisableText(bool isDisabled) { }

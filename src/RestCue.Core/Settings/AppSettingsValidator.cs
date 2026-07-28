@@ -12,6 +12,7 @@ public sealed class AppSettingsValidator : ISettingsValidator
         AddRangeError(errors, settings.MaximumReminderWait, TimeSpan.Zero, TimeSpan.FromMinutes(10), nameof(settings.MaximumReminderWait));
         AddRangeError(errors, settings.BreakDuration, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(60), nameof(settings.BreakDuration));
         AddRangeError(errors, settings.SnoozeDuration, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(30), nameof(settings.SnoozeDuration));
+        AddRangeError(errors, settings.RetryCooldown, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(60), nameof(settings.RetryCooldown));
         AddRangeError(errors, settings.IdleThreshold, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(10), nameof(settings.IdleThreshold));
         AddRangeError(errors, settings.PassiveBreakThreshold, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(120), nameof(settings.PassiveBreakThreshold));
         AddRangeError(errors, settings.ReminderDisplayDuration, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(120), nameof(settings.ReminderDisplayDuration));

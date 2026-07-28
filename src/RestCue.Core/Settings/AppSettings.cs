@@ -14,6 +14,8 @@ public sealed record AppSettings
 
     public TimeSpan SnoozeDuration { get; init; } = TimeSpan.FromMinutes(5);
 
+    public TimeSpan RetryCooldown { get; init; } = TimeSpan.FromMinutes(20);
+
     public TimeSpan IdleThreshold { get; init; } = TimeSpan.FromMinutes(2);
 
     public TimeSpan PassiveBreakThreshold { get; init; } = TimeSpan.FromSeconds(20);

@@ -12,4 +12,9 @@
     <ProjectReference Include="..\RestCue.Core\RestCue.Core.csproj" />
     <ProjectReference Include="..\RestCue.Infrastructure\RestCue.Infrastructure.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>RestCue.App.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
 </Project>

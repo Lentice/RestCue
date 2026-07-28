@@ -84,6 +84,8 @@ public sealed class ApplicationLifecycleTests
         public event EventHandler? DisableRequested;
 
         public event EventHandler? EnableRequested;
+
+        public event EventHandler? BreakNowRequested;
 #pragma warning restore CS0067
 
         public int VisibleSetToTrueCount { get; private set; }
@@ -113,6 +115,8 @@ public sealed class ApplicationLifecycleTests
 
         public void RequestExit() => ExitRequested?.Invoke(this, EventArgs.Empty);
 
+        public void RequestBreakNow() => BreakNowRequested?.Invoke(this, EventArgs.Empty);
+
         public void Dispose() => IsDisposed = true;
 
         public void SetPauseEnabled(bool enabled) => PauseEnabled = enabled;
@@ -120,6 +124,10 @@ public sealed class ApplicationLifecycleTests
         public void SetFocusModeEnabled(bool enabled) => FocusModeEnabled = enabled;
 
         public void SetDisableEnabled(bool enabled) => DisableEnabled = enabled;
+
+        public void SetBreakNowEnabled(bool enabled)
+        {
+        }
 
         public void SetPauseText(bool isPaused)
         {
@@ -142,10 +150,24 @@ public sealed class ApplicationLifecycleTests
         }
     }
 
+    [Fact]
+    public void WireBreakNowCommand_binds_event_to_StartBreakNow()
+    {
+        var tray = new FakeTrayIcon();
+        var window = new FakeStatusWindow();
+        App.WireBreakNowCommand(tray, window);
+        tray.RequestBreakNow();
+        Assert.Equal(1, window.StartBreakNowCount);
+    }
+
     private sealed class FakeStatusWindow : IStatusWindow
     {
         public int ShowOrActivateCount { get; private set; }
 
+        public int StartBreakNowCount { get; private set; }
+
         public void ShowOrActivate() => ShowOrActivateCount++;
+
+        public void StartBreakNow() => StartBreakNowCount++;
     }
 }

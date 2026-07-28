@@ -572,6 +572,8 @@ public sealed class WorkCycleTrackerForegroundContextTests
         Assert.NotEqual(TimeSpan.Zero, tracker.AccumulatedWorkTime);
     }
 
+    private static readonly TimeSpan DefaultRetryCooldown = TimeSpan.FromSeconds(1);
+
     private static WorkCycleTracker CreateTracker(
         FakeClock? clock = null,
         TimeSpan? workInterval = null,
@@ -581,7 +583,8 @@ public sealed class WorkCycleTrackerForegroundContextTests
         TimeSpan? breakDuration = null,
         TimeSpan? passiveBreak = null,
         TimeSpan? snoozeDuration = null,
-        TimeSpan? reminderDisplayDuration = null)
+        TimeSpan? reminderDisplayDuration = null,
+        TimeSpan? retryCooldown = null)
     {
         return new WorkCycleTracker(
             clock ?? new FakeClock(),
@@ -592,7 +595,8 @@ public sealed class WorkCycleTrackerForegroundContextTests
             breakDuration ?? DefaultBreakDuration,
             passiveBreak ?? DefaultPassiveBreak,
             snoozeDuration ?? DefaultSnoozeDuration,
-            reminderDisplayDuration ?? DefaultReminderDisplayDuration);
+            reminderDisplayDuration ?? DefaultReminderDisplayDuration,
+            retryCooldown ?? DefaultRetryCooldown);
     }
 
     private static void ReachPendingReminder(

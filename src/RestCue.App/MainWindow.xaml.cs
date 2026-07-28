@@ -72,7 +72,8 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             settings.BreakDuration,
             settings.PassiveBreakThreshold,
             settings.SnoozeDuration,
-            settings.ReminderDisplayDuration);
+            settings.ReminderDisplayDuration,
+            settings.RetryCooldown);
 
         workCycleTracker.ReminderShown += OnReminderShown;
         workCycleTracker.ReminderSuppressed += OnReminderSuppressed;
@@ -204,6 +205,35 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         catch (InvalidOperationException)
         {
         }
+    }
+
+    public void StartBreakNow()
+    {
+        if (workCycleTracker == null) return;
+
+        try
+        {
+            workCycleTracker.ManualStartBreak();
+        }
+        catch (InvalidOperationException)
+        {
+            return;
+        }
+
+        UpdateCycleStatus();
+
+        CloseReminderIfOpen();
+
+        if (reminderWindow == null)
+        {
+            reminderWindow = new ReminderWindow();
+            reminderWindow.BreakCompleted += OnReminderBreakCompleted;
+            reminderWindow.Closed += (_, _) => reminderWindow = null;
+        }
+
+        reminderWindow.BreakDuration = workCycleTracker.BreakDuration;
+        reminderWindow.StartBreakCountdown();
+        reminderWindow.Show();
     }
 
     protected override void OnClosing(CancelEventArgs e)

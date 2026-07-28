@@ -62,6 +62,11 @@ public partial class App : System.Windows.Application
         base.OnExit(e);
     }
 
+    internal static void WireBreakNowCommand(ITrayIcon trayIcon, IStatusWindow statusWindow)
+    {
+        trayIcon.BreakNowRequested += (_, _) => statusWindow.StartBreakNow();
+    }
+
     private void WireTrayCommands()
     {
         if (_trayIcon == null || _statusWindow == null) return;
@@ -72,6 +77,7 @@ public partial class App : System.Windows.Application
         _trayIcon.EndFocusModeRequested += (_, _) => _statusWindow.EndFocusMode();
         _trayIcon.DisableRequested += (_, _) => _statusWindow.Disable();
         _trayIcon.EnableRequested += (_, _) => _statusWindow.Enable();
+        WireBreakNowCommand(_trayIcon, _statusWindow);
 
         _statusWindow.PhaseChanged += OnPhaseChanged;
         _statusWindow.LowInterruptionReminderRequested += (_, e) =>
@@ -100,6 +106,7 @@ public partial class App : System.Windows.Application
         _trayIcon.SetFocusModeEnabled(true);
         _trayIcon.SetDisableText(false);
         _trayIcon.SetDisableEnabled(true);
+        _trayIcon.SetBreakNowEnabled(true);
         _trayIcon.SetStatusText("RestCue – Eye Break Reminder");
 
         switch (phase)
@@ -107,6 +114,7 @@ public partial class App : System.Windows.Application
             case WorkCyclePhase.Paused:
                 _trayIcon.SetPauseText(true);
                 _trayIcon.SetFocusModeEnabled(false);
+                _trayIcon.SetBreakNowEnabled(false);
                 _trayIcon.SetStatusText("RestCue – 已暫停");
                 break;
 
@@ -120,16 +128,19 @@ public partial class App : System.Windows.Application
                 _trayIcon.SetDisableText(true);
                 _trayIcon.SetPauseEnabled(false);
                 _trayIcon.SetFocusModeEnabled(false);
+                _trayIcon.SetBreakNowEnabled(false);
                 _trayIcon.SetStatusText("RestCue – 已停用");
                 break;
 
             case WorkCyclePhase.BreakInProgress:
                 _trayIcon.SetPauseEnabled(false);
                 _trayIcon.SetFocusModeEnabled(false);
+                _trayIcon.SetBreakNowEnabled(false);
                 break;
 
             case WorkCyclePhase.Idle:
                 _trayIcon.SetFocusModeEnabled(false);
+                _trayIcon.SetBreakNowEnabled(false);
                 break;
         }
     }

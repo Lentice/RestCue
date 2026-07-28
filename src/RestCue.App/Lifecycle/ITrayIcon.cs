@@ -18,6 +18,8 @@ public interface ITrayIcon : IDisposable
 
     event EventHandler? EnableRequested;
 
+    event EventHandler? BreakNowRequested;
+
     bool Visible { get; set; }
 
     void SetPauseText(bool isPaused);
@@ -33,6 +35,8 @@ public interface ITrayIcon : IDisposable
     void SetFocusModeEnabled(bool enabled);
 
     void SetDisableEnabled(bool enabled);
+
+    void SetBreakNowEnabled(bool enabled);
 
     void SetSuppressedState(bool isSuppressed);
 }

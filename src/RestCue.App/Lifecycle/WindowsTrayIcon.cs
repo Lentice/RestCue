@@ -10,6 +10,7 @@ public sealed class WindowsTrayIcon : ITrayIcon
     private readonly ToolStripMenuItem _pauseItem;
     private readonly ToolStripMenuItem _focusItem;
     private readonly ToolStripMenuItem _disableItem;
+    private readonly ToolStripMenuItem _breakNowItem;
 
     private bool _isPaused;
     private bool _isFocusMode;
@@ -23,6 +24,7 @@ public sealed class WindowsTrayIcon : ITrayIcon
         _pauseItem = new ToolStripMenuItem("暫停提醒", null, TogglePause);
         _focusItem = new ToolStripMenuItem("專注模式", null, ToggleFocusMode);
         _disableItem = new ToolStripMenuItem("停用提醒", null, ToggleDisable);
+        _breakNowItem = new ToolStripMenuItem("立即休息", null, (_, _) => BreakNowRequested?.Invoke(this, EventArgs.Empty));
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("開啟 RestCue", null, (_, _) => OpenRequested?.Invoke(this, EventArgs.Empty));
@@ -30,6 +32,7 @@ public sealed class WindowsTrayIcon : ITrayIcon
         menu.Items.Add(_pauseItem);
         menu.Items.Add(_focusItem);
         menu.Items.Add(_disableItem);
+        menu.Items.Add(_breakNowItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("結束 RestCue", null, (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty));
 
@@ -57,6 +60,8 @@ public sealed class WindowsTrayIcon : ITrayIcon
     public event EventHandler? DisableRequested;
 
     public event EventHandler? EnableRequested;
+
+    public event EventHandler? BreakNowRequested;
 
     public bool Visible
     {
@@ -92,6 +97,8 @@ public sealed class WindowsTrayIcon : ITrayIcon
     public void SetFocusModeEnabled(bool enabled) => _focusItem.Enabled = enabled;
 
     public void SetDisableEnabled(bool enabled) => _disableItem.Enabled = enabled;
+
+    public void SetBreakNowEnabled(bool enabled) => _breakNowItem.Enabled = enabled;
 
     public void SetSuppressedState(bool isSuppressed)
     {

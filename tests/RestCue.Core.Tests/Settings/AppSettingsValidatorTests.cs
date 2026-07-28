@@ -48,4 +48,60 @@ public sealed class AppSettingsValidatorTests
         SettingsValidationError error = Assert.Single(errors);
         Assert.Equal("PassiveBreakThreshold", error.Field);
     }
+
+    [Fact]
+    public void RetryCooldown_below_minimum_is_invalid()
+    {
+        AppSettings settings = AppSettings.Default with
+        {
+            RetryCooldown = TimeSpan.FromMinutes(0),
+        };
+        var validator = new AppSettingsValidator();
+
+        IReadOnlyList<SettingsValidationError> errors = validator.Validate(settings);
+
+        Assert.Contains(errors, e => e.Field == "RetryCooldown");
+    }
+
+    [Fact]
+    public void RetryCooldown_above_maximum_is_invalid()
+    {
+        AppSettings settings = AppSettings.Default with
+        {
+            RetryCooldown = TimeSpan.FromMinutes(61),
+        };
+        var validator = new AppSettingsValidator();
+
+        IReadOnlyList<SettingsValidationError> errors = validator.Validate(settings);
+
+        Assert.Contains(errors, e => e.Field == "RetryCooldown");
+    }
+
+    [Fact]
+    public void RetryCooldown_at_minimum_is_valid()
+    {
+        AppSettings settings = AppSettings.Default with
+        {
+            RetryCooldown = TimeSpan.FromMinutes(1),
+        };
+        var validator = new AppSettingsValidator();
+
+        IReadOnlyList<SettingsValidationError> errors = validator.Validate(settings);
+
+        Assert.DoesNotContain(errors, e => e.Field == "RetryCooldown");
+    }
+
+    [Fact]
+    public void RetryCooldown_at_maximum_is_valid()
+    {
+        AppSettings settings = AppSettings.Default with
+        {
+            RetryCooldown = TimeSpan.FromMinutes(60),
+        };
+        var validator = new AppSettingsValidator();
+
+        IReadOnlyList<SettingsValidationError> errors = validator.Validate(settings);
+
+        Assert.DoesNotContain(errors, e => e.Field == "RetryCooldown");
+    }
 }

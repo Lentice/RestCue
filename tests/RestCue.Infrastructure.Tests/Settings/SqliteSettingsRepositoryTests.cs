@@ -118,6 +118,45 @@ public sealed class SqliteSettingsRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task RetryCooldown_round_trips_through_save_and_load()
+    {
+        string databasePath = Path.Combine(directory, "restcue.db");
+        var saved = AppSettings.Default with
+        {
+            RetryCooldown = TimeSpan.FromMinutes(42),
+        };
+
+        var repository = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+        await repository.SaveAsync(saved);
+
+        SettingsLoadResult result = await repository.LoadAsync();
+
+        Assert.Equal(TimeSpan.FromMinutes(42), result.Settings.RetryCooldown);
+    }
+
+    [Fact]
+    public async Task Older_settings_without_RetryCooldown_loads_default_20_minutes()
+    {
+        string databasePath = Path.Combine(directory, "restcue.db");
+        var repository = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+        await repository.SaveAsync(AppSettings.Default);
+
+        string jsonWithoutRetryCooldown = /* language=json */ """{"workInterval":"00:15:00"}""";
+        await using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        await connection.OpenAsync();
+        await using var updateCommand = connection.CreateCommand();
+        updateCommand.CommandText = "UPDATE settings SET value = @value WHERE key = 'app_settings';";
+        updateCommand.Parameters.AddWithValue("@value", jsonWithoutRetryCooldown);
+        await updateCommand.ExecuteNonQueryAsync();
+
+        var reloaded = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+        SettingsLoadResult result = await reloaded.LoadAsync();
+
+        Assert.Equal(TimeSpan.FromMinutes(20), result.Settings.RetryCooldown);
+        Assert.Equal(TimeSpan.FromMinutes(15), result.Settings.WorkInterval);
+    }
+
+    [Fact]
     public async Task Future_schema_version_is_rejected_without_downgrade_or_deletion()
     {
         string databasePath = Path.Combine(directory, "restcue.db");
