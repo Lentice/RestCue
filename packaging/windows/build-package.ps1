@@ -4,8 +4,6 @@
 .DESCRIPTION
     Publishes RestCue.App with Release configuration, generates the Inno Setup
     installer, and outputs SHA-256 checksum to artifacts/.
-.PARAMETER Version
-    Version string for the package (default: auto-detect from built assembly).
 .PARAMETER Configuration
     Build configuration (default: Release).
 .EXAMPLE
@@ -13,7 +11,6 @@
 #>
 
 param(
-    [string]$Version,
     [string]$Configuration = "Release"
 )
 
@@ -27,7 +24,7 @@ Write-Host "Configuration: $Configuration"
 
 # Step 1: Restore, build, test (Release)
 Write-Host "`n[1/5] Restoring..." -ForegroundColor Yellow
-dotnet restore "$RepoRoot\RestCue.sln" --configuration $Configuration
+dotnet restore "$RepoRoot\RestCue.sln"
 if ($LASTEXITCODE -ne 0) { throw "Restore failed." }
 
 Write-Host "`n[2/5] Building..." -ForegroundColor Yellow
@@ -42,25 +39,20 @@ if ($LASTEXITCODE -ne 0) { throw "Tests failed." }
 Write-Host "`n[4/5] Publishing..." -ForegroundColor Yellow
 dotnet publish "$RepoRoot\src\RestCue.App\RestCue.App.csproj" `
     --configuration $Configuration `
-    --no-build `
     --framework net10.0-windows `
     --runtime win-x64 `
     --self-contained false `
     --output $PublishDir
 if ($LASTEXITCODE -ne 0) { throw "Publish failed." }
 
-# Auto-detect version from published assembly
-if (-not $Version) {
-    $exePath = "$PublishDir\RestCue.exe"
-    if (Test-Path $exePath) {
-        $vi = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exePath)
-        $Version = "$($vi.FileMajorPart).$($vi.FileMinorPart).$($vi.FileBuildPart)"
-        Write-Host "Auto-detected version: $Version"
-    } else {
-        $Version = "1.3.0"
-        Write-Host "Using default version: $Version"
-    }
+# Read the installer version from the binary so package metadata cannot drift.
+$exePath = "$PublishDir\RestCue.exe"
+if (-not (Test-Path $exePath)) {
+    throw "Published executable not found: $exePath"
 }
+$vi = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($exePath)
+$Version = "$($vi.FileMajorPart).$($vi.FileMinorPart).$($vi.FileBuildPart)"
+Write-Host "Product version: $Version"
 
 # Step 3: Build installer
 Write-Host "`n[5/5] Building installer..." -ForegroundColor Yellow

@@ -21,14 +21,6 @@ jobs:
           cache-dependency-path: |
             **/*.csproj
 
-      - run: dotnet restore RestCue.sln --configuration Release
-
-      - run: dotnet build RestCue.sln --configuration Release --no-restore
-
-      - run: dotnet test RestCue.sln --configuration Release --no-build --filter "Category!=LongRun"
-
-      - run: dotnet publish src/RestCue.App/RestCue.App.csproj --configuration Release --no-build --framework net10.0-windows --runtime win-x64 --self-contained false --output artifacts/publish/win-x64
-
       - name: Install Inno Setup
         run: |
           $url = "https://files.jrsoftware.org/is/7/innosetup-7.0.1.exe"
@@ -37,23 +29,26 @@ jobs:
           & $installer /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-
           Remove-Item $installer
 
-      - name: Build installer
-        run: |
-          $version = (Get-Date -Format "0.0.yy.Mdd")
-          $iscc = "${env:ProgramFiles}\Inno Setup 7\ISCC.exe"
-          & $iscc "/dMyAppVersion=$version" packaging/windows/RestCue.iss
+      - name: Verify package workflow contract
+        run: .\packaging\windows\test-package-workflow.ps1
 
-      - name: Generate SHA-256
+      - name: Build installer and SHA-256
+        run: .\packaging\windows\build-package.ps1
+
+      - name: Verify installer lifecycle
         run: |
-          $installer = Get-ChildItem artifacts/RestCue-*-win-x64.exe | Select-Object -First 1
-          if ($installer) {
-            $hash = Get-FileHash -Algorithm SHA256 -Path $installer.FullName
-            $hash.Hash | Out-File -FilePath "$($installer.FullName).sha256" -Encoding ascii
-          }
+          $installer = Get-ChildItem artifacts\RestCue-*-win-x64.exe |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+          .\packaging\windows\verify-installer.ps1 `
+            -InstallerPath $installer.FullName `
+            -IsccPath "${env:ProgramFiles}\Inno Setup 7\ISCC.exe"
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: RestCue-installer
           path: |
             artifacts/RestCue-*-win-x64.exe
             artifacts/RestCue-*-win-x64.exe.sha256
+            artifacts/verification/**

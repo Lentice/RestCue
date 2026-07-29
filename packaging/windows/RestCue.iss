@@ -45,10 +45,11 @@ Source: "..\..\artifacts\publish\win-x64\*"; DestDir: "{app}"; Flags: ignorevers
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startup
 
-[Tasks]
-Name: "startup"; Description: "Start {#MyAppName} when I log in"; GroupDescription: "Startup"
+[Registry]
+; Startup is owned by the app setting. Do not create it during install, but
+; remove an orphaned entry during uninstall.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "RestCue"; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: postinstall nowait skipifsilent
@@ -60,3 +61,69 @@ Type: filesandordirs; Name: "{app}"
 [InstallDelete]
 ; Clean up any previous version files not in the new package
 Type: filesandordirs; Name: "{app}\*.old"
+
+[Code]
+function NextVersionPart(var Version: String): Integer;
+var
+  Separator: Integer;
+  Part: String;
+begin
+  Separator := Pos('.', Version);
+  if Separator = 0 then
+  begin
+    Part := Version;
+    Version := '';
+  end
+  else
+  begin
+    Part := Copy(Version, 1, Separator - 1);
+    Delete(Version, 1, Separator);
+  end;
+
+  Result := StrToIntDef(Part, 0);
+end;
+
+function CompareVersions(LeftVersion, RightVersion: String): Integer;
+var
+  Index: Integer;
+  LeftPart: Integer;
+  RightPart: Integer;
+begin
+  Result := 0;
+  for Index := 1 to 4 do
+  begin
+    LeftPart := NextVersionPart(LeftVersion);
+    RightPart := NextVersionPart(RightVersion);
+    if LeftPart > RightPart then
+    begin
+      Result := 1;
+      Exit;
+    end;
+    if LeftPart < RightPart then
+    begin
+      Result := -1;
+      Exit;
+    end;
+  end;
+end;
+
+function InitializeSetup(): Boolean;
+var
+  InstalledVersion: String;
+begin
+  Result := True;
+  if RegQueryStringValue(
+    HKCU,
+    'Software\Microsoft\Windows\CurrentVersion\Uninstall\RestCue_is1',
+    'DisplayVersion',
+    InstalledVersion) and
+    (CompareVersions(InstalledVersion, '{#MyAppVersion}') > 0) then
+  begin
+    SuppressibleMsgBox(
+      'A newer version of RestCue is already installed. Downgrade is not supported.',
+      mbError,
+      MB_OK,
+      IDOK);
+    Result := False;
+  end;
+end;
