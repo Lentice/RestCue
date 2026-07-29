@@ -36,14 +36,28 @@
                            LineStackingStrategy="BlockLineHeight"
                            Margin="0,0,0,12" />
 
-                <TextBlock x:Name="CountdownText"
-                           Text=""
-                           FontSize="24" FontWeight="Light"
+                <Rectangle x:Name="GuideVisual"
+                           Width="40" Height="40"
+                           Fill="#FF4CAF50"
+                           RadiusX="4" RadiusY="4"
                            HorizontalAlignment="Center"
-                           Margin="0,0,0,8" />
+                           Margin="0,0,0,12"
+                           Visibility="Collapsed" />
             </StackPanel>
 
             <StackPanel Grid.Row="2" HorizontalAlignment="Center">
+                <Button x:Name="CancelButton"
+                        Content="結束休息"
+                        FontSize="14"
+                        Height="36"
+                        Width="160"
+                        Click="OnCancelButtonClick"
+                        Cursor="Hand"
+                        Background="#FFF44336"
+                        Foreground="White"
+                        BorderThickness="0"
+                        Margin="0,0,0,6"
+                        Visibility="Collapsed" />
                 <Button x:Name="ActionButton"
                         FontSize="14"
                         Height="36"

@@ -4335,6 +4335,103 @@ public sealed class WorkCycleTrackerTests
         Assert.Equal(savedAccum, tracker.AccumulatedWorkTime);
     }
 
+    [Fact]
+    public void CancelBreak_preserves_accumulated_work_time()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30),
+            naturalPause: TimeSpan.FromSeconds(5),
+            maxWait: TimeSpan.FromMinutes(3));
+        int cancelled = 0;
+        var savedLevel = RestDebtLevel.Level0;
+        tracker.BreakCancelled += (_, _) => cancelled++;
+
+        for (int i = 0; i < 31; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+
+        for (int i = 0; i < 5; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.FromSeconds(10));
+        }
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+
+        var savedAccum = tracker.AccumulatedWorkTime;
+        savedLevel = tracker.RestDebtLevel;
+        Assert.NotEqual(TimeSpan.Zero, savedAccum);
+
+        tracker.StartBreak();
+        Assert.Equal(WorkCyclePhase.BreakInProgress, tracker.CurrentPhase);
+
+        tracker.CancelBreak();
+
+        Assert.Equal(1, cancelled);
+        Assert.Equal(savedAccum, tracker.AccumulatedWorkTime);
+        Assert.Equal(savedLevel, tracker.RestDebtLevel);
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void CancelBreak_outside_break_is_noop()
+    {
+        var tracker = CreateTracker();
+        int cancelled = 0;
+        tracker.BreakCancelled += (_, _) => cancelled++;
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        tracker.CancelBreak();
+
+        Assert.Equal(0, cancelled);
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Break_completion_still_resets_need()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30),
+            naturalPause: TimeSpan.FromSeconds(5),
+            maxWait: TimeSpan.FromMinutes(3),
+            breakDuration: TimeSpan.FromSeconds(20));
+        int completed = 0;
+        tracker.BreakCompleted += (_, _) => completed++;
+
+        for (int i = 0; i < 31; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+
+        for (int i = 0; i < 5; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.FromSeconds(10));
+        }
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+
+        var savedAccum = tracker.AccumulatedWorkTime;
+        Assert.NotEqual(TimeSpan.Zero, savedAccum);
+
+        tracker.ManualStartBreak();
+        Assert.Equal(WorkCyclePhase.BreakInProgress, tracker.CurrentPhase);
+
+        clock.Advance(TimeSpan.FromSeconds(20));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(1, completed);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+        Assert.Equal(RestDebtLevel.Level0, tracker.RestDebtLevel);
+    }
+
     private sealed class FakeClock : IClock
     {
         private DateTimeOffset _utcNow = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);

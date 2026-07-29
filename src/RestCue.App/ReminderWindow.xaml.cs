@@ -7,26 +7,28 @@ namespace RestCue.App;
 
 public partial class ReminderWindow : Window
 {
-    private readonly DispatcherTimer countdownTimer;
-    private int countdownSeconds;
+    private readonly DispatcherTimer breakGuideTimer;
     private bool isBreakStarting;
 
     public event EventHandler? BreakRequested;
     public event EventHandler? BreakCompleted;
     public event EventHandler? SnoozeRequested;
     public event EventHandler? IgnoreRequested;
+    public event EventHandler? CancelRequested;
 
     public TimeSpan SnoozeDuration { get; set; }
     public TimeSpan BreakDuration { get; set; }
 
+    public Action? BreakGuideTick { get; set; }
+
     public ReminderWindow()
     {
         InitializeComponent();
-        countdownTimer = new DispatcherTimer(DispatcherPriority.Normal)
+        breakGuideTimer = new DispatcherTimer(DispatcherPriority.Normal)
         {
             Interval = TimeSpan.FromSeconds(1)
         };
-        countdownTimer.Tick += OnCountdownTick;
+        breakGuideTimer.Tick += OnBreakGuideTick;
 
         Loaded += OnLoaded;
     }
@@ -34,25 +36,50 @@ public partial class ReminderWindow : Window
     public void ShowReminder()
     {
         PhaseText.Text = "Look at something\n6 meters away.";
-        CountdownText.Text = "";
-        ActionButton.Content = $"Start Break ({(int)BreakDuration.TotalSeconds}s)";
-        SnoozeButton.Content = $"Snooze {(int)SnoozeDuration.TotalMinutes}min";
+        ActionButton.Content = "Start Break";
+        SnoozeButton.Content = "Snooze";
         SnoozeButton.Visibility = Visibility.Visible;
         IgnoreButton.Visibility = Visibility.Visible;
+        CancelButton.Visibility = Visibility.Collapsed;
+        GuideVisual.Visibility = Visibility.Collapsed;
         PositionOnPrimaryScreenRightEdge();
         Show();
     }
 
-    public void StartBreakCountdown()
+    public void StartBreakGuide()
     {
-        countdownSeconds = (int)BreakDuration.TotalSeconds;
-        CountdownText.Text = $"{countdownSeconds}s";
-        PhaseText.Text = "Break in progress...";
-        ActionButton.IsEnabled = false;
-        ActionButton.Content = "Break in progress...";
+        PhaseText.Text = RestCue.Core.Reminders.BreakGuideText.ForCue(RestCue.Core.Reminders.BreakGuideCue.Start);
+        ActionButton.Visibility = Visibility.Collapsed;
         SnoozeButton.Visibility = Visibility.Collapsed;
         IgnoreButton.Visibility = Visibility.Collapsed;
-        countdownTimer.Start();
+        CancelButton.Visibility = Visibility.Visible;
+        GuideVisual.Visibility = Visibility.Visible;
+        GuideVisual.BeginAnimation(
+            System.Windows.UIElement.OpacityProperty,
+            new System.Windows.Media.Animation.DoubleAnimation
+            {
+                From = 0.4,
+                To = 1.0,
+                Duration = TimeSpan.FromSeconds(1),
+                AutoReverse = true,
+                RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever
+            });
+        breakGuideTimer.Start();
+    }
+
+    public void CompleteBreak()
+    {
+        breakGuideTimer.Stop();
+        GuideVisual.BeginAnimation(System.Windows.Media.SolidColorBrush.OpacityProperty, null);
+        CancelButton.Visibility = Visibility.Collapsed;
+        GuideVisual.Visibility = Visibility.Collapsed;
+        OnBreakCompleted();
+    }
+
+    public void StopBreakGuide()
+    {
+        breakGuideTimer.Stop();
+        GuideVisual.BeginAnimation(System.Windows.Media.SolidColorBrush.OpacityProperty, null);
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -93,25 +120,14 @@ public partial class ReminderWindow : Window
         IgnoreRequested?.Invoke(this, EventArgs.Empty);
     }
 
-    public void CompleteBreak()
+    private void OnCancelButtonClick(object sender, RoutedEventArgs e)
     {
-        countdownTimer.Stop();
-        OnBreakCompleted();
+        CancelRequested?.Invoke(this, EventArgs.Empty);
     }
 
-    private void OnCountdownTick(object? sender, EventArgs e)
+    private void OnBreakGuideTick(object? sender, EventArgs e)
     {
-        countdownSeconds--;
-
-        if (countdownSeconds <= 0)
-        {
-            countdownTimer.Stop();
-            CountdownText.Text = "Done!";
-        }
-        else
-        {
-            CountdownText.Text = $"{countdownSeconds}s";
-        }
+        BreakGuideTick?.Invoke();
     }
 
     private void OnBreakCompleted()

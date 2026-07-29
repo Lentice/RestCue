@@ -323,6 +323,16 @@ public sealed class WorkCycleTracker
         BreakStarted?.Invoke(this, EventArgs.Empty);
     }
 
+    public void CancelBreak()
+    {
+        if (CurrentPhase != WorkCyclePhase.BreakInProgress)
+            return;
+
+        CurrentPhase = WorkCyclePhase.Working;
+        breakStartUtc = null;
+        BreakCancelled?.Invoke(this, EventArgs.Empty);
+    }
+
     public void Snooze()
     {
         if (CurrentPhase != WorkCyclePhase.ReminderVisible)

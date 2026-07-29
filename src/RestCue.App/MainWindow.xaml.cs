@@ -23,6 +23,8 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     private IForegroundContextProvider? foregroundContextProvider;
     private ApplicationRuleSet? applicationRules;
     private ReminderWindow? reminderWindow;
+    private BreakGuideSession? breakGuideSession;
+    private IClock? clock;
     private TimeSpan snoozeDuration;
 
     public MainWindow()
@@ -63,6 +65,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         IEnumerable<ApplicationRule>? applicationRules = null)
     {
         this.activityMonitor = activityMonitor;
+        this.clock = clock ?? new SystemClock();
         activityTracker = new UserActivityStatusTracker(
             activityMonitor,
             new UserActivityStatusEvaluator(settings.IdleThreshold));
@@ -224,6 +227,8 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     {
         if (workCycleTracker == null) return;
 
+        CloseReminderIfOpen();
+
         try
         {
             workCycleTracker.ManualStartBreak();
@@ -235,17 +240,16 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
         UpdateCycleStatus();
 
-        CloseReminderIfOpen();
-
         if (reminderWindow == null)
         {
             reminderWindow = new ReminderWindow();
             reminderWindow.BreakCompleted += OnReminderBreakCompleted;
-            reminderWindow.Closed += (_, _) => reminderWindow = null;
+            reminderWindow.CancelRequested += OnCancelRequested;
+            reminderWindow.Closed += OnReminderWindowClosed;
         }
 
         reminderWindow.BreakDuration = workCycleTracker.BreakDuration;
-        reminderWindow.StartBreakCountdown();
+        SetupBreakGuideSession(clock ?? new SystemClock(), workCycleTracker.BreakDuration);
         reminderWindow.Show();
     }
 
@@ -304,9 +308,27 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     {
         if (reminderWindow != null)
         {
+            if (workCycleTracker?.CurrentPhase == WorkCyclePhase.BreakInProgress)
+            {
+                workCycleTracker.CancelBreak();
+            }
+            reminderWindow.StopBreakGuide();
             reminderWindow.Close();
             reminderWindow = null;
         }
+    }
+
+    private void OnReminderWindowClosed(object? sender, EventArgs e)
+    {
+        reminderWindow = null;
+        breakGuideSession = null;
+    }
+
+    private void OnCancelRequested(object? sender, EventArgs e)
+    {
+        workCycleTracker?.CancelBreak();
+        CloseReminderIfOpen();
+        UpdateCycleStatus();
     }
 
     private void OnActivityTimerTick(object? sender, EventArgs e)
@@ -364,7 +386,8 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
                 reminderWindow.BreakCompleted += OnReminderBreakCompleted;
                 reminderWindow.SnoozeRequested += OnSnoozeRequested;
                 reminderWindow.IgnoreRequested += OnIgnoreRequested;
-                reminderWindow.Closed += (_, _) => reminderWindow = null;
+                reminderWindow.CancelRequested += OnCancelRequested;
+                reminderWindow.Closed += OnReminderWindowClosed;
             }
 
             reminderWindow.SnoozeDuration = snoozeDuration;
@@ -381,7 +404,46 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     private void OnBreakRequested(object? sender, EventArgs e)
     {
         workCycleTracker?.StartBreak();
-        reminderWindow?.StartBreakCountdown();
+        if (reminderWindow == null || workCycleTracker == null) return;
+
+        SetupBreakGuideSession(clock ?? new SystemClock(), workCycleTracker.BreakDuration);
+    }
+
+    private void SetupBreakGuideSession(IClock clock, TimeSpan duration)
+    {
+        breakGuideSession = new BreakGuideSession(clock, duration);
+        breakGuideSession.CueChanged += OnBreakGuideCueChanged;
+        breakGuideSession.Completed += OnBreakGuideCompleted;
+        breakGuideSession.Cancelled += OnBreakGuideCancelled;
+
+        if (reminderWindow != null)
+        {
+            reminderWindow.BreakGuideTick = () => breakGuideSession.Tick();
+            reminderWindow.StartBreakGuide();
+        }
+
+        breakGuideSession.Start();
+    }
+
+    private void OnBreakGuideCueChanged(object? sender, BreakGuideCue cue)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            if (reminderWindow != null)
+            {
+                reminderWindow.PhaseText.Text = RestCue.Core.Reminders.BreakGuideText.ForCue(cue);
+            }
+        });
+    }
+
+    private void OnBreakGuideCompleted(object? sender, EventArgs e)
+    {
+        breakGuideSession = null;
+    }
+
+    private void OnBreakGuideCancelled(object? sender, EventArgs e)
+    {
+        breakGuideSession = null;
     }
 
     private void OnReminderBreakCompleted(object? sender, EventArgs e)
