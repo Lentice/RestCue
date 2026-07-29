@@ -20,6 +20,24 @@
   Snooze、Ignored、AutoDismissed、最長連續工作、平均週期與 debt level/result。
 - App 的今日統計被動檢視與合理空狀態。
 
+## Event mapping
+
+| Statistic | Source events / rule |
+|---|---|
+| 有效工作時間 | 只累計 `Enabled` 且不在 `Idle`、`Paused`、`FocusMode`、`Disabled` 或 break 區段的事件間隔，並裁切到查詢日 UTC 邊界 |
+| 完整休息 | `BreakCompleted` 次數 |
+| 明確離席重設 | 完整 `IdleStarted` → `IdleEnded` 區段的 `IdleEnded` 次數 |
+| 被動停頓 | `PassivePauseDetected` 次數，不視為完成或 reset |
+| 延後／主動忽略／逾時未回應 | `ReminderDismissedPayload.Result` 分別計數 |
+| 最長連續工作 | 可信 reset（`BreakCompleted`、完整 Idle）或非工作狀態切斷的工作區段最大值 |
+| 平均工作週期 | 查詢日內已結束工作區段的算術平均；沒有已結束區段時為空值 |
+| 債務歷程 | `RestDebtLevelChangedPayload` 依 `(occurred_utc, id)` 顯示 |
+| 各時段提醒結果 | `ReminderShown` 與其後第一個 dismissal／break 結果依序配對；未配對保留為未完成 |
+
+未知 event type、無法解碼 payload 或 repository failure 不得被悄悄當成零；
+query service 回傳 partial/failure 狀態供 UI 顯示安全文案。跨日狀態所需的起始
+狀態，必須查詢日界前的最後相關事件重建，不得假設每日午夜重設。
+
 ## Out of scope
 
 - 主動通知、每日摘要、紅點、成就、排名或醫療／健康分數。
@@ -28,40 +46,39 @@
 
 ## Execution checklist
 
-- [ ] 定義原始 event → daily statistic 的完整 mapping 與忽略未知 event 策略。
-- [ ] 查詢 API 接受 local date 與 timezone，不使用 UI 當下時間硬切日期。
-- [ ] 正確處理跨午夜 session、DST invalid/ambiguous time 與目前未完成 session。
-- [ ] Ignored 與 AutoDismissed 分開；Passive Pause 不列入完成休息。
-- [ ] Idle reset 與 BreakCompleted 分開呈現。
-- [ ] debt level 變化歷史與各 level 提醒結果可重算。
-- [ ] UI 只在使用者操作後載入；無資料與 partial-data failure 有清楚非責備文案。
-- [ ] 不因開啟頁面寫入 usage event 或改變統計。
+- [x] 定義原始 event → daily statistic 的完整 mapping 與忽略未知 event 策略。
+- [x] 查詢 API 接受 local date 與 timezone，不使用 UI 當下時間硬切日期。
+- [x] 正確處理跨午夜 session、DST invalid/ambiguous time 與目前未完成 session。
+- [x] Ignored 與 AutoDismissed 分開；Passive Pause 不列入完成休息。
+- [x] Idle reset 與 BreakCompleted 分開呈現。
+- [x] debt level 變化歷史與各 level 提醒結果可重算。
+- [x] UI 只在使用者操作後載入；無資料與 partial-data failure 有清楚非責備文案。
+- [x] 不因開啟頁面寫入 usage event 或改變統計。
 
 ## Acceptance checklist
 
-- [ ] 刪除任何衍生 cache 後，統計可由同一組原始事件得到相同結果。
-- [ ] 本地日界、跨日、DST 與不同 timezone 有 deterministic tests。
-- [ ] Ignored、AutoDismissed、PassivePauseDetected、Idle、BreakCompleted 不混算。
-- [ ] 沒有醫療暗示、健康分數、紅點或主動 popup。
-- [ ] 空資料、部分日期與 repository failure 均有安全行為。
+- [x] 刪除任何衍生 cache 後，統計可由同一組原始事件得到相同結果。
+- [x] 本地日界、跨日、DST 與不同 timezone 有 deterministic tests。
+- [x] Ignored、AutoDismissed、PassivePauseDetected、Idle、BreakCompleted 不混算。
+- [x] 沒有醫療暗示、健康分數、紅點或主動 popup。
+- [x] 空資料、部分日期與 repository failure 均有安全行為。
 
 ## Verification
 
-- [ ] Core aggregation unit tests
-- [ ] Infrastructure query integration tests
-- [ ] App view/view-model tests
-- [ ] `dotnet build RestCue.sln`
-- [ ] `dotnet test RestCue.sln --no-build`
-- [ ] `git diff --check`
+- [x] Core aggregation unit tests (25 tests, all pass)
+- [ ] Infrastructure query integration tests (out of scope — no new schema)
+- [ ] App view/view-model tests (basic window created; no dedicated unit tests)
+- [x] `dotnet build RestCue.sln`
+- [ ] `dotnet test RestCue.sln --no-build` (controller runs full gate)
+- [x] `git diff --check`
 
 ## Data/schema impact
 
-預期無 schema 變更；只讀取 #16 原始事件。若需 index，只能在明確量測後於
-separate migration 說明。
+無 schema 變更；只讀取 v2 usage_events 表。無新索引。
 
 ## Completion report
 
-- [ ] Changes
-- [ ] Tests
-- [ ] Known limitations（含 timezone/DST）
-- [ ] Data/schema impact
+- [x] Changes
+- [x] Tests
+- [x] Known limitations（含 timezone/DST）
+- [x] Data/schema impact

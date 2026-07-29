@@ -20,6 +20,7 @@ public partial class App : System.Windows.Application
     private WindowsTrayIcon? _trayIcon;
     private MainWindow? _statusWindow;
     private BackgroundUsageEventWriter? _eventWriter;
+    private IUsageEventRepository? _usageEventRepository;
     private WorkCycleTracker? _tracker;
     private WorkCyclePhase _lastPhase;
 
@@ -72,6 +73,22 @@ public partial class App : System.Windows.Application
         base.OnExit(e);
     }
 
+    internal void WireStatisticsCommand(ITrayIcon trayIcon)
+    {
+        trayIcon.StatisticsRequested += (_, _) =>
+        {
+            if (_usageEventRepository == null)
+            {
+                Trace.TraceError("RestCue: statistics unavailable, no repository.");
+                return;
+            }
+
+            var window = new StatisticsWindow(
+                new DailyStatisticsService(_usageEventRepository));
+            window.Show();
+        };
+    }
+
     internal static void WireBreakNowCommand(ITrayIcon trayIcon, IStatusWindow statusWindow)
     {
         trayIcon.BreakNowRequested += (_, _) => statusWindow.StartBreakNow();
@@ -105,6 +122,7 @@ public partial class App : System.Windows.Application
 
         WireModeCommands(_trayIcon, _statusWindow);
         WireBreakNowCommand(_trayIcon, _statusWindow);
+        WireStatisticsCommand(_trayIcon);
 
         _statusWindow.PhaseChanged += OnPhaseChanged;
         _statusWindow.DebtLevelChanged += OnDebtLevelChanged;
@@ -140,6 +158,7 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        _usageEventRepository = repo;
         _eventWriter = new BackgroundUsageEventWriter(
             repo,
             msg => Trace.TraceError(msg));

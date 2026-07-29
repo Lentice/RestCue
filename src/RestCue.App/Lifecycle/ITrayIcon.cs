@@ -22,6 +22,8 @@ public interface ITrayIcon : IDisposable
 
     event EventHandler? BreakNowRequested;
 
+    event EventHandler? StatisticsRequested;
+
     bool Visible { get; set; }
 
     void SetPauseText(bool isPaused);

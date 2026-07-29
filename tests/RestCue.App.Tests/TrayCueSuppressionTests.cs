@@ -63,6 +63,8 @@ public sealed class TrayCueSuppressionTests
         public event EventHandler? EnableRequested;
 
         public event EventHandler? BreakNowRequested;
+
+        public event EventHandler? StatisticsRequested;
 #pragma warning restore CS0067
 
         public bool Visible { get; set; }

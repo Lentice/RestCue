@@ -34,6 +34,7 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("開啟 RestCue", null, (_, _) => OpenRequested?.Invoke(this, EventArgs.Empty));
+        menu.Items.Add("今日統計", null, (_, _) => StatisticsRequested?.Invoke(this, EventArgs.Empty));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_pauseItem);
         menu.Items.Add(_focusItem);
@@ -68,6 +69,8 @@ public sealed class WindowsTrayIcon : ITrayIcon
     public event EventHandler? EnableRequested;
 
     public event EventHandler? BreakNowRequested;
+
+    public event EventHandler? StatisticsRequested;
 
     public bool Visible
     {

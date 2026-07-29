@@ -88,6 +88,8 @@ public sealed class ApplicationLifecycleTests
         public event EventHandler? EnableRequested;
 
         public event EventHandler? BreakNowRequested;
+
+        public event EventHandler? StatisticsRequested;
 #pragma warning restore CS0067
 
         public int VisibleSetToTrueCount { get; private set; }
