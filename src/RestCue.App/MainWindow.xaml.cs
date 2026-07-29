@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using Microsoft.Win32;
 using RestCue.App.Lifecycle;
 using RestCue.Core.Activity;
+using RestCue.Core.Audio;
 using RestCue.Core.Domain;
 using RestCue.Core.Events;
 using RestCue.Core.Policies;
@@ -24,6 +25,8 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     private ApplicationRuleSet? applicationRules;
     private ReminderWindow? reminderWindow;
     private BreakGuideSession? breakGuideSession;
+    private BreakGuideAudioCoordinator? audioCoordinator;
+    private IBreakGuideAudioPlayer? audioPlayer;
     private IClock? clock;
     private TimeSpan snoozeDuration;
 
@@ -44,6 +47,12 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     public RestDebtLevel CurrentDebtLevel { get; private set; }
 
     public WorkCycleTracker? WorkCycleTracker => workCycleTracker;
+
+    public IBreakGuideAudioPlayer? AudioPlayer
+    {
+        get => audioPlayer;
+        set => audioPlayer = value;
+    }
 
     public void WireLifecycleEvents()
     {
@@ -110,6 +119,9 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
     public void StopActivityTracking()
     {
+        EndAudioGuide();
+        audioCoordinator = null;
+
         activityTimer.Stop();
 
         if (workCycleTracker != null)
@@ -312,6 +324,8 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             {
                 workCycleTracker.CancelBreak();
             }
+            EndAudioGuide();
+            audioCoordinator = null;
             reminderWindow.StopBreakGuide();
             reminderWindow.Close();
             reminderWindow = null;
@@ -320,6 +334,8 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
     private void OnReminderWindowClosed(object? sender, EventArgs e)
     {
+        EndAudioGuide();
+        audioCoordinator = null;
         reminderWindow = null;
         breakGuideSession = null;
     }
@@ -423,6 +439,32 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         }
 
         breakGuideSession.Start();
+
+        if (audioPlayer != null && workCycleTracker != null)
+        {
+            EndAudioGuide();
+            audioCoordinator = new BreakGuideAudioCoordinator(audioPlayer);
+            bool audioAllowed = workCycleTracker.EffectiveIntensity >= PresentationIntensity.PopupAndSound;
+            audioCoordinator.BeginGuide(audioAllowed);
+            breakGuideSession.CueChanged += OnAudioCueChanged;
+            audioCoordinator.DegradedToVisual += (_, _) =>
+                System.Diagnostics.Trace.TraceError("RestCue: Break guide degraded to visual-only.");
+        }
+    }
+
+    private void OnAudioCueChanged(object? sender, BreakGuideCue cue)
+    {
+        audioCoordinator?.HandleCue(cue);
+    }
+
+    private void EndAudioGuide()
+    {
+        if (audioCoordinator != null)
+        {
+            if (breakGuideSession != null)
+                breakGuideSession.CueChanged -= OnAudioCueChanged;
+            audioCoordinator.EndGuide();
+        }
     }
 
     private void OnBreakGuideCueChanged(object? sender, BreakGuideCue cue)
@@ -438,11 +480,15 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
     private void OnBreakGuideCompleted(object? sender, EventArgs e)
     {
+        EndAudioGuide();
+        audioCoordinator = null;
         breakGuideSession = null;
     }
 
     private void OnBreakGuideCancelled(object? sender, EventArgs e)
     {
+        EndAudioGuide();
+        audioCoordinator = null;
         breakGuideSession = null;
     }
 

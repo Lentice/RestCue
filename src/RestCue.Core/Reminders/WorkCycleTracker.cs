@@ -115,6 +115,8 @@ public sealed class WorkCycleTracker
 
     public event EventHandler<RestDebtLevelChangedEventArgs>? RestDebtLevelChanged;
 
+    public PresentationIntensity EffectiveIntensity { get; private set; } = PresentationIntensity.PopupAndSound;
+
     public void SetNextDebtDeadline(DateTimeOffset? deadline)
     {
         nextDebtDeadline = cooldownUntil.HasValue ? deadline : null;
@@ -156,7 +158,9 @@ public sealed class WorkCycleTracker
     private PresentationIntensity GetEffectiveIntensity()
     {
         var debtRec = PresentationIntensityPolicy.GetDebtRecommendation(restDebtLevel);
-        return PresentationIntensityPolicy.Effective(debtRec, _contextCap, _userCap);
+        var result = PresentationIntensityPolicy.Effective(debtRec, _contextCap, _userCap);
+        EffectiveIntensity = result;
+        return result;
     }
 
     public event EventHandler? ReminderShown;

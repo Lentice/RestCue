@@ -5,6 +5,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.10" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.4" />
+    <PackageReference Include="System.Speech" Version="10.0.10" />
+    <PackageReference Include="System.Windows.Extensions" Version="10.0.10" />
     <ProjectReference Include="..\RestCue.Core\RestCue.Core.csproj" />
   </ItemGroup>
 </Project>

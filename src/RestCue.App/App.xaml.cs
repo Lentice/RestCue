@@ -8,6 +8,7 @@ using RestCue.Core.Reminders;
 using RestCue.Core.Settings;
 using RestCue.Core.UsageEvents;
 using RestCue.Infrastructure.Activity;
+using RestCue.Infrastructure.Audio;
 using RestCue.Infrastructure.Settings;
 using RestCue.Infrastructure.UsageEvents;
 
@@ -22,6 +23,7 @@ public partial class App : System.Windows.Application
     private BackgroundUsageEventWriter? _eventWriter;
     private IUsageEventRepository? _usageEventRepository;
     private WorkCycleTracker? _tracker;
+    private WindowsBreakGuideAudioPlayer? _audioPlayer;
     private WorkCyclePhase _lastPhase;
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -41,6 +43,8 @@ public partial class App : System.Windows.Application
         try
         {
             await _startup.InitializeAsync();
+            _audioPlayer = new WindowsBreakGuideAudioPlayer();
+            _statusWindow.AudioPlayer = _audioPlayer;
             _statusWindow.StartActivityTracking(
                 new WindowsUserActivityMonitor(),
                 _startup.CurrentSettings,
@@ -69,6 +73,7 @@ public partial class App : System.Windows.Application
             _statusWindow.StopActivityTracking();
         }
         UnwireUsageEventPersistence();
+        _audioPlayer?.Dispose();
         _lifecycle?.Dispose();
         base.OnExit(e);
     }
