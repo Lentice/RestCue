@@ -12,6 +12,22 @@
 - xUnit
 - GitHub Actions（Windows runner）
 
+## 建置與安裝套件
+
+```powershell
+# 完整 Release 建置與測試
+dotnet build RestCue.sln --configuration Release
+dotnet test RestCue.sln --configuration Release --no-build --filter "Category!=LongRun"
+
+# 建置安裝套件（需求：Inno Setup 7）
+.\packaging\windows\build-package.ps1
+
+# 產出檔案位於 artifacts\RestCue-{version}-win-x64.exe
+# 包含 SHA-256 checksum 於同目錄
+```
+
+Installer 為 framework-dependent per-user 安裝（詳見 `docs/adr/0007-windows-install-and-upgrade.md`）。
+
 ## 專案結構
 
 - `src/RestCue.App`：WPF composition root 與 UI

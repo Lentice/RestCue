@@ -1,0 +1,43 @@
+name: Package
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          winget install "JRSoftware.InnoSetup.7" --accept-source-agreements --silent
+
+      - name: Build Package
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}" -replace '^v', ''
+          .\packaging\windows\build-package.ps1 -Version $tag
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RestCue-installer
+          path: artifacts/RestCue-*.exe
+          if-no-files-found: error
+
+      - name: Upload Checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: RestCue-checksum
+          path: artifacts/RestCue-*.sha256
+          if-no-files-found: error

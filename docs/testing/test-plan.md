@@ -12,5 +12,9 @@
 
 見 `docs/testing/windows-manual-acceptance-matrix.md`。每個 release 前必須執行一次完整矩陣，並將結果填回該檔。
 
+## Install/Upgrade verification
+
+見 `docs/testing/windows-install-upgrade-verification.md`。Installer 使用 Inno Setup（見 ADR-0007），per-user 安裝，framework-dependent publish。
+
 每個 ticket 必須列出實際執行的測試與未覆蓋限制。
 

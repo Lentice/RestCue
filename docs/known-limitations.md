@@ -15,3 +15,7 @@
 - Soak harness 的資源量測依賴 `Process.GetCurrentProcess()` 取樣，取樣頻率固定為每 60 秒一次；短暫突發峰值可能被遺漏。判定標準為「8 小時內無持續單調且無界成長」，非單點峰值。
 - Soak harness 的測試結果強烈依賴執行環境（硬體規格、OS 版本、背景服務），不同環境的 baseline 可能差異顯著。首次 soak 應記錄完整環境資訊，後續在同一環境比對。
 - #23 Windows 手動驗收矩陣：多螢幕、mixed-DPI、primary switch、display reconnect 等場景因硬體限制列為 BLOCKED。需 Windows 10/11 雙螢幕環境與不同 DPI 裝置方可執行。
+- 安裝套件（#24）未經數位簽章。Windows Defender SmartScreen 可能顯示警告，要求使用者按「更多資訊」→「仍要執行」。簽章為 release blocker，需另行取得程式碼簽章憑證。
+- 安裝套件為 framework-dependent，目標機器必須已安裝 .NET 10 Desktop Runtime。若缺乏 runtime，請先從 https://dotnet.microsoft.com/download/dotnet/10.0 安裝。
+- Downgrade 不支援：安裝舊版本後啟動會因資料庫 schema 版本較新而拒絕啟動，這是既有設計（ADR-0001/0005），不回退 schema。
+- 安裝／升級驗證所有情境（clean install、upgrade、repair、failed-upgrade recovery、uninstall）因需要乾淨的 Windows 10/11 環境與人類操作，列為 BLOCKED。
