@@ -14,6 +14,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RestCue.App.Tests", "tests\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RestCue.Infrastructure.Tests", "tests\RestCue.Infrastructure.Tests\RestCue.Infrastructure.Tests.csproj", "{97467B2E-70F9-471A-BE18-45433BDD2D0C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RestCue.Validation.Tests", "tests\RestCue.Validation.Tests\RestCue.Validation.Tests.csproj", "{95EA2B71-664D-46BD-B4A0-66BA12192459}"
+EndProject
 Global
     GlobalSection(SolutionConfigurationPlatforms) = preSolution
         Debug|Any CPU = Debug|Any CPU
@@ -44,5 +46,9 @@ Global
         {97467B2E-70F9-471A-BE18-45433BDD2D0C}.Debug|Any CPU.Build.0 = Debug|Any CPU
         {97467B2E-70F9-471A-BE18-45433BDD2D0C}.Release|Any CPU.ActiveCfg = Release|Any CPU
         {97467B2E-70F9-471A-BE18-45433BDD2D0C}.Release|Any CPU.Build.0 = Release|Any CPU
+        {95EA2B71-664D-46BD-B4A0-66BA12192459}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+        {95EA2B71-664D-46BD-B4A0-66BA12192459}.Debug|Any CPU.Build.0 = Debug|Any CPU
+        {95EA2B71-664D-46BD-B4A0-66BA12192459}.Release|Any CPU.ActiveCfg = Release|Any CPU
+        {95EA2B71-664D-46BD-B4A0-66BA12192459}.Release|Any CPU.Build.0 = Release|Any CPU
     EndGlobalSection
 EndGlobal
