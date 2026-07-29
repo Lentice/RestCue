@@ -46,10 +46,6 @@ public sealed class WorkCycleTracker
     private PresentationIntensity _userCap = PresentationIntensityPolicy.DefaultUserCap;
     private bool _forceAllowPopup;
 
-    private static readonly TimeSpan DefaultDebtLevel2 = TimeSpan.FromMinutes(35);
-    private static readonly TimeSpan DefaultDebtLevel3 = TimeSpan.FromMinutes(45);
-    private static readonly TimeSpan DefaultDebtLevel4 = TimeSpan.FromMinutes(60);
-
     public WorkCycleTracker(
         IClock clock,
         TimeSpan workInterval,
@@ -81,9 +77,9 @@ public sealed class WorkCycleTracker
                 nameof(passiveBreakThreshold), passiveBreakThreshold,
                 "Passive break threshold must be less than idle threshold.");
 
-        var l2 = debtLevel2 == default ? DefaultDebtLevel2 : debtLevel2;
-        var l3 = debtLevel3 == default ? DefaultDebtLevel3 : debtLevel3;
-        var l4 = debtLevel4 == default ? DefaultDebtLevel4 : debtLevel4;
+        var l2 = debtLevel2 == default ? TimeSpan.FromMinutes(35) : debtLevel2;
+        var l3 = debtLevel3 == default ? TimeSpan.FromMinutes(45) : debtLevel3;
+        var l4 = debtLevel4 == default ? TimeSpan.FromMinutes(60) : debtLevel4;
 
         DebtPolicy.ValidateThresholds(workInterval, l2, l3, l4);
 

@@ -4,6 +4,8 @@ public sealed record AppSettings
 {
     public static AppSettings Default { get; } = new();
 
+    public int SchemaVersion { get; init; } = 2;
+
     public TimeSpan WorkInterval { get; init; } = TimeSpan.FromMinutes(20);
 
     public TimeSpan NaturalPauseThreshold { get; init; } = TimeSpan.FromSeconds(5);
@@ -25,5 +27,13 @@ public sealed record AppSettings
     public double ReminderOpacity { get; init; } = 0.7;
 
     public bool CollectForegroundProcessNames { get; init; }
+
+    public TimeSpan DebtLevel2Threshold { get; init; } = TimeSpan.FromMinutes(35);
+
+    public TimeSpan DebtLevel3Threshold { get; init; } = TimeSpan.FromMinutes(45);
+
+    public TimeSpan DebtLevel4Threshold { get; init; } = TimeSpan.FromMinutes(60);
+
+    public BreakGuideMode BreakGuideMode { get; init; } = BreakGuideMode.Cue;
 
 }

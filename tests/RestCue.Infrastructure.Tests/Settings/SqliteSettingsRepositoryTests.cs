@@ -21,6 +21,9 @@ public sealed class SqliteSettingsRepositoryTests : IDisposable
         var saved = AppSettings.Default with
         {
             WorkInterval = TimeSpan.FromMinutes(35),
+            DebtLevel2Threshold = TimeSpan.FromMinutes(40),
+            DebtLevel3Threshold = TimeSpan.FromMinutes(50),
+            DebtLevel4Threshold = TimeSpan.FromMinutes(60),
             CollectForegroundProcessNames = true,
         };
 
@@ -97,7 +100,11 @@ public sealed class SqliteSettingsRepositoryTests : IDisposable
     {
         string databasePath = Path.Combine(directory, "restcue.db");
         var repository = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
-        var saved = AppSettings.Default with { WorkInterval = TimeSpan.FromMinutes(37) };
+        var saved = AppSettings.Default with
+        {
+            WorkInterval = TimeSpan.FromMinutes(37),
+            DebtLevel2Threshold = TimeSpan.FromMinutes(40),
+        };
         await repository.SaveAsync(saved);
 
         await using (var lockConnection = new SqliteConnection(
@@ -156,6 +163,124 @@ public sealed class SqliteSettingsRepositoryTests : IDisposable
 
         Assert.Equal(TimeSpan.FromMinutes(20), result.Settings.RetryCooldown);
         Assert.Equal(TimeSpan.FromMinutes(15), result.Settings.WorkInterval);
+    }
+
+    [Fact]
+    public async Task Debt_thresholds_and_break_guide_mode_round_trip()
+    {
+        string databasePath = Path.Combine(directory, "restcue.db");
+        var saved = AppSettings.Default with
+        {
+            DebtLevel2Threshold = TimeSpan.FromMinutes(40),
+            DebtLevel3Threshold = TimeSpan.FromMinutes(55),
+            DebtLevel4Threshold = TimeSpan.FromMinutes(70),
+            BreakGuideMode = BreakGuideMode.Voice,
+        };
+
+        var repository = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+        await repository.SaveAsync(saved);
+
+        SettingsLoadResult result = await repository.LoadAsync();
+
+        Assert.Equal(TimeSpan.FromMinutes(40), result.Settings.DebtLevel2Threshold);
+        Assert.Equal(TimeSpan.FromMinutes(55), result.Settings.DebtLevel3Threshold);
+        Assert.Equal(TimeSpan.FromMinutes(70), result.Settings.DebtLevel4Threshold);
+        Assert.Equal(BreakGuideMode.Voice, result.Settings.BreakGuideMode);
+    }
+
+    [Fact]
+    public async Task Older_document_without_debt_thresholds_loads_v13_defaults()
+    {
+        string databasePath = Path.Combine(directory, "restcue.db");
+        var repository = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+        await repository.SaveAsync(AppSettings.Default);
+
+        string minimalJson = /* language=json */ """{"workInterval":"00:15:00"}""";
+        await using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        await connection.OpenAsync();
+        await using var updateCommand = connection.CreateCommand();
+        updateCommand.CommandText = "UPDATE settings SET value = @value WHERE key = 'app_settings';";
+        updateCommand.Parameters.AddWithValue("@value", minimalJson);
+        await updateCommand.ExecuteNonQueryAsync();
+
+        var reloaded = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+        SettingsLoadResult result = await reloaded.LoadAsync();
+
+        Assert.Equal(TimeSpan.FromMinutes(35), result.Settings.DebtLevel2Threshold);
+        Assert.Equal(TimeSpan.FromMinutes(45), result.Settings.DebtLevel3Threshold);
+        Assert.Equal(TimeSpan.FromMinutes(60), result.Settings.DebtLevel4Threshold);
+        Assert.Equal(BreakGuideMode.Cue, result.Settings.BreakGuideMode);
+        Assert.Equal(TimeSpan.FromMinutes(15), result.Settings.WorkInterval);
+        Assert.False(result.Settings.CollectForegroundProcessNames);
+    }
+
+    [Fact]
+    public async Task Unknown_extra_json_field_is_ignored()
+    {
+        string databasePath = Path.Combine(directory, "restcue.db");
+        var repository = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+        await repository.SaveAsync(AppSettings.Default);
+
+        string jsonWithExtra = /* language=json */ """{"workInterval":"00:15:00","futureField":1}""";
+        await using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        await connection.OpenAsync();
+        await using var updateCommand = connection.CreateCommand();
+        updateCommand.CommandText = "UPDATE settings SET value = @value WHERE key = 'app_settings';";
+        updateCommand.Parameters.AddWithValue("@value", jsonWithExtra);
+        await updateCommand.ExecuteNonQueryAsync();
+
+        var reloaded = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+        SettingsLoadResult result = await reloaded.LoadAsync();
+
+        Assert.False(result.RecoveredFromCorruption);
+        Assert.Equal(TimeSpan.FromMinutes(15), result.Settings.WorkInterval);
+    }
+
+    [Fact]
+    public async Task Invalid_debt_combination_is_rejected_without_replacing_saved_settings()
+    {
+        string databasePath = Path.Combine(directory, "restcue.db");
+        var repository = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+        await repository.SaveAsync(AppSettings.Default);
+        var invalid = AppSettings.Default with
+        {
+            DebtLevel2Threshold = TimeSpan.FromMinutes(20),
+        };
+
+        SettingsValidationException exception = await Assert.ThrowsAsync<SettingsValidationException>(
+            () => repository.SaveAsync(invalid));
+
+        Assert.Contains(exception.Errors, error => error.Field == "DebtLevel2Threshold");
+        Assert.Equal(AppSettings.Default, (await repository.LoadAsync()).Settings);
+    }
+
+    [Fact]
+    public async Task Document_version_upgrade_does_not_change_sqlite_user_version()
+    {
+        string databasePath = Path.Combine(directory, "restcue.db");
+        var repository = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+        await repository.SaveAsync(AppSettings.Default);
+
+        string minimalJson = /* language=json */ """{"workInterval":"00:15:00"}""";
+        await using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        await connection.OpenAsync();
+        await using var updateCommand = connection.CreateCommand();
+        updateCommand.CommandText = "UPDATE settings SET value = @value WHERE key = 'app_settings';";
+        updateCommand.Parameters.AddWithValue("@value", minimalJson);
+        await updateCommand.ExecuteNonQueryAsync();
+
+        await using var versionCommand = connection.CreateCommand();
+        versionCommand.CommandText = "PRAGMA user_version;";
+        long versionBefore = (long)(await versionCommand.ExecuteScalarAsync() ?? 0L);
+
+        var reloaded = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+        await reloaded.LoadAsync();
+
+        await using var versionAfterCommand = connection.CreateCommand();
+        versionAfterCommand.CommandText = "PRAGMA user_version;";
+        long versionAfter = (long)(await versionAfterCommand.ExecuteScalarAsync() ?? 0L);
+
+        Assert.Equal(versionBefore, versionAfter);
     }
 
     [Fact]

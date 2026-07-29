@@ -81,7 +81,10 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             settings.PassiveBreakThreshold,
             settings.SnoozeDuration,
             settings.ReminderDisplayDuration,
-            settings.RetryCooldown);
+            settings.RetryCooldown,
+            settings.DebtLevel2Threshold,
+            settings.DebtLevel3Threshold,
+            settings.DebtLevel4Threshold);
 
         workCycleTracker.ReminderShown += OnReminderShown;
         workCycleTracker.ReminderSuppressed += OnReminderSuppressed;

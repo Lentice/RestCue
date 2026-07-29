@@ -50,6 +50,7 @@ public sealed class SqliteSettingsRepository : ISettingsRepository
             AppSettings settings = JsonSerializer.Deserialize<AppSettings>(
                 serializedSettings,
                 SerializerOptions) ?? throw new JsonException("The settings row contains no settings object.");
+            settings = UpgradeDocument(settings);
             EnsureValid(settings);
             return new(settings);
         }
@@ -128,6 +129,11 @@ public sealed class SqliteSettingsRepository : ISettingsRepository
 
     private static bool IsSettingsDocumentCorrupt(Exception exception) =>
         exception is JsonException or NotSupportedException or SettingsValidationException;
+
+    private static AppSettings UpgradeDocument(AppSettings settings)
+    {
+        return settings with { SchemaVersion = 2 };
+    }
 
     private void EnsureValid(AppSettings settings)
     {
