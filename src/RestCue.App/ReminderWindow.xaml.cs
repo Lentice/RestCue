@@ -42,8 +42,11 @@ public partial class ReminderWindow : Window
         IgnoreButton.Visibility = Visibility.Visible;
         CancelButton.Visibility = Visibility.Collapsed;
         GuideVisual.Visibility = Visibility.Collapsed;
-        PositionOnPrimaryScreenRightEdge();
+        PositionOnForegroundMonitorRightEdge();
         Show();
+        Dispatcher.BeginInvoke(
+            DispatcherPriority.Loaded,
+            new Action(PositionOnForegroundMonitorRightEdge));
     }
 
     public void StartBreakGuide()
@@ -92,10 +95,10 @@ public partial class ReminderWindow : Window
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
-        PositionOnPrimaryScreenRightEdge();
+        PositionOnForegroundMonitorRightEdge();
     }
 
-    private void PositionOnPrimaryScreenRightEdge()
+    private void PositionOnForegroundMonitorRightEdge()
     {
         var hwnd = GetForegroundWindow();
         if (hwnd == IntPtr.Zero)
@@ -122,8 +125,33 @@ public partial class ReminderWindow : Window
         }
 
         var workArea = monitorInfo.WorkRect;
-        Left = workArea.Right - Width - 4;
-        Top = workArea.Top + (workArea.Bottom - workArea.Top - Height) / 2;
+        var reminderHwnd = new WindowInteropHelper(this).EnsureHandle();
+        if (!GetWindowRect(reminderHwnd, out var windowRect))
+        {
+            FallbackToPrimaryScreen();
+            return;
+        }
+
+        var position = ReminderWindowPlacement.RightEdge(
+            workArea.Left,
+            workArea.Top,
+            workArea.Right,
+            workArea.Bottom,
+            windowRect.Right - windowRect.Left,
+            windowRect.Bottom - windowRect.Top,
+            4);
+
+        if (!SetWindowPos(
+            reminderHwnd,
+            IntPtr.Zero,
+            position.X,
+            position.Y,
+            0,
+            0,
+            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE))
+        {
+            FallbackToPrimaryScreen();
+        }
     }
 
     private void FallbackToPrimaryScreen()
@@ -172,6 +200,9 @@ public partial class ReminderWindow : Window
     private const int WS_EX_NOACTIVATE = 0x08000000;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
     private const uint MONITOR_DEFAULTTONEAREST = 2;
+    private const uint SWP_NOZORDER = 0x0004;
+    private const uint SWP_NOACTIVATE = 0x0010;
+    private const uint SWP_NOSIZE = 0x0001;
 
     [DllImport("user32.dll", SetLastError = false)]
     private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
@@ -184,6 +215,19 @@ public partial class ReminderWindow : Window
 
     [DllImport("user32.dll", SetLastError = false)]
     private static extern nint MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowPos(
+        IntPtr hWnd,
+        IntPtr hWndInsertAfter,
+        int x,
+        int y,
+        int cx,
+        int cy,
+        uint flags);
 
     [DllImport("user32.dll", SetLastError = false, CharSet = CharSet.Unicode)]
     private static extern bool GetMonitorInfo(nint hMonitor, ref MONITORINFO lpmi);

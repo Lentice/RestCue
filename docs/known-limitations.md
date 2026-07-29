@@ -5,7 +5,7 @@
 - 以下功能尚未實作：提醒逾時自動淡出、全螢幕降級、休息引導 (Break Guide) 語音／音效。暫停與專注模式、停用狀態、tray 狀態圖示切換、完整選單命令、session lock 與 power events 已於 v1.3 完整實作。
 - 若 Windows `GetLastInputInfo` 失敗，狀態會保守降級為 Idle，避免把未知活動誤算成有效工作；目前狀態頁不另外顯示偵測錯誤。
 - WorkCycleTracker 累積工作時間的最小粒度為 1 秒（對應輪詢間隔），從 Idle 恢復的第一個 Tick 不累積，最多損失 1 秒。
-- ReminderWindow 現已根據前景視窗所在螢幕定位，fallback 為主螢幕右側邊緣。仍不支援 mixed-DPI 場景的精準定位。
+- ReminderWindow 的多螢幕／mixed-DPI 定位已實作並通過 PerMonitorV2 runtime probe、單元測試與 code review；Win32 定位失敗時會退回主螢幕右側邊緣。由於缺少不同 DPI 的雙螢幕硬體，mixed-DPI、primary switch 與 display reconnect 的實機驗收證據仍待補齊。
 - 開發與 CI 環境以 .NET 10 SDK 為基準。
 - 視覺引導的進度呈現不精確，因為刻意不顯示剩餘時間。
 - Windows 音訊播放（`WindowsBreakGuideAudioPlayer`）未自動化測試，因為實機播放無法在 CI 驗證。手動 smoke test 涵蓋：啟動 app 後休息觸發時聽到提示音或語音、拔除輸出裝置後不彈窗、app 退出時資源正確釋放。
