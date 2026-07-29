@@ -27,21 +27,34 @@ public sealed class SqliteUsageDataMaintenance : IUsageDataMaintenance
             await connection.OpenAsync(cancellationToken);
 
             await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+            int affected;
             try
             {
                 await using var command = connection.CreateCommand();
                 command.Transaction = (Microsoft.Data.Sqlite.SqliteTransaction)transaction;
                 command.CommandText = "DELETE FROM usage_events;";
-                int affected = await command.ExecuteNonQueryAsync(cancellationToken);
+                affected = await command.ExecuteNonQueryAsync(cancellationToken);
 
                 await transaction.CommitAsync(cancellationToken);
-                return new ClearResult(true, affected, null);
             }
             catch
             {
                 await transaction.RollbackAsync(cancellationToken);
                 throw;
             }
+
+            await using var vacuumCmd = connection.CreateCommand();
+            vacuumCmd.CommandText = "VACUUM;";
+            try
+            {
+                await vacuumCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+            catch
+            {
+                // VACUUM failure is non-fatal; data was already cleared.
+            }
+
+            return new ClearResult(true, affected, null);
         }
         catch (Exception ex)
         {

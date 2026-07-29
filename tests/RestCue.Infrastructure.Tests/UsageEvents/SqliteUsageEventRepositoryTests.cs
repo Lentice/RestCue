@@ -46,6 +46,8 @@ public sealed class SqliteUsageEventRepositoryTests : IDisposable
                     new ReminderDismissedPayload(ReminderResult.Snoozed),
                 UsageEventType.RestDebtLevelChanged =>
                     new RestDebtLevelChangedPayload(RestDebtLevel.Level0, RestDebtLevel.Level1),
+                UsageEventType.ForegroundProcessChanged =>
+                    new ForegroundProcessChangedPayload("test-app"),
                 _ => null
             };
             await repo.WriteAsync(type, baseTime, payload);
@@ -205,6 +207,8 @@ public sealed class SqliteUsageEventRepositoryTests : IDisposable
                     new ReminderDismissedPayload(ReminderResult.Snoozed),
                 UsageEventType.RestDebtLevelChanged =>
                     new RestDebtLevelChangedPayload(RestDebtLevel.Level0, RestDebtLevel.Level1),
+                UsageEventType.ForegroundProcessChanged =>
+                    new ForegroundProcessChangedPayload("test-app"),
                 _ => null
             };
 
@@ -219,20 +223,24 @@ public sealed class SqliteUsageEventRepositoryTests : IDisposable
             if (e.Payload is ReminderDismissedPayload rdp)
             {
                 json = JsonSerializer.Serialize(new { result = rdp.Result.ToString() });
+                Assert.DoesNotContain("windowTitle", json, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("clipboard", json, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("url", json, StringComparison.OrdinalIgnoreCase);
             }
             else if (e.Payload is RestDebtLevelChangedPayload rlp)
             {
                 json = JsonSerializer.Serialize(new { previous = rlp.Previous.ToString(), current = rlp.Current.ToString() });
+                Assert.DoesNotContain("windowTitle", json, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("clipboard", json, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("url", json, StringComparison.OrdinalIgnoreCase);
             }
-            else
+            else if (e.Payload is ForegroundProcessChangedPayload fcp)
             {
-                continue;
+                json = JsonSerializer.Serialize(new { processName = fcp.ProcessName });
+                Assert.DoesNotContain("windowTitle", json, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("clipboard", json, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("url", json, StringComparison.OrdinalIgnoreCase);
             }
-
-            Assert.DoesNotContain("windowTitle", json, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("clipboard", json, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("processName", json, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("url", json, StringComparison.OrdinalIgnoreCase);
         }
     }
 

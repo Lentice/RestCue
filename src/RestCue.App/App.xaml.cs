@@ -140,6 +140,11 @@ public partial class App : System.Windows.Application
             {
                 var loadResult = await _settingsRepository.LoadAsync();
                 _startup.CurrentSettings = loadResult.Settings;
+                if (_statusWindow != null)
+                {
+                    _statusWindow.UpdateForegroundContextProvider(
+                        loadResult.Settings.CollectForegroundProcessNames);
+                }
             };
             window.Show();
         };
@@ -156,6 +161,21 @@ public partial class App : System.Windows.Application
             }
 
             var window = new AboutWindow();
+            window.OpenDataTransparencyRequested = () =>
+            {
+                if (_usageEventRepository == null || _settingsRepository == null)
+                {
+                    Trace.TraceError("RestCue: data transparency unavailable.");
+                    return;
+                }
+
+                var reader = new SqliteUsageEventMetadataReader(
+                    LocalSettingsPaths.DatabaseFile);
+                var service = new DataTransparencyService(
+                    _settingsRepository, reader);
+                var tw = new TransparencyWindow(service);
+                tw.Show();
+            };
             window.Show();
         };
     }
@@ -184,6 +204,7 @@ public partial class App : System.Windows.Application
     internal static void WireModeCommands(ITrayIcon trayIcon, IStatusWindow statusWindow)
     {
         trayIcon.PauseRequested += (_, _) => statusWindow.Pause();
+        trayIcon.PauseForRequested += (_, duration) => statusWindow.PauseFor(duration);
         trayIcon.ResumeRequested += (_, _) => statusWindow.Resume();
         trayIcon.FocusModeRequested += (_, _) => statusWindow.StartFocusMode();
         trayIcon.EndFocusModeRequested += (_, _) => statusWindow.EndFocusMode();
@@ -271,6 +292,7 @@ public partial class App : System.Windows.Application
         _tracker.Disabled += OnDisabledEvent;
         _tracker.Enabled += OnEnabledEvent;
         _tracker.RestDebtLevelChanged += OnRestDebtLevelChangedEvent;
+        _tracker.ProcessNameChanged += OnProcessNameChangedEvent;
     }
 
     private void UnwireUsageEventPersistence()
@@ -294,6 +316,7 @@ public partial class App : System.Windows.Application
         _tracker.Disabled -= OnDisabledEvent;
         _tracker.Enabled -= OnEnabledEvent;
         _tracker.RestDebtLevelChanged -= OnRestDebtLevelChangedEvent;
+        _tracker.ProcessNameChanged -= OnProcessNameChangedEvent;
 
         _eventWriter?.Dispose();
         _eventWriter = null;
@@ -323,6 +346,10 @@ public partial class App : System.Windows.Application
     private void OnRestDebtLevelChangedEvent(object? sender, RestDebtLevelChangedEventArgs e) =>
         _eventWriter?.Write(UsageEventType.RestDebtLevelChanged, DateTimeOffset.UtcNow,
             new RestDebtLevelChangedPayload(e.Previous, e.Current));
+
+    private void OnProcessNameChangedEvent(object? sender, string? processName) =>
+        _eventWriter?.Write(UsageEventType.ForegroundProcessChanged, DateTimeOffset.UtcNow,
+            new ForegroundProcessChangedPayload(processName ?? string.Empty));
 
     private void WriteUsageEvent(UsageEventType type) =>
         _eventWriter?.Write(type, DateTimeOffset.UtcNow);

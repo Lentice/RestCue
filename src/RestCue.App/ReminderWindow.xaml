@@ -29,7 +29,7 @@
             <StackPanel Grid.Row="1" VerticalAlignment="Center"
                         HorizontalAlignment="Center">
                 <TextBlock x:Name="PhaseText"
-                           Text="Look at something\n6 meters away."
+                           Text="Look at something\nsix meters away."
                            FontSize="13"
                            TextAlignment="Center"
                            LineHeight="20"

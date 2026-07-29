@@ -8,3 +8,5 @@ public abstract record UsageEventPayload;
 public sealed record ReminderDismissedPayload(ReminderResult Result) : UsageEventPayload;
 
 public sealed record RestDebtLevelChangedPayload(RestDebtLevel Previous, RestDebtLevel Current) : UsageEventPayload;
+
+public sealed record ForegroundProcessChangedPayload(string ProcessName) : UsageEventPayload;

@@ -35,9 +35,9 @@ public partial class ReminderWindow : Window
 
     public void ShowReminder()
     {
-        PhaseText.Text = "Look at something\n6 meters away.";
+        PhaseText.Text = "Look at something\nsix meters away.";
         ActionButton.Content = "Start Break";
-        SnoozeButton.Content = "Snooze";
+        SnoozeButton.Content = $"延後 {SnoozeDuration.Minutes} 分鐘";
         SnoozeButton.Visibility = Visibility.Visible;
         IgnoreButton.Visibility = Visibility.Visible;
         CancelButton.Visibility = Visibility.Collapsed;
@@ -70,7 +70,7 @@ public partial class ReminderWindow : Window
     public void CompleteBreak()
     {
         breakGuideTimer.Stop();
-        GuideVisual.BeginAnimation(System.Windows.Media.SolidColorBrush.OpacityProperty, null);
+        GuideVisual.BeginAnimation(System.Windows.UIElement.OpacityProperty, null);
         CancelButton.Visibility = Visibility.Collapsed;
         GuideVisual.Visibility = Visibility.Collapsed;
         OnBreakCompleted();
@@ -79,7 +79,7 @@ public partial class ReminderWindow : Window
     public void StopBreakGuide()
     {
         breakGuideTimer.Stop();
-        GuideVisual.BeginAnimation(System.Windows.Media.SolidColorBrush.OpacityProperty, null);
+        GuideVisual.BeginAnimation(System.Windows.UIElement.OpacityProperty, null);
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -96,6 +96,37 @@ public partial class ReminderWindow : Window
     }
 
     private void PositionOnPrimaryScreenRightEdge()
+    {
+        var hwnd = GetForegroundWindow();
+        if (hwnd == IntPtr.Zero)
+        {
+            FallbackToPrimaryScreen();
+            return;
+        }
+
+        nint monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if (monitor == IntPtr.Zero)
+        {
+            FallbackToPrimaryScreen();
+            return;
+        }
+
+        var monitorInfo = new MONITORINFO
+        {
+            Size = Marshal.SizeOf<MONITORINFO>()
+        };
+        if (!GetMonitorInfo(monitor, ref monitorInfo))
+        {
+            FallbackToPrimaryScreen();
+            return;
+        }
+
+        var workArea = monitorInfo.WorkRect;
+        Left = workArea.Right - Width - 4;
+        Top = workArea.Top + (workArea.Bottom - workArea.Top - Height) / 2;
+    }
+
+    private void FallbackToPrimaryScreen()
     {
         var workArea = SystemParameters.WorkArea;
         Left = workArea.Right - Width - 4;
@@ -140,10 +171,37 @@ public partial class ReminderWindow : Window
     private const int GWL_EXSTYLE = -20;
     private const int WS_EX_NOACTIVATE = 0x08000000;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
+    private const uint MONITOR_DEFAULTTONEAREST = 2;
 
     [DllImport("user32.dll", SetLastError = false)]
     private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
 
     [DllImport("user32.dll", SetLastError = false)]
     private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    [DllImport("user32.dll", SetLastError = false)]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll", SetLastError = false)]
+    private static extern nint MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+    [DllImport("user32.dll", SetLastError = false, CharSet = CharSet.Unicode)]
+    private static extern bool GetMonitorInfo(nint hMonitor, ref MONITORINFO lpmi);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MONITORINFO
+    {
+        public int Size;
+        public RECT MonitorRect;
+        public RECT WorkRect;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
 }

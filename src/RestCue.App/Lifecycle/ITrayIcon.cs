@@ -10,6 +10,8 @@ public interface ITrayIcon : IDisposable
 
     event EventHandler? PauseRequested;
 
+    event EventHandler<TimeSpan>? PauseForRequested;
+
     event EventHandler? ResumeRequested;
 
     event EventHandler? FocusModeRequested;

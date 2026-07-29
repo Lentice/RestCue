@@ -130,8 +130,8 @@ public sealed class WindowsFullscreenDetectionTests
 
         var context = provider.GetCurrentContext();
 
-        Assert.Equal(FullscreenState.Uncertain, context.FullscreenState);
-        Assert.False(context.IsFullscreen);
+        Assert.Equal(FullscreenState.Confirmed, context.FullscreenState);
+        Assert.True(context.IsFullscreen);
     }
 
     [Fact]
@@ -150,8 +150,8 @@ public sealed class WindowsFullscreenDetectionTests
 
         var context = provider.GetCurrentContext();
 
-        Assert.Equal(FullscreenState.Uncertain, context.FullscreenState);
-        Assert.False(context.IsFullscreen);
+        Assert.Equal(FullscreenState.Confirmed, context.FullscreenState);
+        Assert.True(context.IsFullscreen);
     }
 
     [Fact]

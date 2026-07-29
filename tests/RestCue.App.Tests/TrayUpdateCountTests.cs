@@ -56,6 +56,7 @@ public sealed class TrayUpdateCountTests
         public event EventHandler? AboutRequested;
         public event EventHandler? DataTransparencyRequested;
         public event EventHandler? DataManagementRequested;
+        public event EventHandler<TimeSpan>? PauseForRequested;
 #pragma warning restore CS0067
 
         public bool Visible { get; set; }

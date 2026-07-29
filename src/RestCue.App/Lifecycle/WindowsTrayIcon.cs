@@ -9,6 +9,11 @@ public sealed class WindowsTrayIcon : ITrayIcon
     private readonly NotifyIcon _notifyIcon;
 
     private readonly ToolStripMenuItem _pauseItem;
+    private readonly ToolStripMenuItem _pause15;
+    private readonly ToolStripMenuItem _pause30;
+    private readonly ToolStripMenuItem _pause60;
+    private readonly ToolStripMenuItem _pauseManual;
+    private readonly ToolStripMenuItem _resumeItem;
     private readonly ToolStripMenuItem _focusItem;
     private readonly ToolStripMenuItem _disableItem;
     private readonly ToolStripMenuItem _breakNowItem;
@@ -18,8 +23,10 @@ public sealed class WindowsTrayIcon : ITrayIcon
     private bool _isDisabled;
     private RestDebtLevel _currentDebtLevel;
     private bool _isSuppressed;
-
+    private ContextMenuStrip _menu;
+    private int _pauseMenuIndex;
     private static readonly Icon NormalIcon = SystemIcons.Information;
+    private static readonly Icon Level3Icon = SystemIcons.Question;
     private static readonly Icon SuppressedIcon = SystemIcons.Exclamation;
     private static readonly Icon Level1Icon = SystemIcons.Shield;
     private static readonly Icon Level2Icon = SystemIcons.Warning;
@@ -27,7 +34,16 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
     public WindowsTrayIcon()
     {
-        _pauseItem = new ToolStripMenuItem("暫停提醒", null, TogglePause);
+        _pause15 = new ToolStripMenuItem("15 分鐘", null, (_, _) => PauseForRequested?.Invoke(this, TimeSpan.FromMinutes(15)));
+        _pause30 = new ToolStripMenuItem("30 分鐘", null, (_, _) => PauseForRequested?.Invoke(this, TimeSpan.FromMinutes(30)));
+        _pause60 = new ToolStripMenuItem("1 小時", null, (_, _) => PauseForRequested?.Invoke(this, TimeSpan.FromMinutes(60)));
+        _pauseManual = new ToolStripMenuItem("直到手動恢復", null, (_, _) => PauseRequested?.Invoke(this, EventArgs.Empty));
+        _pauseItem = new ToolStripMenuItem("暫停提醒");
+        _pauseItem.DropDownItems.AddRange(
+            _pause15, _pause30, _pause60,
+            new ToolStripSeparator(),
+            _pauseManual);
+        _resumeItem = new ToolStripMenuItem("繼續提醒", null, TogglePause);
         _focusItem = new ToolStripMenuItem("專注模式", null, ToggleFocusMode);
         _disableItem = new ToolStripMenuItem("停用提醒", null, ToggleDisable);
         _breakNowItem = new ToolStripMenuItem("立即休息", null, (_, _) => BreakNowRequested?.Invoke(this, EventArgs.Empty));
@@ -42,6 +58,7 @@ public sealed class WindowsTrayIcon : ITrayIcon
         menu.Items.Add("關於與隱私", null, (_, _) => AboutRequested?.Invoke(this, EventArgs.Empty));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_pauseItem);
+        _pauseMenuIndex = menu.Items.Count - 1;
         menu.Items.Add(_focusItem);
         menu.Items.Add(_disableItem);
         menu.Items.Add(_breakNowItem);
@@ -54,6 +71,7 @@ public sealed class WindowsTrayIcon : ITrayIcon
             Icon = NormalIcon,
             Text = "RestCue – Eye Break Reminder"
         };
+        _menu = menu;
         _notifyIcon.DoubleClick += (_, _) => OpenRequested?.Invoke(this, EventArgs.Empty);
     }
 
@@ -62,6 +80,8 @@ public sealed class WindowsTrayIcon : ITrayIcon
     public event EventHandler? ExitRequested;
 
     public event EventHandler? PauseRequested;
+
+    public event EventHandler<TimeSpan>? PauseForRequested;
 
     public event EventHandler? ResumeRequested;
 
@@ -94,7 +114,16 @@ public sealed class WindowsTrayIcon : ITrayIcon
     public void SetPauseText(bool isPaused)
     {
         _isPaused = isPaused;
-        _pauseItem.Text = isPaused ? "繼續提醒" : "暫停提醒";
+        if (isPaused)
+        {
+            _menu.Items.RemoveAt(_pauseMenuIndex);
+            _menu.Items.Insert(_pauseMenuIndex, _resumeItem);
+        }
+        else
+        {
+            _menu.Items.RemoveAt(_pauseMenuIndex);
+            _menu.Items.Insert(_pauseMenuIndex, _pauseItem);
+        }
     }
 
     public void SetFocusModeText(bool isFocusMode)
@@ -143,7 +172,7 @@ public sealed class WindowsTrayIcon : ITrayIcon
         {
             RestDebtLevel.Level1 => Level1Icon,
             RestDebtLevel.Level2 => Level2Icon,
-            RestDebtLevel.Level3 => SuppressedIcon,
+            RestDebtLevel.Level3 => Level3Icon,
             RestDebtLevel.Level4 => Level4Icon,
             _ => NormalIcon
         };

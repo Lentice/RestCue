@@ -6,6 +6,7 @@ namespace RestCue.App;
 
 public sealed partial class AboutWindow : Window
 {
+    public Action? OpenDataTransparencyRequested { get; set; }
     public AboutWindow()
     {
         InitializeComponent();
@@ -16,5 +17,13 @@ public sealed partial class AboutWindow : Window
         var process = Process.GetCurrentProcess();
         var memory = process.WorkingSet64 / (1024.0 * 1024.0);
         TechInfoText.Text = $".NET 10 (WPF) | 記憶體使用量: {memory:F1} MB | {Environment.OSVersion}";
+    }
+
+    private void OnViewDataClick(object sender, RoutedEventArgs e)
+    {
+        if (OpenDataTransparencyRequested != null)
+        {
+            OpenDataTransparencyRequested();
+        }
     }
 }

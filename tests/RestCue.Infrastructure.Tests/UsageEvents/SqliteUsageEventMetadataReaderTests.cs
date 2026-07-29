@@ -42,6 +42,8 @@ public sealed class SqliteUsageEventMetadataReaderTests : IDisposable
                     new ReminderDismissedPayload(ReminderResult.Snoozed),
                 UsageEventType.RestDebtLevelChanged =>
                     new RestDebtLevelChangedPayload(RestDebtLevel.Level0, RestDebtLevel.Level1),
+                UsageEventType.ForegroundProcessChanged =>
+                    new ForegroundProcessChangedPayload("test-app"),
                 _ => null
             };
             await repo.WriteAsync(type, baseTime, payload);

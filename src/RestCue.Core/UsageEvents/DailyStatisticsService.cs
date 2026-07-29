@@ -45,6 +45,8 @@ public sealed class DailyStatisticsService : IDailyStatisticsService
         DateTimeOffset? segmentStart = acc ? startOfDayUtc : null;
 
         List<TimeSpan> completedSegments = [];
+        Dictionary<string, TimeSpan> perAppTimes = new(StringComparer.OrdinalIgnoreCase);
+        string? currentProcessName = null;
         int idleEndCount = 0;
         int breakCompletedCount = 0;
         int passivePauseCount = 0;
@@ -135,15 +137,25 @@ public sealed class DailyStatisticsService : IDailyStatisticsService
                     break;
 
                 case UsageEventType.FocusModeStarted:
-                    HandleAccStop(ref acc, ref segmentStart, ev.OccurredUtc, completedSegments);
-                    break;
-
                 case UsageEventType.FocusModeEnded:
-                    HandleAccStart(ref acc, ref segmentStart, ev.OccurredUtc);
-                    break;
-
                 case UsageEventType.CooldownStarted:
                 case UsageEventType.CooldownEnded:
+                    break;
+
+                case UsageEventType.ForegroundProcessChanged:
+                    var procName = TryGetProcessName(ev, ref hasPartialData);
+                    if (procName is not null && acc && segmentStart.HasValue)
+                    {
+                        var segDuration = ev.OccurredUtc - segmentStart.Value;
+                        if (segDuration > TimeSpan.Zero)
+                        {
+                            completedSegments.Add(segDuration);
+                            if (currentProcessName is not null)
+                                AddPerAppTime(perAppTimes, currentProcessName, segDuration);
+                        }
+                        segmentStart = ev.OccurredUtc;
+                    }
+                    currentProcessName = procName;
                     break;
             }
         }
@@ -162,6 +174,8 @@ public sealed class DailyStatisticsService : IDailyStatisticsService
             if (finalDuration > TimeSpan.Zero)
             {
                 completedSegments.Add(finalDuration);
+                if (currentProcessName is not null)
+                    AddPerAppTime(perAppTimes, currentProcessName, finalDuration);
             }
         }
 
@@ -195,7 +209,8 @@ public sealed class DailyStatisticsService : IDailyStatisticsService
             LongestContinuousWork: longest,
             AverageWorkCycleDuration: average,
             DebtLevelHistory: debtHistory.AsReadOnly(),
-            ReminderOutcomes: reminderOutcomes.AsReadOnly());
+            ReminderOutcomes: reminderOutcomes.AsReadOnly(),
+            PerAppWorkTime: perAppTimes);
     }
 
     private static (bool acc, int pendingIdleStarts) DeterminePreDayState(
@@ -241,12 +256,6 @@ public sealed class DailyStatisticsService : IDailyStatisticsService
                 case UsageEventType.BreakCancelled:
                     acc = true;
                     break;
-                case UsageEventType.FocusModeStarted:
-                    acc = false;
-                    break;
-                case UsageEventType.FocusModeEnded:
-                    acc = true;
-                    break;
             }
         }
 
@@ -283,6 +292,24 @@ public sealed class DailyStatisticsService : IDailyStatisticsService
 
         hasPartialData = true;
         return null;
+    }
+
+    private static string? TryGetProcessName(UsageEvent ev, ref bool hasPartialData)
+    {
+        if (ev.Payload is ForegroundProcessChangedPayload p)
+            return p.ProcessName;
+
+        hasPartialData = true;
+        return null;
+    }
+
+    private static void AddPerAppTime(Dictionary<string, TimeSpan> perApp, string processName, TimeSpan duration)
+    {
+        if (string.IsNullOrWhiteSpace(processName)) return;
+        if (perApp.TryGetValue(processName, out var existing))
+            perApp[processName] = existing + duration;
+        else
+            perApp[processName] = duration;
     }
 
     private static RestDebtLevelChangedPayload? TryGetDebtPayload(UsageEvent ev, ref bool hasPartialData)
@@ -339,6 +366,7 @@ public sealed class DailyStatisticsService : IDailyStatisticsService
         return new DailyStatistics(
             DailyStatisticsStatus.Failure, message,
             TimeSpan.Zero, 0, 0, 0, 0, 0, 0,
-            TimeSpan.Zero, null, [], []);
+            TimeSpan.Zero, null, [], [],
+            new Dictionary<string, TimeSpan>());
     }
 }

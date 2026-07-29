@@ -15,6 +15,8 @@ public interface IStatusWindow
 
     void Pause();
 
+    void PauseFor(TimeSpan duration);
+
     void Resume();
 
     void StartFocusMode();
@@ -24,4 +26,6 @@ public interface IStatusWindow
     void Disable();
 
     void Enable();
+
+    void UpdateForegroundContextProvider(bool collectProcessNames);
 }

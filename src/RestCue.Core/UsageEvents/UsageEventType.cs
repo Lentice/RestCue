@@ -18,5 +18,6 @@ public enum UsageEventType
     FocusModeEnded,
     Disabled,
     Enabled,
+    ForegroundProcessChanged,
     RestDebtLevelChanged
 }

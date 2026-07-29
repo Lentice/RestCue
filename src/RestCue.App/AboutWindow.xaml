@@ -32,6 +32,12 @@
                         <LineBreak /><LineBreak />
                         <Run Text="不蒐集鍵盤輸入內容、剪貼簿、畫面、視窗標題、網址或文件名稱。前景程式名稱的統計記錄預設關閉，僅在使用者明確啟用後保存。日誌不會意外包含上述資料。" />
                     </TextBlock>
+                    <Button x:Name="ViewDataButton" Margin="0,12,0,0"
+                            Padding="10,6" FontSize="13"
+                            Cursor="Hand" BorderThickness="0"
+                            Background="#FF2196F3" Foreground="White"
+                            Content="查看目前蒐集的資料"
+                            Click="OnViewDataClick" />
                 </StackPanel>
             </Border>
 

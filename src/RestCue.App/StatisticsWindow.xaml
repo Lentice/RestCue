@@ -101,6 +101,12 @@
                        Text="提醒結果" />
             <TextBlock x:Name="ReminderOutcomesText"
                        Foreground="#666666" TextWrapping="Wrap" />
+
+            <TextBlock x:Name="PerAppHeader"
+                       Margin="0,12,0,4" FontSize="14" FontWeight="SemiBold"
+                       Text="各程式使用時間" />
+            <TextBlock x:Name="PerAppText"
+                       Foreground="#666666" TextWrapping="Wrap" /> 
         </StackPanel>
     </ScrollViewer>
 </Window>

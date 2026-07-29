@@ -16,6 +16,7 @@ public sealed class WorkCycleTracker
     private readonly TimeSpan snoozeDuration;
     private readonly TimeSpan reminderDisplayDuration;
     private readonly TimeSpan retryCooldown;
+    private readonly TimeSpan focusModeDuration;
 
     private DateTimeOffset? pendingSinceUtc;
     private DateTimeOffset? breakStartUtc;
@@ -24,6 +25,8 @@ public sealed class WorkCycleTracker
     private DateTimeOffset? snoozeUntilUtc;
     private DateTimeOffset? cooldownUntil;
     private DateTimeOffset? nextDebtDeadline;
+    private DateTimeOffset? focusModeUntilUtc;
+    private DateTimeOffset? pauseUntilUtc;
     private bool wasWorking;
     private bool isLocked;
     private bool isSleeping;
@@ -59,7 +62,8 @@ public sealed class WorkCycleTracker
         TimeSpan retryCooldown,
         TimeSpan debtLevel2 = default,
         TimeSpan debtLevel3 = default,
-        TimeSpan debtLevel4 = default)
+        TimeSpan debtLevel4 = default,
+        TimeSpan focusModeDuration = default)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ValidateThreshold(workInterval, nameof(workInterval));
@@ -97,6 +101,7 @@ public sealed class WorkCycleTracker
         this.snoozeDuration = snoozeDuration;
         this.reminderDisplayDuration = reminderDisplayDuration;
         this.retryCooldown = retryCooldown;
+        this.focusModeDuration = focusModeDuration == default ? TimeSpan.FromMinutes(60) : focusModeDuration;
     }
 
     public WorkCyclePhase CurrentPhase { get; private set; } = WorkCyclePhase.Working;
@@ -181,6 +186,18 @@ public sealed class WorkCycleTracker
     public event EventHandler? Enabled;
     public event EventHandler<ReminderSuppressedEventArgs>? ReminderSuppressed;
 
+    public event EventHandler<string?>? ProcessNameChanged;
+
+    private string? _lastProcessName;
+
+    public void TrackForegroundProcess(string? processName)
+    {
+        if (string.Equals(_lastProcessName, processName, StringComparison.OrdinalIgnoreCase))
+            return;
+        _lastProcessName = processName;
+        ProcessNameChanged?.Invoke(this, processName);
+    }
+
     public void Tick(TimeSpan idleDuration)
     {
         if (isLocked || isSleeping)
@@ -227,11 +244,20 @@ public sealed class WorkCycleTracker
                 break;
 
             case WorkCyclePhase.Paused:
+                if (pauseUntilUtc.HasValue && now >= pauseUntilUtc.Value)
+                {
+                    Resume();
+                }
+                break;
             case WorkCyclePhase.Disabled:
                 break;
 
             case WorkCyclePhase.FocusMode:
-                if (!isWorking)
+                if (focusModeUntilUtc.HasValue && now >= focusModeUntilUtc.Value)
+                {
+                    EndFocusMode();
+                }
+                else if (!isWorking)
                 {
                     EnterIdle();
                 }
@@ -260,7 +286,12 @@ public sealed class WorkCycleTracker
         switch (CurrentPhase)
         {
             case WorkCyclePhase.Working:
+                break;
             case WorkCyclePhase.FocusMode:
+                if (focusModeUntilUtc.HasValue && now >= focusModeUntilUtc.Value)
+                {
+                    EndFocusMode();
+                }
                 break;
 
             case WorkCyclePhase.PendingReminder:
@@ -367,7 +398,7 @@ public sealed class WorkCycleTracker
         ReminderDismissed?.Invoke(this, new ReminderDismissedEventArgs(ReminderResult.Ignored));
     }
 
-    public void Pause()
+    public void Pause(TimeSpan? pauseDuration = null)
     {
         if (CurrentPhase is not (WorkCyclePhase.Working or WorkCyclePhase.PendingReminder
             or WorkCyclePhase.ReminderVisible or WorkCyclePhase.Snoozed))
@@ -375,6 +406,7 @@ public sealed class WorkCycleTracker
                 $"Cannot pause from phase {CurrentPhase}.");
 
         CurrentPhase = WorkCyclePhase.Paused;
+        pauseUntilUtc = pauseDuration.HasValue ? clock.UtcNow + pauseDuration.Value : null;
         ClearReminderState();
         Paused?.Invoke(this, EventArgs.Empty);
     }
@@ -387,6 +419,7 @@ public sealed class WorkCycleTracker
 
         lastTickUtc = null;
         wasWorking = false;
+        pauseUntilUtc = null;
         CurrentPhase = WorkCyclePhase.Working;
         Resumed?.Invoke(this, EventArgs.Empty);
     }
@@ -398,6 +431,7 @@ public sealed class WorkCycleTracker
                 $"Cannot start focus mode from phase {CurrentPhase}.");
 
         CurrentPhase = WorkCyclePhase.FocusMode;
+        focusModeUntilUtc = clock.UtcNow + focusModeDuration;
         ClearReminderState();
         FocusModeStarted?.Invoke(this, EventArgs.Empty);
     }
@@ -408,6 +442,7 @@ public sealed class WorkCycleTracker
             throw new InvalidOperationException(
                 $"Cannot end focus mode from phase {CurrentPhase}.");
 
+        focusModeUntilUtc = null;
         if (TryEnterPendingReminderFromWorking(clock.UtcNow))
         {
             FocusModeEnded?.Invoke(this, EventArgs.Empty);
@@ -698,6 +733,8 @@ public sealed class WorkCycleTracker
         wasPassivePaused = false;
         cooldownUntil = null;
         nextDebtDeadline = null;
+        focusModeUntilUtc = null;
+        pauseUntilUtc = null;
         restDebtLevel = RestDebtLevel.Level0;
 
         if (wasInBreak)
@@ -786,6 +823,8 @@ public sealed class WorkCycleTracker
         showTrayCue = false;
         cooldownUntil = null;
         nextDebtDeadline = null;
+        focusModeUntilUtc = null;
+        pauseUntilUtc = null;
         restDebtLevel = RestDebtLevel.Level0;
 
         if (wasCooldownActive)

@@ -95,6 +95,19 @@ public sealed partial class StatisticsWindow : Window
         {
             ReminderOutcomesText.Text = "今日無提醒事件。";
         }
+
+        if (stats.PerAppWorkTime.Count > 0)
+        {
+            PerAppText.Text = string.Join("\n",
+                stats.PerAppWorkTime
+                    .OrderByDescending(kv => kv.Value)
+                    .Select(kv => $"{kv.Key}: {FormatTimeSpan(kv.Value)}"));
+        }
+        else
+        {
+            PerAppHeader.Visibility = Visibility.Collapsed;
+            PerAppText.Visibility = Visibility.Collapsed;
+        }
     }
 
     private static string FormatTimeSpan(TimeSpan ts)

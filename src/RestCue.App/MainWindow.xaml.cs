@@ -11,6 +11,7 @@ using RestCue.Core.Policies;
 using RestCue.Core.Reminders;
 using RestCue.Core.Settings;
 using RestCue.Core.Time;
+using RestCue.Infrastructure.Activity;
 using RestCue.Infrastructure.Time;
 
 namespace RestCue.App;
@@ -29,6 +30,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     private IBreakGuideAudioPlayer? audioPlayer;
     private IClock? clock;
     private TimeSpan snoozeDuration;
+    private Core.Settings.BreakGuideMode userBreakGuideMode;
 
     public MainWindow()
     {
@@ -80,6 +82,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             new UserActivityStatusEvaluator(settings.IdleThreshold));
 
         snoozeDuration = settings.SnoozeDuration;
+        userBreakGuideMode = settings.BreakGuideMode;
         this.foregroundContextProvider = foregroundContextProvider;
         this.applicationRules = new ApplicationRuleSet(applicationRules);
 
@@ -96,7 +99,8 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             settings.RetryCooldown,
             settings.DebtLevel2Threshold,
             settings.DebtLevel3Threshold,
-            settings.DebtLevel4Threshold);
+            settings.DebtLevel4Threshold,
+            settings.FocusModeDuration);
 
         workCycleTracker.ReminderShown += OnReminderShown;
         workCycleTracker.ReminderSuppressed += OnReminderSuppressed;
@@ -166,6 +170,24 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         }
         catch (InvalidOperationException)
         {
+            System.Diagnostics.Trace.TraceWarning(
+                "RestCue: Pause or PauseFor rejected — invalid state transition.");
+        }
+    }
+
+    public void PauseFor(TimeSpan duration)
+    {
+        if (workCycleTracker == null) return;
+        try
+        {
+            CloseReminderIfOpen();
+            workCycleTracker.Pause(duration);
+            UpdateCycleStatus();
+        }
+        catch (InvalidOperationException)
+        {
+            System.Diagnostics.Trace.TraceWarning(
+                "RestCue: PauseFor rejected — invalid state transition.");
         }
     }
 
@@ -233,6 +255,12 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         catch (InvalidOperationException)
         {
         }
+    }
+
+    public void UpdateForegroundContextProvider(bool collectProcessNames)
+    {
+        foregroundContextProvider = new WindowsForegroundContextProvider(
+            collectProcessNames);
     }
 
     public void StartBreakNow()
@@ -376,6 +404,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         if (workCycleTracker == null || foregroundContextProvider == null) return;
 
         var context = foregroundContextProvider.GetCurrentContext();
+        workCycleTracker.TrackForegroundProcess(context.ProcessName);
         var rule = applicationRules?.Find(context.ProcessName);
         bool windowSuppression = context.FullscreenState != FullscreenState.NotFullscreen;
 
@@ -443,7 +472,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         if (audioPlayer != null && workCycleTracker != null)
         {
             EndAudioGuide();
-            audioCoordinator = new BreakGuideAudioCoordinator(audioPlayer);
+            audioCoordinator = new BreakGuideAudioCoordinator(audioPlayer, MapBreakGuideMode(userBreakGuideMode));
             bool audioAllowed = workCycleTracker.EffectiveIntensity >= PresentationIntensity.PopupAndSound;
             audioCoordinator.BeginGuide(audioAllowed);
             breakGuideSession.CueChanged += OnAudioCueChanged;
@@ -621,6 +650,17 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             WorkCyclePhase.FocusMode => "專注模式",
             WorkCyclePhase.Disabled => "已停用",
             _ => "未知"
+        };
+    }
+
+    internal static Core.Reminders.BreakGuideMode MapBreakGuideMode(Core.Settings.BreakGuideMode mode)
+    {
+        return mode switch
+        {
+            Core.Settings.BreakGuideMode.Cue => Core.Reminders.BreakGuideMode.Chime,
+            Core.Settings.BreakGuideMode.Voice => Core.Reminders.BreakGuideMode.Speech,
+            Core.Settings.BreakGuideMode.NumberlessVisual => Core.Reminders.BreakGuideMode.VisualOnly,
+            _ => Core.Reminders.BreakGuideMode.Chime
         };
     }
 }

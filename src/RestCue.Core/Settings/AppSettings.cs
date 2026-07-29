@@ -34,6 +34,8 @@ public sealed record AppSettings
 
     public TimeSpan DebtLevel4Threshold { get; init; } = TimeSpan.FromMinutes(60);
 
+    public TimeSpan FocusModeDuration { get; init; } = TimeSpan.FromMinutes(60);
+
     public BreakGuideMode BreakGuideMode { get; init; } = BreakGuideMode.Cue;
 
 }

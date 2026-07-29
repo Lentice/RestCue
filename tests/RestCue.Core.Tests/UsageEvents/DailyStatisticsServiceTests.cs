@@ -348,7 +348,7 @@ public sealed class DailyStatisticsServiceTests
     }
 
     [Fact]
-    public async Task ComputeAsync_work_excludes_focus_mode()
+    public async Task ComputeAsync_work_includes_focus_mode()
     {
         var repo = new FakeUsageEventRepository();
         var startOfDay = new DateTimeOffset(2026, 7, 15, 0, 0, 0, TimeSpan.Zero);
@@ -362,7 +362,7 @@ public sealed class DailyStatisticsServiceTests
 
         var result = await service.ComputeAsync(date, tz);
 
-        Assert.Equal(TimeSpan.FromHours(1).Add(TimeSpan.FromMinutes(30)), result.EffectiveWorkTime);
+        Assert.Equal(TimeSpan.FromHours(2), result.EffectiveWorkTime);
     }
 
     [Fact]
@@ -456,6 +456,30 @@ public sealed class DailyStatisticsServiceTests
 
         Assert.Equal(1, result.IdleResetCount);
         Assert.Equal(TimeSpan.FromHours(2), result.EffectiveWorkTime);
+    }
+
+    [Fact]
+    public async Task ComputeAsync_per_app_work_time_aggregates_by_process()
+    {
+        var repo = new FakeUsageEventRepository();
+        var startOfDay = new DateTimeOffset(2026, 7, 15, 0, 0, 0, TimeSpan.Zero);
+        repo.Events.Add(new UsageEvent(1, startOfDay.AddHours(8), UsageEventType.IdleEnded, null));
+        repo.Events.Add(new UsageEvent(2, startOfDay.AddHours(8), UsageEventType.ForegroundProcessChanged,
+            new ForegroundProcessChangedPayload("devenv")));
+        repo.Events.Add(new UsageEvent(3, startOfDay.AddHours(8).AddMinutes(30), UsageEventType.ForegroundProcessChanged,
+            new ForegroundProcessChangedPayload("chrome")));
+        repo.Events.Add(new UsageEvent(4, startOfDay.AddHours(9), UsageEventType.ForegroundProcessChanged,
+            new ForegroundProcessChangedPayload("devenv")));
+
+        var service = new DailyStatisticsService(repo);
+        var date = new DateOnly(2026, 7, 15);
+        var tz = TimeZoneInfo.Utc;
+
+        var result = await service.ComputeAsync(date, tz);
+
+        Assert.True(result.PerAppWorkTime.Count >= 2);
+        Assert.True(result.PerAppWorkTime["devenv"] >= TimeSpan.FromMinutes(30));
+        Assert.True(result.PerAppWorkTime["chrome"] >= TimeSpan.FromMinutes(25));
     }
 
     private sealed class FakeUsageEventRepository : IUsageEventRepository

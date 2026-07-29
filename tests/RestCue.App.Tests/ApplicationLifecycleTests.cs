@@ -97,6 +97,7 @@ public sealed class ApplicationLifecycleTests
 
         public event EventHandler? DataTransparencyRequested;
         public event EventHandler? DataManagementRequested;
+        public event EventHandler<TimeSpan>? PauseForRequested;
 #pragma warning restore CS0067
 
         public int VisibleSetToTrueCount { get; private set; }
@@ -246,5 +247,9 @@ public sealed class ApplicationLifecycleTests
         public void Disable() => DisableCount++;
 
         public void Enable() => EnableCount++;
+
+        public void PauseFor(TimeSpan duration) { }
+
+        public void UpdateForegroundContextProvider(bool collectProcessNames) { }
     }
 }

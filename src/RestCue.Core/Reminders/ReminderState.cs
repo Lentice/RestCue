@@ -5,7 +5,6 @@ public enum ReminderState
     Working,
     PendingReminder,
     ReminderVisible,
-    BreakGuide,
     Snoozed,
     Idle,
     Paused,

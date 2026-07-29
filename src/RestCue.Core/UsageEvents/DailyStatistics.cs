@@ -22,7 +22,8 @@ public sealed record DailyStatistics(
     TimeSpan LongestContinuousWork,
     TimeSpan? AverageWorkCycleDuration,
     IReadOnlyList<DebtLevelChangeEntry> DebtLevelHistory,
-    IReadOnlyList<ReminderOutcomeEntry> ReminderOutcomes);
+    IReadOnlyList<ReminderOutcomeEntry> ReminderOutcomes,
+    IReadOnlyDictionary<string, TimeSpan> PerAppWorkTime);
 
 public sealed record DebtLevelChangeEntry(
     DateTimeOffset OccurredUtc,

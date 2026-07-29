@@ -12,7 +12,6 @@ public static partial class PrivacyDenylist
         "http://",
         "https://",
         "documentName",
-        "processName",
         "input",
     ];
 

@@ -39,6 +39,8 @@ public sealed class PrivacyDenylistTests : IDisposable
                     new ReminderDismissedPayload(ReminderResult.Snoozed),
                 UsageEventType.RestDebtLevelChanged =>
                     new RestDebtLevelChangedPayload(RestDebtLevel.Level0, RestDebtLevel.Level1),
+                UsageEventType.ForegroundProcessChanged =>
+                    new ForegroundProcessChangedPayload("test-app"),
                 _ => null
             };
             await repo.WriteAsync(type, baseTime.AddSeconds(id), payload);
@@ -77,7 +79,6 @@ public sealed class PrivacyDenylistTests : IDisposable
                 string payload = dataReader.IsDBNull(3) ? "" : dataReader.GetString(3);
                 if (!string.IsNullOrEmpty(payload))
                 {
-                    Assert.DoesNotContain("processName", payload, StringComparison.OrdinalIgnoreCase);
                     Assert.DoesNotContain("windowTitle", payload, StringComparison.OrdinalIgnoreCase);
                     Assert.DoesNotContain("clipboard", payload, StringComparison.OrdinalIgnoreCase);
                     Assert.DoesNotContain("url", payload, StringComparison.OrdinalIgnoreCase);
@@ -88,8 +89,9 @@ public sealed class PrivacyDenylistTests : IDisposable
                     Assert.True(
                         payload.Contains("\"result\"", StringComparison.OrdinalIgnoreCase) ||
                         (payload.Contains("\"previous\"", StringComparison.OrdinalIgnoreCase) &&
-                         payload.Contains("\"current\"", StringComparison.OrdinalIgnoreCase)),
-                        "Payload must contain only allowed keys (result, previous, current)");
+                         payload.Contains("\"current\"", StringComparison.OrdinalIgnoreCase)) ||
+                        payload.Contains("\"processName\"", StringComparison.OrdinalIgnoreCase),
+                        "Payload must contain only allowed keys");
                 }
             }
         }
