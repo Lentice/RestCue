@@ -54,19 +54,18 @@
 - **影響**：全螢幕偵測邏輯無法透過 fake 進行獨立測試，違反 spec NFR-004「Windows 狀態偵測必須有 Interface，可用 Fake 實作測試」。
 - **建議修正**：從 `WindowsForegroundContextProvider` 抽取 `IsWindowFullscreen()` 到獨立的 `WindowsFullscreenDetector : IFullscreenDetector`，並透過 DI 注入。
 
-### B07 — missing `.github/workflows/package.yml`
+### B07 — 自動建置安裝包（RESOLVED）
 
-- **檔案**：`.github/workflows/package.yml`
-- **問題**：Spec #24 的交付清單包含此檔案，但 repo 中不存在。`ci.yml` 存在且正常運作。
-- **影響**：CI 無法自動建置安裝包。
-- **建議修正**：建立 `package.yml`，包含 restore → build → test → publish → Inno Setup → SHA-256。
+- **修正檔案**：`.github/workflows/package.yml`、`packaging/windows/build-package.ps1`、`packaging/windows/test-package-workflow.ps1`
+- **修正內容**：`package.yml` 已存在；改為委派給單一可重現打包命令，使用產品版本而非日期版號，依序 restore → build → test → RID publish → Inno Setup → SHA-256，並上傳 installer、checksum 與驗證紀錄。另修正 `dotnet restore --configuration` 與 RID publish `--no-build` 造成的實際建包失敗。
+- **驗證**：workflow contract 通過；本機 Release build 0 warnings／0 errors、628 個非 LongRun 測試通過、win-x64 publish 與 Inno Setup compile 成功。
 
-### B08 — 安裝／升級／移除全情境未測試（全部 BLOCKED）
+### B08 — 安裝／升級／移除情境（PARTIALLY RESOLVED）
 
-- **檔案**：`docs/testing/windows-install-upgrade-verification.md`
-- **問題**：Clean install、upgrade、repair、failed-upgrade recovery、uninstall、downgrade rejection 六個情境全部標記為 BLOCKED，需要乾淨 Windows 10/11 環境。
-- **影響**：安裝套件無法驗證實際可用性。
-- **建議修正**：在乾淨 Windows VM 中執行所有情境並記錄證據。
+- **修正檔案**：`packaging/windows/verify-installer.ps1`、`packaging/windows/RestCue.iss`、`.github/workflows/package.yml`、`docs/testing/windows-install-upgrade-verification.md`
+- **修正內容**：在乾淨 CI user 上自動驗證 silent clean install、installer version transition、same-version repair、malformed-package rejection、downgrade rejection 與 uninstall；產出 Markdown report 與 installer logs。installer 明確拒絕 downgrade，不建立 Startup 捷徑，uninstall 會移除 app-owned Run entry。
+- **驗證**：Windows build 10.0.26200.0 本機自動 installer-mechanics lifecycle 六個情境全部 PASS；解除安裝後 install dir、uninstall registry、startup registration 與測試 sentinel 均無殘留。
+- **剩餘驗收**：Win10/Win11 tray GUI、真實舊版 schema data、SmartScreen 與 mid-install file-lock recovery 仍需乾淨互動式 VM，維持 BLOCKED；不得以 automated PASS 取代。
 
 ### B09 — 系統列圖示 Level 3 與 Suppressed 共用相同圖示
 
@@ -134,12 +133,12 @@
 - **問題**：`OnSettingsReset` 只更新 `_startup.CurrentSettings`，但 `WindowsForegroundContextProvider` 仍使用舊的 `CollectForegroundProcessNames` 值，需下次啟動才生效。已在 known-limitations 記錄。
 - **建議修正**：於 App 層重建 foreground context provider 並重新注入（或維持既有「下次啟動生效」設計，視產品決策）。
 
-### B18 — ReminderWindow 多螢幕定位未實作
+### B18 — ReminderWindow 多螢幕定位未實作（RESOLVED）
 
-- **檔案**：`src/RestCue.App/ReminderWindow.xaml.cs:98-103`
-- **問題**：`PositionOnPrimaryScreenRightEdge()` 永遠使用 `SystemParameters.WorkArea`（主螢幕）。Spec FR-005 要求「預設顯示於目前前景視窗所在螢幕」。
-- **影響**：多螢幕使用者體驗不佳。（已在 known-limitations 記錄）
-- **建議修正**：使用 `MonitorFromWindow` API 根據前景視窗所在螢幕定位，或於設定提供使用者選擇。
+- **修正檔案**：`src/RestCue.App/DpiAwarenessBootstrap.cs`、`src/RestCue.App/ReminderWindow.xaml.cs`、`src/RestCue.App/ReminderWindowPlacement.cs`
+- **修正內容**：於 WPF 啟動前啟用 PerMonitorV2；使用 `MonitorFromWindow`／`GetMonitorInfo` 找出前景視窗所在螢幕，並以 Win32 實體像素座標在首次顯示前定位。定位計算支援負座標螢幕、過大視窗邊界 clamp，以及 Win32 API 失敗時退回主螢幕。
+- **驗證**：runtime `GetProcessDpiAwareness` 回報 `2`（Per-monitor aware）；`dotnet build RestCue.sln` 為 0 warnings／0 errors；628 個一般測試與 1 個一分鐘 soak 測試通過；dcli-claude 最終 review 無 blocking findings。
+- **剩餘驗收**：真實雙螢幕 mixed-DPI、primary switch 與 display reconnect 因硬體限制仍待依 #23 手動驗收；這是驗收證據缺口，不是已知功能缺失。
 
 ### B19 — 暫無 per-app 使用時間的 UI
 
@@ -156,7 +155,7 @@
 | FR-003 提醒狀態機 | 已實作 | — |
 | FR-004 自然停頓提醒 | 已實作 | — |
 | FR-004a 休息債務分級呈現 | 已實作 | — |
-| FR-005 非阻擋式邊緣提醒 | 已實作（僅主螢幕） | B18 |
+| FR-005 非阻擋式邊緣提醒 | 已實作（實機 mixed-DPI 驗收待補） | B18（已修正） |
 | FR-006 休息引導（去數字化） | 部分實作（音訊模式無效） | B01, B15 |
 | FR-007 延後/忽略/逾時 | 已實作 | — |
 | FR-008 暫停與專注模式 | 部分實作（缺計時器） | B04, B05 |

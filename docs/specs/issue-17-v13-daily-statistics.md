@@ -66,10 +66,10 @@ query service 回傳 partial/failure 狀態供 UI 顯示安全文案。跨日狀
 ## Verification
 
 - [x] Core aggregation unit tests (25 tests, all pass)
-- [ ] Infrastructure query integration tests (out of scope — no new schema)
-- [ ] App view/view-model tests (basic window created; no dedicated unit tests)
+- [ ] Infrastructure query integration tests（本票未新增；既有 repository round-trip 測試不等同統計查詢整合測試）
+- [ ] App view/view-model tests（目前無專用 view-model 測試）
 - [x] `dotnet build RestCue.sln`
-- [ ] `dotnet test RestCue.sln --no-build` (controller runs full gate)
+- [x] `dotnet test RestCue.sln --no-build` (420 Core + 76 App + 53 Infrastructure = 549 pass)
 - [x] `git diff --check`
 
 ## Data/schema impact

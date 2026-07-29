@@ -217,7 +217,7 @@
 - [x] 受影響 Core/App 單元測試
 - [x] `dotnet build RestCue.sln`
 - [x] `dotnet test RestCue.sln --no-build`（410 Core + 73 App + 45 Infra = 528 pass）
-- [ ] 手動拔除／停用輸出裝置 smoke test，確認無額外彈窗
+- [ ] 手動拔除／停用輸出裝置 smoke test，確認無額外彈窗（程式路徑已確認靜默降級，但尚未以實體裝置拔除驗證。）
 - [x] `git diff --check`
 
 ## Data/schema impact
