@@ -90,12 +90,6 @@ public partial class App : System.Windows.Application
                 return;
             }
 
-            foreach (var w in Current.Windows.OfType<SettingsWindow>())
-            {
-                w.Activate();
-                return;
-            }
-
             var window = new SettingsWindow(_settingsRepository, _startup.CurrentSettings);
             window.Show();
         };
@@ -120,16 +114,41 @@ public partial class App : System.Windows.Application
         };
     }
 
+    internal void WireDataManagementCommand(ITrayIcon trayIcon)
+    {
+        trayIcon.DataManagementRequested += (_, _) =>
+        {
+            if (_usageEventRepository == null || _settingsRepository == null || _startup == null)
+            {
+                Trace.TraceError("RestCue: data management unavailable.");
+                return;
+            }
+
+            var window = new DataManagementWindow(_usageEventRepository, _settingsRepository);
+            window.DataCleared += (_, _) =>
+            {
+                foreach (var sw in Current.Windows.OfType<StatisticsWindow>())
+                {
+                    sw.Close();
+                }
+                foreach (var tw in Current.Windows.OfType<TransparencyWindow>())
+                {
+                    tw.Close();
+                }
+            };
+            window.SettingsReset += async (_, _) =>
+            {
+                var loadResult = await _settingsRepository.LoadAsync();
+                _startup.CurrentSettings = loadResult.Settings;
+            };
+            window.Show();
+        };
+    }
+
     internal void WireAboutCommand(ITrayIcon trayIcon)
     {
         trayIcon.AboutRequested += (_, _) =>
         {
-            foreach (var w in Current.Windows.OfType<AboutWindow>())
-            {
-                w.Activate();
-                return;
-            }
-
             var window = new AboutWindow();
             window.Show();
         };
@@ -186,6 +205,7 @@ public partial class App : System.Windows.Application
         WireBreakNowCommand(_trayIcon, _statusWindow);
         WireStatisticsCommand(_trayIcon);
         WireDataTransparencyCommand(_trayIcon);
+        WireDataManagementCommand(_trayIcon);
         WireSettingsCommand(_trayIcon);
         WireAboutCommand(_trayIcon);
 

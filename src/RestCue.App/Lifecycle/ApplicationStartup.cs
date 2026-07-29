@@ -15,7 +15,7 @@ public sealed class ApplicationStartup
         this.lifecycle = lifecycle;
     }
 
-    public AppSettings CurrentSettings { get; private set; } = AppSettings.Default;
+    public AppSettings CurrentSettings { get; internal set; } = AppSettings.Default;
 
     public async Task<SettingsLoadResult> InitializeAsync(
         CancellationToken cancellationToken = default)
