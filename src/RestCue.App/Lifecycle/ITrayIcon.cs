@@ -24,6 +24,10 @@ public interface ITrayIcon : IDisposable
 
     event EventHandler? StatisticsRequested;
 
+    event EventHandler? SettingsRequested;
+
+    event EventHandler? AboutRequested;
+
     bool Visible { get; set; }
 
     void SetPauseText(bool isPaused);

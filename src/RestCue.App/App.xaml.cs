@@ -22,6 +22,7 @@ public partial class App : System.Windows.Application
     private MainWindow? _statusWindow;
     private BackgroundUsageEventWriter? _eventWriter;
     private IUsageEventRepository? _usageEventRepository;
+    private ISettingsRepository? _settingsRepository;
     private WorkCycleTracker? _tracker;
     private WindowsBreakGuideAudioPlayer? _audioPlayer;
     private WorkCyclePhase _lastPhase;
@@ -36,10 +37,10 @@ public partial class App : System.Windows.Application
             _trayIcon,
             _statusWindow,
             Shutdown);
-        var settingsRepository = new SqliteSettingsRepository(
+        _settingsRepository = new SqliteSettingsRepository(
             LocalSettingsPaths.DatabaseFile,
             new AppSettingsValidator());
-        _startup = new ApplicationStartup(settingsRepository, _lifecycle);
+        _startup = new ApplicationStartup(_settingsRepository, _lifecycle);
         try
         {
             await _startup.InitializeAsync();
@@ -76,6 +77,42 @@ public partial class App : System.Windows.Application
         _audioPlayer?.Dispose();
         _lifecycle?.Dispose();
         base.OnExit(e);
+    }
+
+    internal void WireSettingsCommand(ITrayIcon trayIcon)
+    {
+        trayIcon.SettingsRequested += (_, _) =>
+        {
+            if (_startup == null || _settingsRepository == null)
+            {
+                System.Diagnostics.Trace.TraceError("RestCue: settings unavailable.");
+                return;
+            }
+
+            foreach (var w in Current.Windows.OfType<SettingsWindow>())
+            {
+                w.Activate();
+                return;
+            }
+
+            var window = new SettingsWindow(_settingsRepository, _startup.CurrentSettings);
+            window.Show();
+        };
+    }
+
+    internal void WireAboutCommand(ITrayIcon trayIcon)
+    {
+        trayIcon.AboutRequested += (_, _) =>
+        {
+            foreach (var w in Current.Windows.OfType<AboutWindow>())
+            {
+                w.Activate();
+                return;
+            }
+
+            var window = new AboutWindow();
+            window.Show();
+        };
     }
 
     internal void WireStatisticsCommand(ITrayIcon trayIcon)
@@ -128,6 +165,8 @@ public partial class App : System.Windows.Application
         WireModeCommands(_trayIcon, _statusWindow);
         WireBreakNowCommand(_trayIcon, _statusWindow);
         WireStatisticsCommand(_trayIcon);
+        WireSettingsCommand(_trayIcon);
+        WireAboutCommand(_trayIcon);
 
         _statusWindow.PhaseChanged += OnPhaseChanged;
         _statusWindow.DebtLevelChanged += OnDebtLevelChanged;

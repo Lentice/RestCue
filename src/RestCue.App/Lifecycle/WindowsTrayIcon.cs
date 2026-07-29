@@ -36,6 +36,9 @@ public sealed class WindowsTrayIcon : ITrayIcon
         menu.Items.Add("開啟 RestCue", null, (_, _) => OpenRequested?.Invoke(this, EventArgs.Empty));
         menu.Items.Add("今日統計", null, (_, _) => StatisticsRequested?.Invoke(this, EventArgs.Empty));
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("設定", null, (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty));
+        menu.Items.Add("關於與隱私", null, (_, _) => AboutRequested?.Invoke(this, EventArgs.Empty));
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(_pauseItem);
         menu.Items.Add(_focusItem);
         menu.Items.Add(_disableItem);
@@ -71,6 +74,10 @@ public sealed class WindowsTrayIcon : ITrayIcon
     public event EventHandler? BreakNowRequested;
 
     public event EventHandler? StatisticsRequested;
+
+    public event EventHandler? SettingsRequested;
+
+    public event EventHandler? AboutRequested;
 
     public bool Visible
     {
