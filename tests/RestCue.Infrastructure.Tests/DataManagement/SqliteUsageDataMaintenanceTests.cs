@@ -165,6 +165,61 @@ public sealed class SqliteUsageDataMaintenanceTests : IDisposable
         Assert.Empty(events);
     }
 
+    [Fact]
+    public async Task Clear_settings_only_resets_settings_and_keeps_events()
+    {
+        string dbPath = Path.Combine(directory, "restcue.db");
+        Directory.CreateDirectory(directory);
+
+        await using (var connection = new SqliteConnection($"Data Source={dbPath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            await SchemaMigrator.EnsureSchemaAsync(connection);
+        }
+
+        var repo = new SqliteUsageEventRepository(dbPath);
+        var baseTime = new DateTimeOffset(2026, 7, 15, 8, 0, 0, TimeSpan.Zero);
+        for (int i = 0; i < 5; i++)
+        {
+            await repo.WriteAsync(UsageEventType.ReminderShown, baseTime.AddMinutes(i));
+        }
+
+        var settingsRepo = new SqliteSettingsRepository(dbPath, new Core.Settings.AppSettingsValidator());
+        var nonDefault = Core.Settings.AppSettings.Default with { CollectForegroundProcessNames = true };
+        await settingsRepo.SaveAsync(nonDefault);
+
+        await settingsRepo.SaveAsync(Core.Settings.AppSettings.Default);
+
+        var events = await repo.QueryAsync(DateTimeOffset.MinValue, DateTimeOffset.MaxValue);
+        Assert.Equal(5, events.Count);
+
+        var settingsResult = await settingsRepo.LoadAsync();
+        Assert.Equal(2, settingsResult.Settings.SchemaVersion);
+        Assert.False(settingsResult.RecoveredFromCorruption);
+    }
+
+    [Fact]
+    public async Task Reset_settings_restores_process_name_opt_in_to_false()
+    {
+        string dbPath = Path.Combine(directory, "restcue.db");
+        Directory.CreateDirectory(directory);
+
+        await using (var connection = new SqliteConnection($"Data Source={dbPath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            await SchemaMigrator.EnsureSchemaAsync(connection);
+        }
+
+        var settingsRepo = new SqliteSettingsRepository(dbPath, new Core.Settings.AppSettingsValidator());
+        var nonDefault = Core.Settings.AppSettings.Default with { CollectForegroundProcessNames = true };
+        await settingsRepo.SaveAsync(nonDefault);
+
+        await settingsRepo.SaveAsync(Core.Settings.AppSettings.Default);
+
+        var settingsResult = await settingsRepo.LoadAsync();
+        Assert.False(settingsResult.Settings.CollectForegroundProcessNames);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(directory))

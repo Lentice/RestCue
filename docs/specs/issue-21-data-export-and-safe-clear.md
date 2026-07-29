@@ -245,7 +245,7 @@ transaction/VACUUM 行為與 export 格式版本。
 
 ## Completion report
 
-- [ ] Changes
-- [ ] Tests
-- [ ] Known limitations（含 deletion guarantee）
-- [ ] Data/schema impact
+- [x] Changes: 28 files, +1315 lines. New: `UsageEventExportDocument`/`UsageEventExportRecord` allowlist DTO, `IUsageDataExporter`/`UsageDataExporter`, `IExportWriter`/`AtomicJsonExportWriter`, `IUsageDataMaintenance`/`SqliteUsageDataMaintenance`, `DataManagementWindow` (XAML + code-behind), `ITrayIcon.DataManagementRequested` event, `WindowsTrayIcon` menu item, `App.WireDataManagementCommand`. Modified: `App.xaml.cs` (wiring + AboutWindow restore), `docs/privacy.md`, `docs/known-limitations.md`.
+- [x] Tests: 571 total (431 Core + 77 App + 63 Infrastructure; +3 vs baseline). Core: `UsageDataExporterTests` (8 → 9 tests, added `Export_is_unaffected_by_process_name_opt_in`). Infrastructure: `AtomicJsonExportWriterTests` (4), `SqliteUsageDataMaintenanceTests` (4 → 6, added `Clear_settings_only_resets_settings_and_keeps_events` and `Reset_settings_restores_process_name_opt_in_to_false`). App: `DataManagementWiringTests` (1).
+- [x] Known limitations: `docs/privacy.md` documents SQLite `DELETE` does not guarantee physical erasure; `VACUUM` is not performed; `-wal`/`-shm` remnants may remain. Settings reset's foreground process name opt-in takes effect on next launch per `docs/known-limitations.md`.
+- [x] Data/schema impact: No schema changes. Export format v1 (UTF-8 without BOM JSON, UTC timestamps, allowlist-only fields). History uses transactional `DELETE FROM usage_events`; settings reset calls `SaveAsync(AppSettings.Default)`. No data loss on cancellation, failure, or rollback.

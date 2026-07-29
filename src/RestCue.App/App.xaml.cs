@@ -149,6 +149,12 @@ public partial class App : System.Windows.Application
     {
         trayIcon.AboutRequested += (_, _) =>
         {
+            foreach (var w in Current.Windows.OfType<AboutWindow>())
+            {
+                w.Activate();
+                return;
+            }
+
             var window = new AboutWindow();
             window.Show();
         };

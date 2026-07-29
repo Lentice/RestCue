@@ -26,7 +26,7 @@ public sealed class AtomicJsonExportWriter : IExportWriter
 
     public async Task WriteAsync(string json, CancellationToken cancellationToken = default)
     {
-        byte[] bytes = System.Text.Encoding.UTF8.GetBytes(json);
+        byte[] bytes = new System.Text.UTF8Encoding(false).GetBytes(json);
         await stream.WriteAsync(bytes, cancellationToken);
     }
 

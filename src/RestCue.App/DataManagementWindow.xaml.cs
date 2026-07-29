@@ -43,7 +43,7 @@ public sealed partial class DataManagementWindow : Window
 
         try
         {
-            var writer = new AtomicJsonExportWriter(dialog.FileName);
+            using var writer = new AtomicJsonExportWriter(dialog.FileName);
             var exporter = new UsageDataExporter(usageEventRepository, writer, SchemaMigrator.LatestSchemaVersion);
             var result = await exporter.ExportAsync(
                 dialog.FileName,

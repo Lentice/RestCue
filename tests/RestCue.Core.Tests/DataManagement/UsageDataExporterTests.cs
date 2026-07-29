@@ -94,6 +94,41 @@ public sealed class UsageDataExporterTests
     }
 
     [Fact]
+    public async Task Export_is_unaffected_by_process_name_opt_in()
+    {
+        var repo = new FakeUsageEventRepository();
+        var baseTime = new DateTimeOffset(2026, 7, 15, 8, 0, 0, TimeSpan.Zero);
+        repo.Events.Add(new UsageEvent(1, baseTime, UsageEventType.ReminderShown, null));
+        repo.Events.Add(new UsageEvent(2, baseTime.AddMinutes(1), UsageEventType.BreakCompleted, null));
+        repo.Events.Add(new UsageEvent(3, baseTime.AddMinutes(2), UsageEventType.ReminderDismissed,
+            new ReminderDismissedPayload(ReminderResult.Snoozed)));
+        repo.Events.Add(new UsageEvent(4, baseTime.AddMinutes(3), UsageEventType.RestDebtLevelChanged,
+            new RestDebtLevelChangedPayload(RestDebtLevel.Level0, RestDebtLevel.Level2)));
+
+        var writer1 = new FakeExportWriter();
+        var exporter1 = new UsageDataExporter(repo, writer1, sourceDatabaseSchemaVersion: 2);
+        var result1 = await exporter1.ExportAsync("out1.json", DateTimeOffset.MinValue, DateTimeOffset.MaxValue);
+        Assert.True(result1.Succeeded);
+
+        var writer2 = new FakeExportWriter();
+        var exporter2 = new UsageDataExporter(repo, writer2, sourceDatabaseSchemaVersion: 2);
+        var result2 = await exporter2.ExportAsync("out2.json", DateTimeOffset.MinValue, DateTimeOffset.MaxValue);
+        Assert.True(result2.Succeeded);
+
+        var doc1 = JsonSerializer.Deserialize<UsageEventExportDocument>(writer1.WrittenJson!);
+        var doc2 = JsonSerializer.Deserialize<UsageEventExportDocument>(writer2.WrittenJson!);
+        Assert.NotNull(doc1);
+        Assert.NotNull(doc2);
+
+        var normalized1 = doc1 with { ExportedAtUtc = default };
+        var normalized2 = doc2 with { ExportedAtUtc = default };
+
+        string json1 = JsonSerializer.Serialize(normalized1);
+        string json2 = JsonSerializer.Serialize(normalized2);
+        Assert.Equal(json1, json2);
+    }
+
+    [Fact]
     public async Task Export_timestamps_are_utc_roundtrip()
     {
         var repo = new FakeUsageEventRepository();
