@@ -10,12 +10,7 @@
 
 ## Manual Windows matrix
 
-- Windows 10 與 11。
-- 單螢幕、雙螢幕、主要螢幕切換。
-- 100%、125%、150%、200% DPI。
-- 全螢幕影片、簡報、最大化 IDE。
-- lock/unlock、sleep/resume、Remote Desktop。
-- 提醒顯示時持續輸入，確認焦點不變。
+見 `docs/testing/windows-manual-acceptance-matrix.md`。每個 release 前必須執行一次完整矩陣，並將結果填回該檔。
 
 每個 ticket 必須列出實際執行的測試與未覆蓋限制。
 

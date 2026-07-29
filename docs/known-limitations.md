@@ -14,3 +14,4 @@
 - 重設設定後，`_startup.CurrentSettings` 會立即更新，但部分執行時期行為（前景程式名稱蒐集開關）需於下次啟動方可生效。
 - Soak harness 的資源量測依賴 `Process.GetCurrentProcess()` 取樣，取樣頻率固定為每 60 秒一次；短暫突發峰值可能被遺漏。判定標準為「8 小時內無持續單調且無界成長」，非單點峰值。
 - Soak harness 的測試結果強烈依賴執行環境（硬體規格、OS 版本、背景服務），不同環境的 baseline 可能差異顯著。首次 soak 應記錄完整環境資訊，後續在同一環境比對。
+- #23 Windows 手動驗收矩陣：多螢幕、mixed-DPI、primary switch、display reconnect 等場景因硬體限制列為 BLOCKED。需 Windows 10/11 雙螢幕環境與不同 DPI 裝置方可執行。
