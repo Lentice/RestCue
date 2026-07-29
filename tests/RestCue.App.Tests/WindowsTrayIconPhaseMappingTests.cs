@@ -193,6 +193,8 @@ public sealed class WindowsTrayIconPhaseMappingTests
         public event EventHandler? SettingsRequested;
 
         public event EventHandler? AboutRequested;
+
+        public event EventHandler? DataTransparencyRequested;
 #pragma warning restore CS0067
 
         public int VisibleSetToTrueCount { get; private set; }

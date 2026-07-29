@@ -6,6 +6,7 @@ using RestCue.Core.Domain;
 using RestCue.Core.Events;
 using RestCue.Core.Reminders;
 using RestCue.Core.Settings;
+using RestCue.Core.Transparency;
 using RestCue.Core.UsageEvents;
 using RestCue.Infrastructure.Activity;
 using RestCue.Infrastructure.Audio;
@@ -100,6 +101,25 @@ public partial class App : System.Windows.Application
         };
     }
 
+    internal void WireDataTransparencyCommand(ITrayIcon trayIcon)
+    {
+        trayIcon.DataTransparencyRequested += (_, _) =>
+        {
+            if (_usageEventRepository == null || _settingsRepository == null)
+            {
+                Trace.TraceError("RestCue: data transparency unavailable.");
+                return;
+            }
+
+            var reader = new SqliteUsageEventMetadataReader(
+                LocalSettingsPaths.DatabaseFile);
+            var service = new DataTransparencyService(
+                _settingsRepository, reader);
+            var window = new TransparencyWindow(service);
+            window.Show();
+        };
+    }
+
     internal void WireAboutCommand(ITrayIcon trayIcon)
     {
         trayIcon.AboutRequested += (_, _) =>
@@ -165,6 +185,7 @@ public partial class App : System.Windows.Application
         WireModeCommands(_trayIcon, _statusWindow);
         WireBreakNowCommand(_trayIcon, _statusWindow);
         WireStatisticsCommand(_trayIcon);
+        WireDataTransparencyCommand(_trayIcon);
         WireSettingsCommand(_trayIcon);
         WireAboutCommand(_trayIcon);
 

@@ -28,6 +28,8 @@ public interface ITrayIcon : IDisposable
 
     event EventHandler? AboutRequested;
 
+    event EventHandler? DataTransparencyRequested;
+
     bool Visible { get; set; }
 
     void SetPauseText(bool isPaused);
