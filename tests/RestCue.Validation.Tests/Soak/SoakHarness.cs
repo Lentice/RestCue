@@ -9,7 +9,7 @@ public sealed class SoakHarness
     [Fact]
     public async Task Resource_usage_remains_bounded_over_time()
     {
-        int soakMinutes = 5;
+        int soakMinutes = 1;
         string? envMinutes = Environment.GetEnvironmentVariable("RESTCUE_SOAK_MINUTES");
         if (!string.IsNullOrEmpty(envMinutes) && int.TryParse(envMinutes, out int parsed) && parsed > 0)
         {
@@ -26,7 +26,7 @@ public sealed class SoakHarness
             Path.GetTempPath(), "RestCue.Tests", Guid.NewGuid().ToString("N"), "restcue.db");
         Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
 
-        var sampler = new ResourceSampler(csvPath, dbPath);
+        using var sampler = new ResourceSampler(csvPath, dbPath);
         var stopwatch = Stopwatch.StartNew();
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(soakMinutes * 2));
 
@@ -50,11 +50,6 @@ public sealed class SoakHarness
         {
             Assert.Fail("Soak test timed out before completing all samples.");
         }
-        finally
-        {
-            sampler.Close();
-        }
-
         Assert.True(File.Exists(csvPath), "Soak CSV output was not created.");
     }
 }

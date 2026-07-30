@@ -2,18 +2,19 @@ using System.Diagnostics;
 
 namespace RestCue.Validation.Tests.Soak;
 
-public sealed class ResourceSampler
+public sealed class ResourceSampler : IDisposable
 {
     private readonly Process process;
     private readonly string dbPath;
     private readonly StreamWriter writer;
+    private bool disposed;
     private int sampleIndex;
 
     public ResourceSampler(string outputPath, string dbPath)
     {
         this.process = Process.GetCurrentProcess();
         this.dbPath = dbPath;
-        writer = new StreamWriter(outputPath, append: false);
+        writer = OpenArtifactWriter(outputPath);
         writer.WriteLine("Sample,ElapsedSeconds,TotalProcessorSeconds,WorkingSetMB,PrivateMemoryMB,HandleCount,ThreadCount,DatabaseFileKB");
     }
 
@@ -41,8 +42,46 @@ public sealed class ResourceSampler
         sampleIndex++;
     }
 
-    public void Close()
+    public void Close() => Dispose();
+
+    public void Dispose()
     {
+        if (disposed)
+        {
+            return;
+        }
+
         writer.Dispose();
+        disposed = true;
+    }
+
+    private static StreamWriter OpenArtifactWriter(string outputPath)
+    {
+        try
+        {
+            return CreateWriter(outputPath);
+        }
+        catch (IOException)
+        {
+            string directory = Path.GetDirectoryName(outputPath)
+                ?? throw new InvalidOperationException("The soak artifact path must include a directory.");
+            string fileName = Path.GetFileNameWithoutExtension(outputPath);
+            string extension = Path.GetExtension(outputPath);
+            string isolatedPath = Path.Combine(
+                directory,
+                $"{fileName}-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Environment.ProcessId}-{Guid.NewGuid():N}{extension}");
+
+            return CreateWriter(isolatedPath);
+        }
+    }
+
+    private static StreamWriter CreateWriter(string path)
+    {
+        var stream = new FileStream(
+            path,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.Read);
+        return new StreamWriter(stream);
     }
 }
