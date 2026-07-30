@@ -94,6 +94,39 @@ public sealed class BackgroundUsageEventWriterTests : IDisposable
     }
 
     [Fact]
+    public void Dispose_does_not_deadlock_on_a_UI_synchronization_context()
+    {
+        var originalContext = SynchronizationContext.Current;
+        var context = new QueuedSynchronizationContext();
+        var disposeReturned = new ManualResetEventSlim();
+
+        var thread = new Thread(() =>
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+            using var writer = new BackgroundUsageEventWriter(new FakeUsageEventRepository());
+            writer.Dispose();
+            disposeReturned.Set();
+        })
+        {
+            IsBackground = true
+        };
+
+        try
+        {
+            thread.Start();
+            Assert.True(
+                disposeReturned.Wait(TimeSpan.FromSeconds(3)),
+                "Dispose deadlocked while waiting for a consumer continuation posted to the UI context.");
+        }
+        finally
+        {
+            context.RunPostedCallbacks();
+            thread.Join(TimeSpan.FromSeconds(1));
+            SynchronizationContext.SetSynchronizationContext(originalContext);
+        }
+    }
+
+    [Fact]
     public async Task Multiple_producers_maintain_FIFO_within_semantics()
     {
         var fake = new FakeUsageEventRepository();
@@ -154,6 +187,39 @@ public sealed class BackgroundUsageEventWriterTests : IDisposable
     {
         public event EventHandler? Fired;
         public void Raise() => Fired?.Invoke(this, EventArgs.Empty);
+    }
+
+    private sealed class QueuedSynchronizationContext : SynchronizationContext
+    {
+        private readonly Queue<(SendOrPostCallback Callback, object? State)> callbacks = new();
+        private readonly object gate = new();
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            lock (gate)
+            {
+                callbacks.Enqueue((d, state));
+            }
+        }
+
+        public void RunPostedCallbacks()
+        {
+            while (true)
+            {
+                (SendOrPostCallback Callback, object? State) callback;
+                lock (gate)
+                {
+                    if (callbacks.Count == 0)
+                    {
+                        return;
+                    }
+
+                    callback = callbacks.Dequeue();
+                }
+
+                callback.Callback(callback.State);
+            }
+        }
     }
 
     private sealed class FakeClock : IClock

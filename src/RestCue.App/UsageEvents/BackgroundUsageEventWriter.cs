@@ -64,7 +64,7 @@ public sealed class BackgroundUsageEventWriter : IDisposable
 
     private async Task ConsumeAsync(CancellationToken ct)
     {
-        await foreach (var request in channel.Reader.ReadAllAsync(ct))
+        await foreach (var request in channel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
         {
             try
             {
