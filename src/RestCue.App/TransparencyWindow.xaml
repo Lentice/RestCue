@@ -1,76 +1,105 @@
 <Window x:Class="RestCue.App.TransparencyWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="RestCue – 資料透明檢視" Height="480" Width="440"
+        xmlns:local="clr-namespace:RestCue.App"
+        Title="RestCue – 資料透明檢視" Height="520" Width="460"
+        MinHeight="320" MinWidth="380"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="CanMinimize"
-        ShowInTaskbar="False"
-        WindowStyle="None"
-        AllowsTransparency="True">
-    <ScrollViewer Margin="20" VerticalScrollBarVisibility="Auto">
-        <StackPanel>
-            <TextBlock FontSize="22" FontWeight="SemiBold" Text="資料透明檢視" />
-            <TextBlock Margin="0,4,0,16" Foreground="#666666" FontSize="13"
+        local:WindowInteraction.CloseOnEscape="True">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Margin="20,20,20,0">
+            <TextBlock Style="{StaticResource WindowTitleStyle}" Text="資料透明檢視" />
+            <TextBlock Style="{StaticResource WindowSubtitleStyle}"
                        Text="RestCue 只在本機處理與保存資料，以下為實際狀態。" />
 
-            <TextBlock x:Name="StatusText" FontSize="14" FontWeight="SemiBold"
-                       Foreground="#CC0000" Visibility="Collapsed" />
-
-            <Border Padding="16" CornerRadius="8" Background="#FFF3F4F6">
-                <StackPanel>
-                    <TextBlock FontSize="14" FontWeight="SemiBold"
-                               Text="資料類別狀態" />
-                    <ItemsControl x:Name="CategoryList" Margin="0,8,0,0">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Margin="0,4,0,4">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{Binding Label}"
-                                               TextWrapping="Wrap" />
-                                    <TextBlock Grid.Column="1"
-                                               FontWeight="SemiBold"
-                                               Text="{Binding State}" />
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </Border>
-
-            <Border Margin="0,12,0,0" Padding="16" CornerRadius="8"
-                    Background="#FFF3F4F6">
-                <StackPanel>
-                    <TextBlock FontSize="14" FontWeight="SemiBold"
-                               Text="事件類型統計" />
-                    <TextBlock x:Name="TotalCountText" Margin="0,4,0,0"
-                               Foreground="#666666" FontSize="13" />
-                    <ItemsControl x:Name="EventTypeCountList" Margin="0,4,0,0">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Margin="0,2,0,2">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0"
-                                               Text="{Binding EventType}" />
-                                    <TextBlock Grid.Column="1"
-                                               FontWeight="SemiBold"
-                                               Text="{Binding Count}" />
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-
-                    <TextBlock x:Name="EarliestText" Margin="0,8,0,0"
-                               Foreground="#666666" FontSize="13" />
-                    <TextBlock x:Name="LatestText" Margin="0,2,0,0"
-                               Foreground="#666666" FontSize="13" />
-                </StackPanel>
+            <Border x:Name="StatusBanner" Style="{StaticResource CardStyle}"
+                    Margin="0,0,0,12" Visibility="Collapsed">
+                <TextBlock x:Name="StatusText"
+                           Style="{StaticResource BodyTextStyle}"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource DangerTextBrush}" />
             </Border>
         </StackPanel>
-    </ScrollViewer>
+
+        <ScrollViewer Grid.Row="1" Margin="20,0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <Border x:Name="CategoryCard" Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}"
+                                   Text="資料類別狀態" />
+                        <ItemsControl x:Name="CategoryList" Margin="0,8,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0"
+                                                   Style="{StaticResource KeyValueKeyStyle}"
+                                                   Text="{Binding Label}" />
+                                        <TextBlock Grid.Column="1"
+                                                   Style="{StaticResource KeyValueValueStyle}"
+                                                   Text="{Binding State}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource StackedCardStyle}" Margin="0,12,0,20">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}"
+                                   Text="事件類型統計" />
+                        <TextBlock x:Name="TotalCountText" Margin="0,8,0,0"
+                                   Style="{StaticResource MetricLabelStyle}" />
+                        <ItemsControl x:Name="EventTypeCountList" Margin="0,4,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0"
+                                                   Style="{StaticResource KeyValueKeyStyle}"
+                                                   Text="{Binding EventType}" />
+                                        <TextBlock Grid.Column="1"
+                                                   Style="{StaticResource KeyValueValueStyle}"
+                                                   Text="{Binding Count}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Border Height="1" Margin="0,10"
+                                Background="{StaticResource DividerBrush}" />
+
+                        <TextBlock x:Name="EarliestText"
+                                   Style="{StaticResource MetricLabelStyle}" />
+                        <TextBlock x:Name="LatestText" Margin="0,4,0,0"
+                                   Style="{StaticResource MetricLabelStyle}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="2" Padding="20,12"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{StaticResource DividerBrush}">
+            <Button Content="關閉"
+                    Style="{StaticResource SecondaryButtonStyle}"
+                    HorizontalAlignment="Right"
+                    MinWidth="88"
+                    IsCancel="True"
+                    Click="OnCloseClick" />
+        </Border>
+    </Grid>
 </Window>

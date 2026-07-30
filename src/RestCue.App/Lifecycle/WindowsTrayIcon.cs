@@ -25,12 +25,12 @@ public sealed class WindowsTrayIcon : ITrayIcon
     private bool _isSuppressed;
     private ContextMenuStrip _menu;
     private int _pauseMenuIndex;
-    private static readonly Icon NormalIcon = SystemIcons.Information;
-    private static readonly Icon Level3Icon = SystemIcons.Question;
-    private static readonly Icon SuppressedIcon = SystemIcons.Exclamation;
-    private static readonly Icon Level1Icon = SystemIcons.Shield;
-    private static readonly Icon Level2Icon = SystemIcons.Warning;
-    private static readonly Icon Level4Icon = SystemIcons.Error;
+    private static readonly Icon NormalIcon = TrayIconFactory.Create(Color.FromArgb(47, 111, 235));
+    private static readonly Icon Level1Icon = TrayIconFactory.Create(Color.FromArgb(46, 125, 91));
+    private static readonly Icon Level2Icon = TrayIconFactory.Create(Color.FromArgb(196, 128, 20));
+    private static readonly Icon Level3Icon = TrayIconFactory.Create(Color.FromArgb(211, 95, 24));
+    private static readonly Icon Level4Icon = TrayIconFactory.Create(Color.FromArgb(192, 57, 43));
+    private static readonly Icon SuppressedIcon = TrayIconFactory.Create(Color.FromArgb(92, 101, 112));
 
     public WindowsTrayIcon()
     {

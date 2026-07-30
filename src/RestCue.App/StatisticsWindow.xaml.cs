@@ -30,22 +30,21 @@ public sealed partial class StatisticsWindow : Window
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"無法載入統計: {ex.Message}";
+            ShowStatus($"無法載入統計: {ex.Message}");
             return;
         }
 
         switch (stats.Status)
         {
             case DailyStatisticsStatus.Failure:
-                StatusText.Text = $"查詢失敗: {stats.ErrorMessage}";
+                ShowStatus($"查詢失敗: {stats.ErrorMessage}");
                 return;
 
             case DailyStatisticsStatus.PartialData:
-                StatusText.Text = "部分資料可能不完整（部分事件無法解析）。";
+                ShowStatus("部分資料可能不完整（部分事件無法解析）。");
                 break;
 
             case DailyStatisticsStatus.Success:
-                StatusText.Visibility = Visibility.Collapsed;
                 break;
         }
 
@@ -108,6 +107,17 @@ public sealed partial class StatisticsWindow : Window
             PerAppHeader.Visibility = Visibility.Collapsed;
             PerAppText.Visibility = Visibility.Collapsed;
         }
+    }
+
+    private void OnCloseClick(object sender, RoutedEventArgs e)
+    {
+        Close();
+    }
+
+    private void ShowStatus(string message)
+    {
+        StatusText.Text = message;
+        StatusText.Visibility = Visibility.Visible;
     }
 
     private static string FormatTimeSpan(TimeSpan ts)

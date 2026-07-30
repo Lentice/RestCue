@@ -1,56 +1,75 @@
 <Window x:Class="RestCue.App.AboutWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="RestCue – 關於與隱私" Height="440" Width="480"
+        xmlns:local="clr-namespace:RestCue.App"
+        Title="RestCue – 關於與隱私" Height="500" Width="480"
+        MinHeight="340" MinWidth="400"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="CanMinimize">
-    <ScrollViewer Margin="24" VerticalScrollBarVisibility="Auto">
-        <StackPanel>
+        local:WindowInteraction.CloseOnEscape="True">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Margin="24,24,24,16">
             <TextBlock FontSize="24" FontWeight="SemiBold" Text="RestCue" />
             <TextBlock x:Name="VersionText" Margin="0,4,0,0"
-                       Foreground="#666666" FontSize="13" />
-
-            <Border Padding="16" CornerRadius="8"
-                    Background="#FFF3F4F6" Margin="0,16,0,0">
-                <StackPanel>
-                    <TextBlock FontSize="14" FontWeight="SemiBold"
-                               Text="關於 RestCue" />
-                    <TextBlock Margin="0,8,0,0" Foreground="#333333"
-                               TextWrapping="Wrap" FontSize="13"
-                               Text="RestCue 是 Windows 用眼的休息提醒工具，以低干擾的方式定期提醒您讓眼睛休息。&#x0a;&#x0a;RestCue 是休息提醒工具，不是醫療器材，也不提供診斷或治療建議。" />
-                </StackPanel>
-            </Border>
-
-            <Border Padding="16" CornerRadius="8"
-                    Background="#FFF3F4F6" Margin="0,12,0,0">
-                <StackPanel>
-                    <TextBlock FontSize="14" FontWeight="SemiBold"
-                               Text="隱私說明" />
-                    <TextBlock Margin="0,8,0,0" Foreground="#333333"
-                               TextWrapping="Wrap" FontSize="13">
-                        <Run Text="RestCue 預設只在本機處理與保存資料。" />
-                        <LineBreak /><LineBreak />
-                        <Run Text="不蒐集鍵盤輸入內容、剪貼簿、畫面、視窗標題、網址或文件名稱。前景程式名稱的統計記錄預設關閉，僅在使用者明確啟用後保存。日誌不會意外包含上述資料。" />
-                    </TextBlock>
-                    <Button x:Name="ViewDataButton" Margin="0,12,0,0"
-                            Padding="10,6" FontSize="13"
-                            Cursor="Hand" BorderThickness="0"
-                            Background="#FF2196F3" Foreground="White"
-                            Content="查看目前蒐集的資料"
-                            Click="OnViewDataClick" />
-                </StackPanel>
-            </Border>
-
-            <Border Padding="16" CornerRadius="8"
-                    Background="#FFF3F4F6" Margin="0,12,0,0">
-                <StackPanel>
-                    <TextBlock FontSize="14" FontWeight="SemiBold"
-                               Text="技術資訊" />
-                    <TextBlock x:Name="TechInfoText" Margin="0,8,0,0"
-                               Foreground="#666666" FontSize="12"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
+                       Style="{StaticResource MetricLabelStyle}" />
         </StackPanel>
-    </ScrollViewer>
+
+        <ScrollViewer Grid.Row="1" Margin="24,0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}"
+                                   Text="關於 RestCue" />
+                        <TextBlock Style="{StaticResource BodyTextStyle}"
+                                   Margin="0,8,0,0"
+                                   Text="RestCue 是 Windows 用眼的休息提醒工具，以低干擾的方式定期提醒您讓眼睛休息。&#x0a;&#x0a;RestCue 是休息提醒工具，不是醫療器材，也不提供診斷或治療建議。" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource StackedCardStyle}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}"
+                                   Text="隱私說明" />
+                        <TextBlock Style="{StaticResource BodyTextStyle}" Margin="0,8,0,0">
+                            <Run Text="RestCue 預設只在本機處理與保存資料。" />
+                            <LineBreak /><LineBreak />
+                            <Run Text="不蒐集鍵盤輸入內容、剪貼簿、畫面、視窗標題、網址或文件名稱。前景程式名稱的統計記錄預設關閉，僅在使用者明確啟用後保存。日誌不會意外包含上述資料。" />
+                        </TextBlock>
+                        <Button x:Name="ViewDataButton"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Margin="0,14,0,0"
+                                HorizontalAlignment="Left"
+                                Content="查看目前蒐集的資料"
+                                Click="OnViewDataClick" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource StackedCardStyle}" Margin="0,12,0,20">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}"
+                                   Text="技術資訊" />
+                        <TextBlock x:Name="TechInfoText"
+                                   Style="{StaticResource FieldHintStyle}"
+                                   Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="2" Padding="24,12"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{StaticResource DividerBrush}">
+            <Button Content="關閉"
+                    Style="{StaticResource SecondaryButtonStyle}"
+                    HorizontalAlignment="Right"
+                    MinWidth="88"
+                    IsCancel="True"
+                    Click="OnCloseClick" />
+        </Border>
+    </Grid>
 </Window>

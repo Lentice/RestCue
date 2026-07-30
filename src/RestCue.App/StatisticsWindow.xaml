@@ -1,112 +1,188 @@
 <Window x:Class="RestCue.App.StatisticsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="RestCue – 今日統計" Height="520" Width="440"
+        xmlns:local="clr-namespace:RestCue.App"
+        Title="RestCue – 今日統計" Height="560" Width="460"
+        MinHeight="360" MinWidth="400"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="CanMinimize">
-    <ScrollViewer Margin="20" VerticalScrollBarVisibility="Auto">
-        <StackPanel>
-            <TextBlock FontSize="22" FontWeight="SemiBold" Text="今日統計" />
-            <TextBlock x:Name="DateText" Margin="0,4,0,16"
-                       Foreground="#666666" FontSize="13" />
+        local:WindowInteraction.CloseOnEscape="True">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
-            <Border Padding="16" CornerRadius="8" Background="#FFF3F4F6">
-                <StackPanel>
-                    <TextBlock x:Name="StatusText"
-                               FontSize="14" FontWeight="SemiBold"
-                               Foreground="#CC0000" />
-
-                    <TextBlock Margin="0,8,0,0" Foreground="#666666"
-                               Text="有效工作時間" />
-                    <TextBlock x:Name="WorkTimeText"
-                               FontSize="20" FontWeight="SemiBold"
-                               Text="—" />
-
-                    <TextBlock Margin="0,8,0,0" Foreground="#666666"
-                               Text="最長連續工作" />
-                    <TextBlock x:Name="LongestWorkText"
-                               FontSize="16" FontWeight="SemiBold"
-                               Text="—" />
-
-                    <TextBlock Margin="0,8,0,0" Foreground="#666666"
-                               Text="平均工作週期" />
-                    <TextBlock x:Name="AvgCycleText"
-                               FontSize="16" FontWeight="SemiBold"
-                               Text="—" />
-                </StackPanel>
-            </Border>
-
-            <Border Margin="0,12,0,0" Padding="16" CornerRadius="8"
-                    Background="#FFF3F4F6">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <TextBlock Grid.Row="0" Grid.Column="0"
-                               Foreground="#666666" Text="完整休息" />
-                    <TextBlock x:Name="BreakCompletedText"
-                               Grid.Row="0" Grid.Column="1"
-                               FontWeight="SemiBold" Text="0" />
-
-                    <TextBlock Grid.Row="1" Grid.Column="0"
-                               Foreground="#666666" Text="明確離席重設" />
-                    <TextBlock x:Name="IdleResetText"
-                               Grid.Row="1" Grid.Column="1"
-                               FontWeight="SemiBold" Text="0" />
-
-                    <TextBlock Grid.Row="2" Grid.Column="0"
-                               Foreground="#666666" Text="被動停頓" />
-                    <TextBlock x:Name="PassivePauseText"
-                               Grid.Row="2" Grid.Column="1"
-                               FontWeight="SemiBold" Text="0" />
-
-                    <TextBlock Grid.Row="3" Grid.Column="0"
-                               Foreground="#666666" Text="延後" />
-                    <TextBlock x:Name="SnoozedText"
-                               Grid.Row="3" Grid.Column="1"
-                               FontWeight="SemiBold" Text="0" />
-
-                    <TextBlock Grid.Row="4" Grid.Column="0"
-                               Foreground="#666666" Text="主動忽略" />
-                    <TextBlock x:Name="IgnoredText"
-                               Grid.Row="4" Grid.Column="1"
-                               FontWeight="SemiBold" Text="0" />
-
-                    <TextBlock Grid.Row="5" Grid.Column="0"
-                               Foreground="#666666" Text="逾時未回應" />
-                    <TextBlock x:Name="AutoDismissedText"
-                               Grid.Row="5" Grid.Column="1"
-                               FontWeight="SemiBold" Text="0" />
-                </Grid>
-            </Border>
-
-            <TextBlock x:Name="DebtHistoryHeader"
-                       Margin="0,12,0,4" FontSize="14" FontWeight="SemiBold"
-                       Text="債務等級變化" />
-            <TextBlock x:Name="DebtHistoryText"
-                       Foreground="#666666" TextWrapping="Wrap" />
-
-            <TextBlock x:Name="ReminderOutcomesHeader"
-                       Margin="0,12,0,4" FontSize="14" FontWeight="SemiBold"
-                       Text="提醒結果" />
-            <TextBlock x:Name="ReminderOutcomesText"
-                       Foreground="#666666" TextWrapping="Wrap" />
-
-            <TextBlock x:Name="PerAppHeader"
-                       Margin="0,12,0,4" FontSize="14" FontWeight="SemiBold"
-                       Text="各程式使用時間" />
-            <TextBlock x:Name="PerAppText"
-                       Foreground="#666666" TextWrapping="Wrap" /> 
+        <StackPanel Margin="20,20,20,0">
+            <TextBlock Style="{StaticResource WindowTitleStyle}" Text="今日統計" />
+            <TextBlock x:Name="DateText" Style="{StaticResource WindowSubtitleStyle}" />
         </StackPanel>
-    </ScrollViewer>
+
+        <ScrollViewer Grid.Row="1" Margin="20,0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+
+                <!-- Headline figure first, supporting figures beneath it. -->
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <TextBlock x:Name="StatusText"
+                                   Style="{StaticResource BodyTextStyle}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource DangerTextBrush}"
+                                   Margin="0,0,0,10"
+                                   Visibility="Collapsed" />
+
+                        <TextBlock Style="{StaticResource MetricLabelStyle}"
+                                   Text="有效工作時間" />
+                        <TextBlock x:Name="WorkTimeText"
+                                   Style="{StaticResource MetricValueStyle}"
+                                   FontSize="28"
+                                   AutomationProperties.Name="有效工作時間"
+                                   Text="—" />
+
+                        <Border Height="1" Margin="0,14"
+                                Background="{StaticResource DividerBrush}" />
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Style="{StaticResource MetricLabelStyle}"
+                                           Text="最長連續工作" />
+                                <TextBlock x:Name="LongestWorkText"
+                                           Style="{StaticResource MetricValueSmallStyle}"
+                                           Margin="0,2,0,0"
+                                           AutomationProperties.Name="最長連續工作"
+                                           Text="—" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Style="{StaticResource MetricLabelStyle}"
+                                           Text="平均工作週期" />
+                                <TextBlock x:Name="AvgCycleText"
+                                           Style="{StaticResource MetricValueSmallStyle}"
+                                           Margin="0,2,0,0"
+                                           AutomationProperties.Name="平均工作週期"
+                                           Text="—" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource StackedCardStyle}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}"
+                                   Margin="0,0,0,8"
+                                   Text="提醒與休息次數" />
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0"
+                                       Style="{StaticResource KeyValueKeyStyle}"
+                                       Text="完整休息" />
+                            <TextBlock x:Name="BreakCompletedText"
+                                       Grid.Row="0" Grid.Column="1"
+                                       Style="{StaticResource KeyValueValueStyle}"
+                                       AutomationProperties.Name="完整休息次數"
+                                       Text="0" />
+
+                            <TextBlock Grid.Row="1" Grid.Column="0"
+                                       Style="{StaticResource KeyValueKeyStyle}"
+                                       Text="明確離席重設" />
+                            <TextBlock x:Name="IdleResetText"
+                                       Grid.Row="1" Grid.Column="1"
+                                       Style="{StaticResource KeyValueValueStyle}"
+                                       AutomationProperties.Name="明確離席重設次數"
+                                       Text="0" />
+
+                            <TextBlock Grid.Row="2" Grid.Column="0"
+                                       Style="{StaticResource KeyValueKeyStyle}"
+                                       Text="被動停頓" />
+                            <TextBlock x:Name="PassivePauseText"
+                                       Grid.Row="2" Grid.Column="1"
+                                       Style="{StaticResource KeyValueValueStyle}"
+                                       AutomationProperties.Name="被動停頓次數"
+                                       Text="0" />
+
+                            <TextBlock Grid.Row="3" Grid.Column="0"
+                                       Style="{StaticResource KeyValueKeyStyle}"
+                                       Text="延後" />
+                            <TextBlock x:Name="SnoozedText"
+                                       Grid.Row="3" Grid.Column="1"
+                                       Style="{StaticResource KeyValueValueStyle}"
+                                       AutomationProperties.Name="延後次數"
+                                       Text="0" />
+
+                            <TextBlock Grid.Row="4" Grid.Column="0"
+                                       Style="{StaticResource KeyValueKeyStyle}"
+                                       Text="主動忽略" />
+                            <TextBlock x:Name="IgnoredText"
+                                       Grid.Row="4" Grid.Column="1"
+                                       Style="{StaticResource KeyValueValueStyle}"
+                                       AutomationProperties.Name="主動忽略次數"
+                                       Text="0" />
+
+                            <TextBlock Grid.Row="5" Grid.Column="0"
+                                       Style="{StaticResource KeyValueKeyStyle}"
+                                       Text="逾時未回應" />
+                            <TextBlock x:Name="AutoDismissedText"
+                                       Grid.Row="5" Grid.Column="1"
+                                       Style="{StaticResource KeyValueValueStyle}"
+                                       AutomationProperties.Name="逾時未回應次數"
+                                       Text="0" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource StackedCardStyle}" Margin="0,12,0,20">
+                    <StackPanel>
+                        <TextBlock x:Name="DebtHistoryHeader"
+                                   Style="{StaticResource SectionHeaderStyle}"
+                                   Text="債務等級變化" />
+                        <TextBlock x:Name="DebtHistoryText"
+                                   Style="{StaticResource FieldHintStyle}" />
+
+                        <TextBlock x:Name="ReminderOutcomesHeader"
+                                   Style="{StaticResource SectionHeaderStyle}"
+                                   Margin="0,14,0,0"
+                                   Text="提醒結果" />
+                        <TextBlock x:Name="ReminderOutcomesText"
+                                   Style="{StaticResource FieldHintStyle}" />
+
+                        <TextBlock x:Name="PerAppHeader"
+                                   Style="{StaticResource SectionHeaderStyle}"
+                                   Margin="0,14,0,0"
+                                   Text="各程式使用時間" />
+                        <TextBlock x:Name="PerAppText"
+                                   Style="{StaticResource FieldHintStyle}" />
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="2" Padding="20,12"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{StaticResource DividerBrush}">
+            <Button Content="關閉"
+                    Style="{StaticResource SecondaryButtonStyle}"
+                    HorizontalAlignment="Right"
+                    MinWidth="88"
+                    IsCancel="True"
+                    Click="OnCloseClick" />
+        </Border>
+    </Grid>
 </Window>

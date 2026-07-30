@@ -35,10 +35,11 @@ public partial class ReminderWindow : Window
 
     public void ShowReminder()
     {
-        PhaseText.Text = "Look at something\nsix meters away.";
-        ActionButton.Content = "Start Break";
-        SnoozeButton.Content = $"延後 {SnoozeDuration.Minutes} 分鐘";
+        PhaseText.Text = "看向約六公尺外";
+        ActionButton.Content = "開始休息";
+        SnoozeButton.Content = $"延後 {(int)Math.Round(SnoozeDuration.TotalMinutes)} 分鐘";
         SnoozeButton.Visibility = Visibility.Visible;
+        ActionButton.Visibility = Visibility.Visible;
         IgnoreButton.Visibility = Visibility.Visible;
         CancelButton.Visibility = Visibility.Collapsed;
         GuideVisual.Visibility = Visibility.Collapsed;

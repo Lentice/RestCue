@@ -92,9 +92,7 @@ public sealed partial class SettingsWindow : Window
         }
         catch (Exception ex)
         {
-            StatusMessage.Text = $"儲存失敗: {ex.Message}";
-            StatusMessage.Visibility = Visibility.Visible;
-            StatusMessage.Foreground = System.Windows.Media.Brushes.Red;
+            ShowStatus($"儲存失敗: {ex.Message}", isError: true);
             return;
         }
 
@@ -116,9 +114,24 @@ public sealed partial class SettingsWindow : Window
             }
         }
 
-        StatusMessage.Text = "設定已儲存。部分設定將於下次啟動時生效。";
-        StatusMessage.Visibility = Visibility.Visible;
-        StatusMessage.Foreground = System.Windows.Media.Brushes.Green;
+        ShowStatus("設定已儲存。部分設定將於下次啟動時生效。", isError: false);
+    }
+
+    private void OnCloseClick(object sender, RoutedEventArgs e)
+    {
+        Close();
+    }
+
+    /// <summary>
+    /// Shows the banner above the form. Success and failure differ by colour
+    /// and by wording, so the state is not conveyed by colour alone.
+    /// </summary>
+    private void ShowStatus(string message, bool isError)
+    {
+        StatusMessage.Text = message;
+        StatusMessage.Foreground = (System.Windows.Media.Brush)FindResource(
+            isError ? "DangerTextBrush" : "SuccessBrush");
+        StatusBanner.Visibility = Visibility.Visible;
     }
 
     private AppSettings? ParseValues()
@@ -182,16 +195,14 @@ public sealed partial class SettingsWindow : Window
 
     private void ShowFieldError(System.Windows.Controls.TextBox box, string message)
     {
-        StatusMessage.Text = message;
-        StatusMessage.Visibility = Visibility.Visible;
-        StatusMessage.Foreground = System.Windows.Media.Brushes.Red;
+        ShowStatus(message, isError: true);
         box.Focus();
         box.SelectAll();
     }
 
     private void ClearErrors()
     {
-        StatusMessage.Visibility = Visibility.Collapsed;
+        StatusBanner.Visibility = Visibility.Collapsed;
         foreach (var errorBox in new[]
         {
             WorkIntervalError, NaturalPauseError, MaxReminderWaitError,
@@ -207,9 +218,7 @@ public sealed partial class SettingsWindow : Window
 
     private void ShowValidationErrors(IReadOnlyList<SettingsValidationError> errors)
     {
-        StatusMessage.Text = "請修正以下錯誤：";
-        StatusMessage.Visibility = Visibility.Visible;
-        StatusMessage.Foreground = System.Windows.Media.Brushes.Red;
+        ShowStatus("請修正以下錯誤：", isError: true);
 
         foreach (var error in errors)
         {

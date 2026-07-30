@@ -24,6 +24,11 @@ public sealed partial class DataManagementWindow : Window
         InitializeComponent();
     }
 
+    private void OnCloseClick(object sender, RoutedEventArgs e)
+    {
+        Close();
+    }
+
     private async void ExportButton_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new Microsoft.Win32.SaveFileDialog

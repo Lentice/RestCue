@@ -19,6 +19,11 @@ public sealed partial class AboutWindow : Window
         TechInfoText.Text = $".NET 10 (WPF) | 記憶體使用量: {memory:F1} MB | {Environment.OSVersion}";
     }
 
+    private void OnCloseClick(object sender, RoutedEventArgs e)
+    {
+        Close();
+    }
+
     private void OnViewDataClick(object sender, RoutedEventArgs e)
     {
         if (OpenDataTransparencyRequested != null)
