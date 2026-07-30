@@ -81,6 +81,26 @@ public sealed class WindowsFullscreenDetectionTests
     }
 
     [Fact]
+    public void Fullscreen_window_off_by_dpi_rounding_still_returns_confirmed()
+    {
+        var api = new FakeFullscreenWin32Api
+        {
+            ForegroundWindow = 0x100,
+            DesktopWindow = 0x200,
+            ShellWindow = 0x300,
+            WindowStyle = unchecked((int)0x90000000), // WS_POPUP | WS_VISIBLE, no caption
+            WindowRect = new RECT { Left = 0, Top = 0, Right = 1919, Bottom = 1079 },
+            MonitorRect = new RECT { Left = 0, Top = 0, Right = 1920, Bottom = 1080 }
+        };
+        var provider = new WindowsForegroundContextProvider(false, api);
+
+        var context = provider.GetCurrentContext();
+
+        Assert.Equal(FullscreenState.Confirmed, context.FullscreenState);
+        Assert.True(context.IsFullscreen);
+    }
+
+    [Fact]
     public void Normal_window_not_matching_monitor_returns_not_fullscreen()
     {
         var api = new FakeFullscreenWin32Api

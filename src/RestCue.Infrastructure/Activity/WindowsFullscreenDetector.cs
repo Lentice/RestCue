@@ -48,10 +48,10 @@ public sealed class WindowsFullscreenDetector : IFullscreenDetector
             if (!win32.GetMonitorInfo(monitor, ref monitorInfo))
                 return FullscreenState.Uncertain;
 
-            bool matchesMonitor = windowRect.Left == monitorInfo.MonitorRect.Left &&
-                                  windowRect.Top == monitorInfo.MonitorRect.Top &&
-                                  windowRect.Right == monitorInfo.MonitorRect.Right &&
-                                  windowRect.Bottom == monitorInfo.MonitorRect.Bottom;
+            bool matchesMonitor = Math.Abs(windowRect.Left - monitorInfo.MonitorRect.Left) <= DpiRoundingToleranceInPixels &&
+                                  Math.Abs(windowRect.Top - monitorInfo.MonitorRect.Top) <= DpiRoundingToleranceInPixels &&
+                                  Math.Abs(windowRect.Right - monitorInfo.MonitorRect.Right) <= DpiRoundingToleranceInPixels &&
+                                  Math.Abs(windowRect.Bottom - monitorInfo.MonitorRect.Bottom) <= DpiRoundingToleranceInPixels;
 
             return matchesMonitor ? FullscreenState.Confirmed : FullscreenState.NotFullscreen;
         }
@@ -62,4 +62,11 @@ public sealed class WindowsFullscreenDetector : IFullscreenDetector
     }
 
     private const uint MONITOR_DEFAULTTONEAREST = 2;
+
+    // Per-monitor-DPI-aware apps can report window rects that are off from the true
+    // monitor rect by a pixel or two due to DPI scale rounding (e.g. 150%/175% scale
+    // factors that don't divide the monitor's physical resolution evenly). Without
+    // this tolerance, a genuinely fullscreen window can fail the exact-rect match and
+    // be misclassified as NotFullscreen, so its reminder wouldn't be suppressed.
+    private const int DpiRoundingToleranceInPixels = 2;
 }
