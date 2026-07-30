@@ -19,5 +19,15 @@ public enum UsageEventType
     Disabled,
     Enabled,
     ForegroundProcessChanged,
-    RestDebtLevelChanged
+    RestDebtLevelChanged,
+
+    AppStarted,
+    AppStopped,
+    WorkSessionStarted,
+    WorkSessionEnded,
+    ReminderSnoozed,
+    ReminderIgnored,
+    ReminderAutoDismissed,
+    ContextSuppressed,
+    ErrorOccurred,
 }

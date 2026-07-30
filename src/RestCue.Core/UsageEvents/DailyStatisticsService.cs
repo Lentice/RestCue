@@ -88,10 +88,12 @@ public sealed class DailyStatisticsService : IDailyStatisticsService
                     break;
 
                 case UsageEventType.Disabled:
+                case UsageEventType.WorkSessionEnded:
                     HandleAccStop(ref acc, ref segmentStart, ev.OccurredUtc, completedSegments);
                     break;
 
                 case UsageEventType.Enabled:
+                case UsageEventType.WorkSessionStarted:
                     HandleAccStart(ref acc, ref segmentStart, ev.OccurredUtc);
                     break;
 
@@ -118,12 +120,29 @@ public sealed class DailyStatisticsService : IDailyStatisticsService
                     break;
 
                 case UsageEventType.ReminderDismissed:
+                {
                     var result = TryGetReminderResult(ev, ref hasPartialData);
                     if (result == ReminderResult.Snoozed) snoozedCount++;
                     else if (result == ReminderResult.Ignored) ignoredCount++;
                     else if (result == ReminderResult.AutoDismissed) autoDismissedCount++;
 
                     TryPairReminder(pendingReminders, reminderOutcomes, ev, result);
+                    break;
+                }
+
+                case UsageEventType.ReminderSnoozed:
+                    snoozedCount++;
+                    TryPairReminder(pendingReminders, reminderOutcomes, ev, ReminderResult.Snoozed);
+                    break;
+
+                case UsageEventType.ReminderIgnored:
+                    ignoredCount++;
+                    TryPairReminder(pendingReminders, reminderOutcomes, ev, ReminderResult.Ignored);
+                    break;
+
+                case UsageEventType.ReminderAutoDismissed:
+                    autoDismissedCount++;
+                    TryPairReminder(pendingReminders, reminderOutcomes, ev, ReminderResult.AutoDismissed);
                     break;
 
                 case UsageEventType.RestDebtLevelChanged:
@@ -140,6 +159,10 @@ public sealed class DailyStatisticsService : IDailyStatisticsService
                 case UsageEventType.FocusModeEnded:
                 case UsageEventType.CooldownStarted:
                 case UsageEventType.CooldownEnded:
+                case UsageEventType.AppStarted:
+                case UsageEventType.AppStopped:
+                case UsageEventType.ContextSuppressed:
+                case UsageEventType.ErrorOccurred:
                     break;
 
                 case UsageEventType.ForegroundProcessChanged:
@@ -255,6 +278,12 @@ public sealed class DailyStatisticsService : IDailyStatisticsService
                     break;
                 case UsageEventType.BreakCancelled:
                     acc = true;
+                    break;
+                case UsageEventType.WorkSessionStarted:
+                    acc = true;
+                    break;
+                case UsageEventType.WorkSessionEnded:
+                    acc = false;
                     break;
             }
         }

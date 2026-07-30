@@ -10,3 +10,5 @@ public sealed record ReminderDismissedPayload(ReminderResult Result) : UsageEven
 public sealed record RestDebtLevelChangedPayload(RestDebtLevel Previous, RestDebtLevel Current) : UsageEventPayload;
 
 public sealed record ForegroundProcessChangedPayload(string ProcessName) : UsageEventPayload;
+
+public sealed record ErrorOccurredPayload(string ErrorCategory) : UsageEventPayload;

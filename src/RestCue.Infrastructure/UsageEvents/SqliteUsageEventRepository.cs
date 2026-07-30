@@ -27,7 +27,8 @@ public sealed class SqliteUsageEventRepository : IUsageEventRepository
     [
         UsageEventType.ReminderDismissed,
         UsageEventType.RestDebtLevelChanged,
-        UsageEventType.ForegroundProcessChanged
+        UsageEventType.ForegroundProcessChanged,
+        UsageEventType.ErrorOccurred,
     ];
 
     public async Task WriteAsync(
@@ -107,6 +108,8 @@ public sealed class SqliteUsageEventRepository : IUsageEventRepository
                 new { previous = p.Previous.ToString(), current = p.Current.ToString() }),
             ForegroundProcessChangedPayload p => JsonSerializer.Serialize(
                 new { processName = p.ProcessName }),
+            ErrorOccurredPayload p => JsonSerializer.Serialize(
+                new { errorCategory = p.ErrorCategory }),
             _ => DBNull.Value
         };
     }
@@ -132,6 +135,9 @@ public sealed class SqliteUsageEventRepository : IUsageEventRepository
             UsageEventType.ForegroundProcessChanged =>
                 new ForegroundProcessChangedPayload(
                     root.GetProperty("processName").GetString()!),
+            UsageEventType.ErrorOccurred =>
+                new ErrorOccurredPayload(
+                    root.GetProperty("errorCategory").GetString()!),
             _ => throw new InvalidOperationException(
                 $"Unexpected payload-bearing event type: {eventType}.")
         };

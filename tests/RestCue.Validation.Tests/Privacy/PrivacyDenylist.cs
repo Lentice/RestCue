@@ -17,7 +17,7 @@ public static partial class PrivacyDenylist
 
     public static readonly string[] PayloadAllowedKeys =
     [
-        "result", "previous", "current"
+        "result", "previous", "current", "errorCategory"
     ];
 
     [GeneratedRegex(@"\.[a-zA-Z]{2,5}\b")]

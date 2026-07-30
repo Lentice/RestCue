@@ -48,6 +48,8 @@ public sealed class SqliteUsageEventRepositoryTests : IDisposable
                     new RestDebtLevelChangedPayload(RestDebtLevel.Level0, RestDebtLevel.Level1),
                 UsageEventType.ForegroundProcessChanged =>
                     new ForegroundProcessChangedPayload("test-app"),
+                UsageEventType.ErrorOccurred =>
+                    new ErrorOccurredPayload("TestError"),
                 _ => null
             };
             await repo.WriteAsync(type, baseTime, payload);
@@ -209,6 +211,8 @@ public sealed class SqliteUsageEventRepositoryTests : IDisposable
                     new RestDebtLevelChangedPayload(RestDebtLevel.Level0, RestDebtLevel.Level1),
                 UsageEventType.ForegroundProcessChanged =>
                     new ForegroundProcessChangedPayload("test-app"),
+                UsageEventType.ErrorOccurred =>
+                    new ErrorOccurredPayload("TestError"),
                 _ => null
             };
 

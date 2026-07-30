@@ -41,6 +41,8 @@ public sealed class PrivacyDenylistTests : IDisposable
                     new RestDebtLevelChangedPayload(RestDebtLevel.Level0, RestDebtLevel.Level1),
                 UsageEventType.ForegroundProcessChanged =>
                     new ForegroundProcessChangedPayload("test-app"),
+                UsageEventType.ErrorOccurred =>
+                    new ErrorOccurredPayload("TestError"),
                 _ => null
             };
             await repo.WriteAsync(type, baseTime.AddSeconds(id), payload);
@@ -90,7 +92,8 @@ public sealed class PrivacyDenylistTests : IDisposable
                         payload.Contains("\"result\"", StringComparison.OrdinalIgnoreCase) ||
                         (payload.Contains("\"previous\"", StringComparison.OrdinalIgnoreCase) &&
                          payload.Contains("\"current\"", StringComparison.OrdinalIgnoreCase)) ||
-                        payload.Contains("\"processName\"", StringComparison.OrdinalIgnoreCase),
+                        payload.Contains("\"processName\"", StringComparison.OrdinalIgnoreCase) ||
+                        payload.Contains("\"errorCategory\"", StringComparison.OrdinalIgnoreCase),
                         "Payload must contain only allowed keys");
                 }
             }

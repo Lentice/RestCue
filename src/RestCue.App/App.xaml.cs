@@ -61,10 +61,13 @@ public partial class App : System.Windows.Application
 
             _statusWindow.WireLifecycleEvents();
             WireUsageEventPersistence();
+            WireUsageEventEmitters();
             WireTrayCommands();
         }
         catch (Exception exception)
         {
+            _eventWriter?.Write(UsageEventType.ErrorOccurred, DateTimeOffset.UtcNow,
+                new ErrorOccurredPayload("StartupFailure"));
             ApplicationStartupFailureHandler.Handle(
                 exception,
                 message => Trace.TraceError(message),
@@ -74,6 +77,9 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _eventWriter?.Write(UsageEventType.AppStopped, DateTimeOffset.UtcNow);
+        UnwireUsageEventEmitters();
+
         if (_statusWindow != null)
         {
             _statusWindow.UnwireLifecycleEvents();
@@ -279,6 +285,50 @@ public partial class App : System.Windows.Application
         };
     }
 
+    private void WireUsageEventEmitters()
+    {
+        _eventWriter?.Write(UsageEventType.AppStarted, DateTimeOffset.UtcNow);
+
+        if (_tracker != null)
+        {
+            _tracker.ReminderSuppressed += OnReminderSuppressedEvent;
+            _statusWindow!.PhaseChanged += OnPhaseChangedForWorkSession;
+        }
+    }
+
+    private void UnwireUsageEventEmitters()
+    {
+        if (_tracker != null)
+        {
+            _tracker.ReminderSuppressed -= OnReminderSuppressedEvent;
+        }
+        if (_statusWindow != null)
+        {
+            _statusWindow.PhaseChanged -= OnPhaseChangedForWorkSession;
+        }
+    }
+
+    private void OnReminderSuppressedEvent(object? sender, ReminderSuppressedEventArgs e)
+    {
+        _eventWriter?.Write(UsageEventType.ContextSuppressed, DateTimeOffset.UtcNow);
+    }
+
+    private bool _wasWorking;
+
+    private void OnPhaseChangedForWorkSession(object? sender, WorkCyclePhase newPhase)
+    {
+        bool isWorking = newPhase is WorkCyclePhase.Working;
+        if (isWorking && !_wasWorking)
+        {
+            _eventWriter?.Write(UsageEventType.WorkSessionStarted, DateTimeOffset.UtcNow);
+        }
+        else if (!isWorking && _wasWorking)
+        {
+            _eventWriter?.Write(UsageEventType.WorkSessionEnded, DateTimeOffset.UtcNow);
+        }
+        _wasWorking = isWorking;
+    }
+
     private void WireUsageEventPersistence()
     {
         _tracker = _statusWindow?.WorkCycleTracker;
@@ -365,9 +415,17 @@ public partial class App : System.Windows.Application
     private void OnDisabledEvent(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.Disabled);
     private void OnEnabledEvent(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.Enabled);
 
-    private void OnReminderDismissedEvent(object? sender, ReminderDismissedEventArgs e) =>
-        _eventWriter?.Write(UsageEventType.ReminderDismissed, DateTimeOffset.UtcNow,
-            new ReminderDismissedPayload(e.Result));
+    private void OnReminderDismissedEvent(object? sender, ReminderDismissedEventArgs e)
+    {
+        UsageEventType individualType = e.Result switch
+        {
+            ReminderResult.Snoozed => UsageEventType.ReminderSnoozed,
+            ReminderResult.Ignored => UsageEventType.ReminderIgnored,
+            ReminderResult.AutoDismissed => UsageEventType.ReminderAutoDismissed,
+            _ => UsageEventType.ReminderDismissed,
+        };
+        _eventWriter?.Write(individualType, DateTimeOffset.UtcNow);
+    }
 
     private void OnRestDebtLevelChangedEvent(object? sender, RestDebtLevelChangedEventArgs e) =>
         _eventWriter?.Write(UsageEventType.RestDebtLevelChanged, DateTimeOffset.UtcNow,
