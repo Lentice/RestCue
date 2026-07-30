@@ -24,6 +24,8 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     private WorkCycleTracker? workCycleTracker;
     private IForegroundContextProvider? foregroundContextProvider;
     private ApplicationRuleSet? applicationRules;
+    private HashSet<string>? defaultSuggestionNames;
+    private HashSet<string>? seenSuggestionProcesses;
     private ReminderWindow? reminderWindow;
     private BreakGuideSession? breakGuideSession;
     private BreakGuideAudioCoordinator? audioCoordinator;
@@ -48,6 +50,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     public event EventHandler<WorkCyclePhase>? PhaseChanged;
     public event EventHandler<ReminderSuppressedEventArgs>? LowInterruptionReminderRequested;
     public event EventHandler<RestDebtLevelChangedEventArgs>? DebtLevelChanged;
+    public event EventHandler<SuggestionEventArgs>? SuggestionRequested;
 
     public RestDebtLevel CurrentDebtLevel { get; private set; }
 
@@ -83,7 +86,8 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         AppSettings settings,
         IClock? clock = null,
         IForegroundContextProvider? foregroundContextProvider = null,
-        IEnumerable<ApplicationRule>? applicationRules = null)
+        IEnumerable<ApplicationRule>? applicationRules = null,
+        IEnumerable<string>? defaultSuggestionProcessNames = null)
     {
         this.activityMonitor = activityMonitor;
         this.clock = clock ?? new SystemClock();
@@ -95,6 +99,10 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         userBreakGuideMode = settings.BreakGuideMode;
         this.foregroundContextProvider = foregroundContextProvider;
         this.applicationRules = new ApplicationRuleSet(applicationRules);
+        defaultSuggestionNames = defaultSuggestionProcessNames is not null
+            ? new HashSet<string>(defaultSuggestionProcessNames, StringComparer.OrdinalIgnoreCase)
+            : [];
+        seenSuggestionProcesses = [];
 
         workCycleTracker = new WorkCycleTracker(
             clock ?? new SystemClock(),
@@ -545,6 +553,14 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         var context = foregroundContextProvider.GetCurrentContext();
         workCycleTracker.TrackForegroundProcess(context.ProcessName);
         var rule = applicationRules?.Find(context.ProcessName);
+
+        if (rule == null && context.ProcessName is not null &&
+            defaultSuggestionNames?.Contains(context.ProcessName) == true &&
+            seenSuggestionProcesses?.Add(context.ProcessName) == true)
+        {
+            SuggestionRequested?.Invoke(this, new SuggestionEventArgs(context.ProcessName));
+        }
+
         bool windowSuppression = context.FullscreenState != FullscreenState.NotFullscreen;
 
         var fsCap = PresentationIntensityPolicy.FromFullscreenState(context.FullscreenState);

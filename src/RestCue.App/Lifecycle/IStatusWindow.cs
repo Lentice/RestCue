@@ -28,6 +28,8 @@ public interface IStatusWindow
 
     void Enable();
 
+    event EventHandler<SuggestionEventArgs>? SuggestionRequested;
+
     void UpdateForegroundContextProvider(bool collectProcessNames);
 
     void UpdateApplicationRules(IEnumerable<ApplicationRule> rules);

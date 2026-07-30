@@ -50,14 +50,20 @@ public partial class App : System.Windows.Application
             _statusWindow.AudioPlayer = _audioPlayer;
             _ruleRepository = new SqliteApplicationRuleRepository(LocalSettingsPaths.DatabaseFile);
             var loadedRules = await _ruleRepository.LoadAllAsync();
-            var mergedRules = MergeRulesWithDefaults(loadedRules);
+
+            var defaultSuggestionNames = DefaultApplicationRules.All
+                .Select(r => r.ProcessName)
+                .Except(loadedRules.Select(r => r.ProcessName), StringComparer.OrdinalIgnoreCase);
 
             _statusWindow.StartActivityTracking(
                 new WindowsUserActivityMonitor(),
                 _startup.CurrentSettings,
                 foregroundContextProvider: new WindowsForegroundContextProvider(
                     _startup.CurrentSettings.CollectForegroundProcessNames),
-                applicationRules: mergedRules);
+                applicationRules: loadedRules,
+                defaultSuggestionProcessNames: defaultSuggestionNames);
+
+            WireSuggestionPrompting();
 
             _statusWindow.WireLifecycleEvents();
             WireUsageEventPersistence();
@@ -218,8 +224,7 @@ public partial class App : System.Windows.Application
         try
         {
             var loadedRules = await _ruleRepository.LoadAllAsync();
-            var mergedRules = MergeRulesWithDefaults(loadedRules);
-            _statusWindow.UpdateApplicationRules(mergedRules);
+            _statusWindow.UpdateApplicationRules(loadedRules);
         }
         catch (Exception ex)
         {
@@ -305,6 +310,44 @@ public partial class App : System.Windows.Application
         if (_statusWindow != null)
         {
             _statusWindow.PhaseChanged -= OnPhaseChangedForWorkSession;
+        }
+    }
+
+    private ISuggestionStore? _suggestionStore;
+
+    private void WireSuggestionPrompting()
+    {
+        if (_ruleRepository == null || _statusWindow == null) return;
+
+        _suggestionStore = new SqliteSuggestionStore(LocalSettingsPaths.DatabaseFile);
+
+        _statusWindow.SuggestionRequested += OnSuggestionRequested;
+    }
+
+    private async void OnSuggestionRequested(object? sender, SuggestionEventArgs e)
+    {
+        if (_ruleRepository == null || _suggestionStore == null) return;
+
+        var result = System.Windows.MessageBox.Show(
+            $"已檢測到「{e.ProcessName}」正在執行。\n\nRestCue 建議為此應用程式套用「僅系統列」規則，避免休息提醒干擾。\n\n要套用此建議嗎？",
+            "RestCue – 應用程式規則建議",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Question);
+
+        if (result == System.Windows.MessageBoxResult.Yes)
+        {
+            var rule = new ApplicationRule
+            {
+                ProcessName = e.ProcessName,
+                RuleType = ApplicationRuleType.TrayOnly,
+            };
+            await _ruleRepository.SaveAsync(rule);
+            var loadedRules = await _ruleRepository.LoadAllAsync();
+            _statusWindow?.UpdateApplicationRules(loadedRules);
+        }
+        else
+        {
+            await _suggestionStore.DismissAsync(e.ProcessName);
         }
     }
 
@@ -437,23 +480,6 @@ public partial class App : System.Windows.Application
 
     private void WriteUsageEvent(UsageEventType type) =>
         _eventWriter?.Write(type, DateTimeOffset.UtcNow);
-
-    private static IEnumerable<ApplicationRule> MergeRulesWithDefaults(IReadOnlyList<ApplicationRule> persistedRules)
-    {
-        var defaultByName = DefaultApplicationRules.All
-            .ToDictionary(r => r.ProcessName, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var persisted in persistedRules)
-        {
-            yield return persisted;
-            defaultByName.Remove(persisted.ProcessName);
-        }
-
-        foreach (var remaining in defaultByName.Values)
-        {
-            yield return remaining;
-        }
-    }
 
     internal static string GetStatusTextForPhase(WorkCyclePhase phase)
     {

@@ -234,6 +234,7 @@ public sealed class ApplicationLifecycleTests
     {
 #pragma warning disable CS0067
         public event EventHandler<RestDebtLevelChangedEventArgs>? DebtLevelChanged;
+        public event EventHandler<SuggestionEventArgs>? SuggestionRequested;
 #pragma warning restore CS0067
 
         public RestDebtLevel CurrentDebtLevel => RestDebtLevel.Level0;
