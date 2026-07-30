@@ -327,7 +327,7 @@ public sealed class SqliteSettingsRepositoryTests : IDisposable
         {
             await connection.OpenAsync();
             await using SqliteCommand command = connection.CreateCommand();
-            command.CommandText = "PRAGMA user_version = 3;";
+            command.CommandText = "PRAGMA user_version = 99;";
             await command.ExecuteNonQueryAsync();
         }
 
@@ -341,7 +341,7 @@ public sealed class SqliteSettingsRepositoryTests : IDisposable
         await verifyConnection.OpenAsync();
         await using SqliteCommand verifyCommand = verifyConnection.CreateCommand();
         verifyCommand.CommandText = "PRAGMA user_version;";
-        Assert.Equal(3L, await verifyCommand.ExecuteScalarAsync());
+        Assert.Equal(99L, await verifyCommand.ExecuteScalarAsync());
         Assert.Empty(Directory.GetFiles(directory, "*.bak"));
     }
 

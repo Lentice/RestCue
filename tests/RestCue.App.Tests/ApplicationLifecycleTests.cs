@@ -1,6 +1,7 @@
 using RestCue.App.Lifecycle;
 using RestCue.Core.Domain;
 using RestCue.Core.Events;
+using RestCue.Core.Reminders;
 using Xunit;
 
 namespace RestCue.App.Tests;
@@ -272,5 +273,7 @@ public sealed class ApplicationLifecycleTests
         public void PauseFor(TimeSpan duration) { }
 
         public void UpdateForegroundContextProvider(bool collectProcessNames) { }
+
+        public void UpdateApplicationRules(IEnumerable<ApplicationRule> rules) { }
     }
 }

@@ -1,5 +1,6 @@
 using RestCue.Core.Domain;
 using RestCue.Core.Events;
+using RestCue.Core.Reminders;
 
 namespace RestCue.App.Lifecycle;
 
@@ -28,4 +29,6 @@ public interface IStatusWindow
     void Enable();
 
     void UpdateForegroundContextProvider(bool collectProcessNames);
+
+    void UpdateApplicationRules(IEnumerable<ApplicationRule> rules);
 }

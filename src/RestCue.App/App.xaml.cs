@@ -24,6 +24,7 @@ public partial class App : System.Windows.Application
     private BackgroundUsageEventWriter? _eventWriter;
     private IUsageEventRepository? _usageEventRepository;
     private ISettingsRepository? _settingsRepository;
+    private IApplicationRuleRepository? _ruleRepository;
     private WorkCycleTracker? _tracker;
     private WindowsBreakGuideAudioPlayer? _audioPlayer;
     private WorkCyclePhase _lastPhase;
@@ -47,12 +48,16 @@ public partial class App : System.Windows.Application
             await _startup.InitializeAsync();
             _audioPlayer = new WindowsBreakGuideAudioPlayer();
             _statusWindow.AudioPlayer = _audioPlayer;
+            _ruleRepository = new SqliteApplicationRuleRepository(LocalSettingsPaths.DatabaseFile);
+            var loadedRules = await _ruleRepository.LoadAllAsync();
+            var mergedRules = MergeRulesWithDefaults(loadedRules);
+
             _statusWindow.StartActivityTracking(
                 new WindowsUserActivityMonitor(),
                 _startup.CurrentSettings,
                 foregroundContextProvider: new WindowsForegroundContextProvider(
                     _startup.CurrentSettings.CollectForegroundProcessNames),
-                applicationRules: RestCue.Core.Reminders.DefaultApplicationRules.All);
+                applicationRules: mergedRules);
 
             _statusWindow.WireLifecycleEvents();
             WireUsageEventPersistence();
@@ -188,13 +193,32 @@ public partial class App : System.Windows.Application
 
     private void OpenSettingsWindow()
     {
-        if (_startup == null || _settingsRepository == null)
+        if (_startup == null || _settingsRepository == null || _ruleRepository == null)
         {
             Trace.TraceError("RestCue: settings unavailable.");
             return;
         }
 
-        new SettingsWindow(_settingsRepository, _startup.CurrentSettings).Show();
+        var window = new SettingsWindow(_settingsRepository, _ruleRepository, _startup.CurrentSettings);
+        window.ApplicationRulesChanged += OnApplicationRulesChanged;
+        window.Show();
+    }
+
+    private async void OnApplicationRulesChanged(object? sender, EventArgs e)
+    {
+        if (_ruleRepository == null || _statusWindow == null)
+            return;
+
+        try
+        {
+            var loadedRules = await _ruleRepository.LoadAllAsync();
+            var mergedRules = MergeRulesWithDefaults(loadedRules);
+            _statusWindow.UpdateApplicationRules(mergedRules);
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceError($"RestCue: failed to reload rules: {ex.Message}");
+        }
     }
 
     private void OpenAboutWindow()
@@ -355,6 +379,23 @@ public partial class App : System.Windows.Application
 
     private void WriteUsageEvent(UsageEventType type) =>
         _eventWriter?.Write(type, DateTimeOffset.UtcNow);
+
+    private static IEnumerable<ApplicationRule> MergeRulesWithDefaults(IReadOnlyList<ApplicationRule> persistedRules)
+    {
+        var defaultByName = DefaultApplicationRules.All
+            .ToDictionary(r => r.ProcessName, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var persisted in persistedRules)
+        {
+            yield return persisted;
+            defaultByName.Remove(persisted.ProcessName);
+        }
+
+        foreach (var remaining in defaultByName.Values)
+        {
+            yield return remaining;
+        }
+    }
 
     internal static string GetStatusTextForPhase(WorkCyclePhase phase)
     {

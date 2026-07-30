@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Threading;
+using RestCue.Core.Reminders;
 using RestCue.Core.Settings;
 using RestCue.Core.Transparency;
 using RestCue.Core.UsageEvents;
@@ -45,7 +46,7 @@ public sealed class WindowXamlLoadTests
     [Fact]
     public void SettingsWindow_loads()
     {
-        wpf.Construct(() => new SettingsWindow(new StubSettingsRepository(), AppSettings.Default));
+        wpf.Construct(() => new SettingsWindow(new StubSettingsRepository(), new StubApplicationRuleRepository(), AppSettings.Default));
     }
 
     [Fact]
@@ -66,6 +67,18 @@ public sealed class WindowXamlLoadTests
         wpf.Construct(() => new DataManagementWindow(
             new StubUsageEventRepository(),
             new StubSettingsRepository()));
+    }
+
+    private sealed class StubApplicationRuleRepository : IApplicationRuleRepository
+    {
+        public Task<IReadOnlyList<ApplicationRule>> LoadAllAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<ApplicationRule>>([]);
+
+        public Task SaveAsync(ApplicationRule rule, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task DeleteAsync(string processName, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class StubSettingsRepository : ISettingsRepository

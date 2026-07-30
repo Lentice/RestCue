@@ -274,6 +274,11 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             collectProcessNames);
     }
 
+    public void UpdateApplicationRules(IEnumerable<ApplicationRule> rules)
+    {
+        applicationRules = new ApplicationRuleSet(rules);
+    }
+
     public void StartBreakNow()
     {
         if (workCycleTracker == null) return;

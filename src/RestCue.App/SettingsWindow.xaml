@@ -183,6 +183,77 @@
                                            Visibility="Collapsed" />
                             </StackPanel>
                         </Border>
+
+                        <Border Style="{StaticResource SettingsGroupStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="應用程式規則" />
+                                <TextBlock Style="{StaticResource FieldHintStyle}"
+                                           Margin="0,3,0,10"
+                                           Text="設定個別應用程式的提醒行為。規則會儲存在此裝置。" />
+
+                                <StackPanel x:Name="RuleListStack" />
+
+                                <Border Background="{StaticResource InputBackgroundBrush}"
+                                        BorderBrush="{StaticResource InputBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="{StaticResource ControlCornerRadius}"
+                                        Padding="12"
+                                        Margin="0,12,0,0">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="新增規則" Margin="0,0,0,4" />
+                                        <TextBox x:Name="AddRuleProcessBox"
+                                                 Style="{StaticResource NumericFieldStyle}"
+                                                 Width="180"
+                                                 MaxLength="64"
+                                                 AutomationProperties.Name="處理程序名稱"
+                                                 Text="zoom" />
+                                        <TextBlock Style="{StaticResource FieldHintStyle}" Text="處理程序名稱（不含 .exe）" Margin="0,2,0,8" />
+
+                                        <StackPanel Margin="0,0,0,8">
+                                            <RadioButton x:Name="AddRuleTrayRadio" GroupName="AddRuleType"
+                                                         Content="僅系統列" IsChecked="True"
+                                                         Checked="OnAddRuleTypeChanged" />
+                                            <RadioButton x:Name="AddRuleNormalRadio" GroupName="AddRuleType"
+                                                         Content="一般" Margin="0,4,0,0"
+                                                         Checked="OnAddRuleTypeChanged" />
+                                            <RadioButton x:Name="AddRuleSilentRadio" GroupName="AddRuleType"
+                                                         Content="無聲" Margin="0,4,0,0"
+                                                         Checked="OnAddRuleTypeChanged" />
+                                            <RadioButton x:Name="AddRuleCustomRadio" GroupName="AddRuleType"
+                                                         Content="自訂間隔" Margin="0,4,0,0"
+                                                         Checked="OnAddRuleTypeChanged" />
+                                        </StackPanel>
+
+                                        <StackPanel x:Name="CustomIntervalPanel"
+                                                    Visibility="Collapsed"
+                                                    Margin="0,0,0,8">
+                                            <TextBox x:Name="AddRuleIntervalBox"
+                                                     Style="{StaticResource NumericFieldStyle}"
+                                                     Width="88"
+                                                     MaxLength="3"
+                                                     Text="30"
+                                                     AutomationProperties.Name="自訂間隔，分鐘" />
+                                            <TextBlock Style="{StaticResource FieldHintStyle}" Text="分鐘（1–120）" />
+                                        </StackPanel>
+
+                                        <StackPanel Orientation="Horizontal">
+                                            <Button x:Name="AddRuleButton"
+                                                    Content="新增"
+                                                    Style="{StaticResource PrimaryButtonStyle}"
+                                                    MinWidth="80"
+                                                    Click="OnAddRuleClick" />
+                                            <Button x:Name="CancelEditButton"
+                                                    Content="取消編輯"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    MinWidth="80"
+                                                    Margin="8,0,0,0"
+                                                    Visibility="Collapsed"
+                                                    Click="OnCancelEditClick" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
 
                     <StackPanel Grid.Column="2">

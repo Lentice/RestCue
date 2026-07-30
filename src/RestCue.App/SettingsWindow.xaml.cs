@@ -1,5 +1,7 @@
+using System.Collections.ObjectModel;
 using System.Windows;
 using RestCue.App.Lifecycle;
+using RestCue.Core.Reminders;
 using RestCue.Core.Settings;
 
 namespace RestCue.App;
@@ -7,18 +9,30 @@ namespace RestCue.App;
 public sealed partial class SettingsWindow : Window
 {
     private readonly ISettingsRepository repository;
+    private readonly IApplicationRuleRepository ruleRepository;
     private readonly AppSettings currentSettings;
     private readonly AppSettingsValidator validator = new();
+    private readonly ObservableCollection<ApplicationRule> rules = [];
+    private string? editingProcessName;
+    private readonly SemaphoreSlim ruleGate = new(1, 1);
 
-    public SettingsWindow(ISettingsRepository repository, AppSettings currentSettings)
+    public event EventHandler? ApplicationRulesChanged;
+
+    public SettingsWindow(
+        ISettingsRepository repository,
+        IApplicationRuleRepository ruleRepository,
+        AppSettings currentSettings)
     {
         ArgumentNullException.ThrowIfNull(repository);
+        ArgumentNullException.ThrowIfNull(ruleRepository);
         ArgumentNullException.ThrowIfNull(currentSettings);
         this.repository = repository;
+        this.ruleRepository = ruleRepository;
         this.currentSettings = currentSettings;
         InitializeComponent();
         LoadSettings();
         LoadStartupState();
+        Loaded += async (_, _) => await LoadRulesAsync();
     }
 
     private void LoadSettings()
@@ -45,13 +59,13 @@ public sealed partial class SettingsWindow : Window
 
         switch (currentSettings.BreakGuideMode)
         {
-            case BreakGuideMode.Cue:
+            case RestCue.Core.Settings.BreakGuideMode.Cue:
                 GuideCueRadio.IsChecked = true;
                 break;
-            case BreakGuideMode.Voice:
+            case RestCue.Core.Settings.BreakGuideMode.Voice:
                 GuideVoiceRadio.IsChecked = true;
                 break;
-            case BreakGuideMode.NumberlessVisual:
+            case RestCue.Core.Settings.BreakGuideMode.NumberlessVisual:
                 GuideVisualRadio.IsChecked = true;
                 break;
         }
@@ -68,6 +82,266 @@ public sealed partial class SettingsWindow : Window
         {
             StartupDiagnostics.Text = $"開機啟動狀態讀取失敗: {ex.Message}";
             StartupDiagnostics.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void OnAddRuleTypeChanged(object sender, RoutedEventArgs e)
+    {
+        if (CustomIntervalPanel is null)
+            return;
+        CustomIntervalPanel.Visibility = AddRuleCustomRadio.IsChecked == true
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
+    private async Task LoadRulesAsync()
+    {
+        try
+        {
+            var loaded = await ruleRepository.LoadAllAsync();
+            rules.Clear();
+            foreach (var rule in loaded)
+            {
+                rules.Add(rule);
+            }
+            RefreshRuleList();
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"無法載入應用程式規則: {ex.Message}", isError: true);
+        }
+    }
+
+    private void NotifyRulesChanged()
+    {
+        ApplicationRulesChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void RefreshRuleList()
+    {
+        RuleListStack.Children.Clear();
+
+        if (rules.Count == 0)
+        {
+            RuleListStack.Children.Add(new System.Windows.Controls.TextBlock
+            {
+                Text = "尚未新增任何規則。",
+                Style = (Style)FindResource("FieldHintStyle"),
+            });
+            return;
+        }
+
+        foreach (var rule in rules)
+        {
+            var row = new System.Windows.Controls.Grid();
+            row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new System.Windows.GridLength(1, System.Windows.GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto });
+            row.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = System.Windows.GridLength.Auto });
+
+            var label = new System.Windows.Controls.TextBlock
+            {
+                Text = $"{rule.ProcessName} — {RuleTypeLabel(rule.RuleType)}",
+                Style = (Style)FindResource("BodyTextStyle"),
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            };
+            System.Windows.Controls.Grid.SetColumn(label, 0);
+            row.Children.Add(label);
+
+            var editButton = BuildRuleButton("編輯", "SecondaryButtonStyle", OnEditRuleClick, rule.ProcessName, this);
+            System.Windows.Controls.Grid.SetColumn(editButton, 1);
+            row.Children.Add(editButton);
+
+            var deleteButton = BuildRuleButton("刪除", "DangerButtonStyle", OnDeleteRuleClick, rule.ProcessName, this);
+            System.Windows.Controls.Grid.SetColumn(deleteButton, 2);
+            row.Children.Add(deleteButton);
+
+            row.Margin = new System.Windows.Thickness(0, 0, 0, 6);
+            RuleListStack.Children.Add(row);
+        }
+    }
+
+    private static System.Windows.Controls.Button BuildRuleButton(
+        string text, string styleKey, System.Windows.RoutedEventHandler clickHandler, string processName,
+        System.Windows.FrameworkElement resourceSource)
+    {
+        return new System.Windows.Controls.Button
+        {
+            Content = text,
+            Style = (Style)resourceSource.FindResource(styleKey),
+            MinWidth = 50,
+            MinHeight = 26,
+            Margin = new System.Windows.Thickness(4, 2, 0, 2),
+            Padding = new System.Windows.Thickness(8, 2, 8, 2),
+            Tag = processName,
+        };
+    }
+
+    private static string RuleTypeLabel(ApplicationRuleType type) => type switch
+    {
+        ApplicationRuleType.Normal => "一般",
+        ApplicationRuleType.TrayOnly => "僅系統列",
+        ApplicationRuleType.Silent => "無聲",
+        ApplicationRuleType.CustomInterval => "自訂間隔",
+        _ => type.ToString(),
+    };
+
+    private ApplicationRuleType SelectedRuleType
+    {
+        get
+        {
+            if (AddRuleNormalRadio.IsChecked == true) return ApplicationRuleType.Normal;
+            if (AddRuleTrayRadio.IsChecked == true) return ApplicationRuleType.TrayOnly;
+            if (AddRuleSilentRadio.IsChecked == true) return ApplicationRuleType.Silent;
+            return ApplicationRuleType.CustomInterval;
+        }
+        set
+        {
+            AddRuleNormalRadio.IsChecked = value == ApplicationRuleType.Normal;
+            AddRuleTrayRadio.IsChecked = value == ApplicationRuleType.TrayOnly;
+            AddRuleSilentRadio.IsChecked = value == ApplicationRuleType.Silent;
+            AddRuleCustomRadio.IsChecked = value == ApplicationRuleType.CustomInterval;
+        }
+    }
+
+    private void OnEditRuleClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { Tag: string processName })
+            return;
+
+        var rule = rules.FirstOrDefault(r =>
+            string.Equals(r.ProcessName, processName, StringComparison.OrdinalIgnoreCase));
+        if (rule == null)
+            return;
+
+        editingProcessName = rule.ProcessName;
+        AddRuleProcessBox.Text = rule.ProcessName;
+        AddRuleProcessBox.IsEnabled = false;
+        SelectedRuleType = rule.RuleType;
+
+        if (rule.RuleType == ApplicationRuleType.CustomInterval)
+        {
+            AddRuleIntervalBox.Text = ((int)(rule.CustomInterval?.TotalMinutes ?? 30)).ToString();
+        }
+
+        AddRuleButton.Content = "更新";
+        CancelEditButton.Visibility = Visibility.Visible;
+    }
+
+    private async void OnDeleteRuleClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { Tag: string processName })
+            return;
+
+        await ruleGate.WaitAsync();
+        try
+        {
+            await ruleRepository.DeleteAsync(processName);
+            var toRemove = rules.FirstOrDefault(r =>
+                string.Equals(r.ProcessName, processName, StringComparison.OrdinalIgnoreCase));
+            if (toRemove != null)
+            {
+                rules.Remove(toRemove);
+            }
+            RefreshRuleList();
+            NotifyRulesChanged();
+            ShowStatus($"已刪除「{processName}」的規則。", isError: false);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"刪除失敗: {ex.Message}", isError: true);
+        }
+        finally
+        {
+            ruleGate.Release();
+        }
+    }
+
+    private void CancelEdit()
+    {
+        editingProcessName = null;
+        AddRuleProcessBox.Text = "";
+        AddRuleProcessBox.IsEnabled = true;
+        AddRuleIntervalBox.Text = "";
+        SelectedRuleType = ApplicationRuleType.TrayOnly;
+        AddRuleButton.Content = "新增";
+        CancelEditButton.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnCancelEditClick(object sender, RoutedEventArgs e)
+    {
+        CancelEdit();
+    }
+
+    private async void OnAddRuleClick(object sender, RoutedEventArgs e)
+    {
+        string processName = AddRuleProcessBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(processName))
+        {
+            ShowStatus("請輸入處理程序名稱。", isError: true);
+            AddRuleProcessBox.Focus();
+            return;
+        }
+
+        var ruleType = SelectedRuleType;
+
+        TimeSpan? customInterval = null;
+        if (ruleType == ApplicationRuleType.CustomInterval)
+        {
+            if (!int.TryParse(AddRuleIntervalBox.Text, out int minutes) || minutes < 1 || minutes > 120)
+            {
+                ShowStatus("自訂間隔須為 1–120 的整數（分鐘）。", isError: true);
+                AddRuleIntervalBox.Focus();
+                return;
+            }
+            customInterval = TimeSpan.FromMinutes(minutes);
+        }
+
+        var rule = new ApplicationRule
+        {
+            ProcessName = processName,
+            RuleType = ruleType,
+            CustomInterval = customInterval,
+        };
+
+        await ruleGate.WaitAsync();
+        try
+        {
+            if (editingProcessName != null)
+            {
+                await ruleRepository.SaveAsync(rule);
+                var toRemove = rules.FirstOrDefault(r =>
+                    string.Equals(r.ProcessName, editingProcessName, StringComparison.OrdinalIgnoreCase));
+                if (toRemove != null)
+                    rules.Remove(toRemove);
+                rules.Add(rule);
+                RefreshRuleList();
+                CancelEdit();
+                NotifyRulesChanged();
+                ShowStatus($"已更新「{rule.ProcessName}」的規則。", isError: false);
+            }
+            else
+            {
+                if (rules.Any(r => string.Equals(r.ProcessName, processName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    ShowStatus($"「{processName}」的規則已存在。", isError: true);
+                    return;
+                }
+
+                await ruleRepository.SaveAsync(rule);
+                rules.Add(rule);
+                RefreshRuleList();
+                CancelEdit();
+                NotifyRulesChanged();
+                ShowStatus($"已新增「{rule.ProcessName}」的規則。", isError: false);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowStatus(editingProcessName != null ? $"更新失敗: {ex.Message}" : $"新增失敗: {ex.Message}", isError: true);
+        }
+        finally
+        {
+            ruleGate.Release();
         }
     }
 
@@ -161,9 +435,9 @@ public sealed partial class SettingsWindow : Window
         if (!TryParseInt(DebtLevel4Box, out int debtL4, "Level 4"))
             return null;
 
-        var mode = GuideCueRadio.IsChecked == true ? BreakGuideMode.Cue
-            : GuideVoiceRadio.IsChecked == true ? BreakGuideMode.Voice
-            : BreakGuideMode.NumberlessVisual;
+        var mode = GuideCueRadio.IsChecked == true ? RestCue.Core.Settings.BreakGuideMode.Cue
+            : GuideVoiceRadio.IsChecked == true ? RestCue.Core.Settings.BreakGuideMode.Voice
+            : RestCue.Core.Settings.BreakGuideMode.NumberlessVisual;
 
         return currentSettings with
         {

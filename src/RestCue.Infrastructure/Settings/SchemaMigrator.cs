@@ -4,7 +4,7 @@ namespace RestCue.Infrastructure.Settings;
 
 public static class SchemaMigrator
 {
-    public const int LatestSchemaVersion = 2;
+    public const int LatestSchemaVersion = 3;
 
     public static async Task EnsureSchemaAsync(
         SqliteConnection connection,
@@ -26,10 +26,16 @@ public static class SchemaMigrator
             {
                 await ExecuteNonQueryAsync(connection, CreateSettingsTableSql, cancellationToken);
                 await ExecuteNonQueryAsync(connection, CreateUsageEventsTableSql, cancellationToken);
+                await ExecuteNonQueryAsync(connection, CreateApplicationRulesTableSql, cancellationToken);
             }
             else if (version == 1)
             {
                 await ExecuteNonQueryAsync(connection, CreateUsageEventsTableSql, cancellationToken);
+                await ExecuteNonQueryAsync(connection, CreateApplicationRulesTableSql, cancellationToken);
+            }
+            else if (version == 2)
+            {
+                await ExecuteNonQueryAsync(connection, CreateApplicationRulesTableSql, cancellationToken);
             }
 
             await ExecuteNonQueryAsync(connection, CreateUsageEventsIndex1Sql, cancellationToken);
@@ -98,4 +104,14 @@ public static class SchemaMigrator
 
     private const string CreateUsageEventsIndex2Sql =
         "CREATE INDEX IF NOT EXISTS idx_usage_events_type_time ON usage_events (event_type, occurred_utc);";
+
+    private const string CreateApplicationRulesTableSql =
+        """
+        CREATE TABLE IF NOT EXISTS application_rules (
+            process_name TEXT PRIMARY KEY,
+            rule_type TEXT NOT NULL,
+            custom_interval_seconds INTEGER,
+            updated_at_utc TEXT NOT NULL
+        );
+        """;
 }
