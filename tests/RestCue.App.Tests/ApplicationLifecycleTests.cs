@@ -57,6 +57,27 @@ public sealed class ApplicationLifecycleTests
     }
 
     [Fact]
+    public void Exit_DisposesTrayIconBeforeShuttingDown()
+    {
+        var tray = new FakeTrayIcon();
+        var shutdownCalled = false;
+        var lifecycle = new ApplicationLifecycle(
+            tray,
+            new FakeStatusWindow(),
+            () =>
+            {
+                Assert.True(tray.IsDisposed);
+                shutdownCalled = true;
+            });
+        lifecycle.Start();
+
+        lifecycle.Exit();
+
+        Assert.True(shutdownCalled);
+        Assert.False(tray.Visible);
+    }
+
+    [Fact]
     public void ExposesTrayIcon()
     {
         var tray = new FakeTrayIcon();

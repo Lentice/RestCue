@@ -2,39 +2,93 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:RestCue.App"
-        Title="RestCue – 護眼休息提醒" Height="320" Width="420"
+        Title="RestCue – 護眼休息提醒" Height="380" Width="440"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanMinimize"
         local:WindowInteraction.CloseOnEscape="True">
-    <Grid Margin="32">
-        <StackPanel VerticalAlignment="Center">
-            <TextBlock FontSize="28" FontWeight="SemiBold" Text="RestCue" />
-            <TextBlock Margin="0,4,0,0"
-                       Foreground="{StaticResource TextSecondaryBrush}"
-                       Text="溫和地提醒您讓眼睛休息。" />
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-            <Border Style="{StaticResource CardStyle}" Margin="0,20,0,0">
-                <StackPanel>
-                    <TextBlock Style="{StaticResource MetricLabelStyle}"
-                               Text="目前狀態" />
-                    <TextBlock x:Name="ActivityStatusText"
-                               Margin="0,6,0,0"
-                               FontSize="22"
-                               FontWeight="SemiBold"
-                               AutomationProperties.Name="目前活動狀態"
-                               Text="正在確認…" />
-                    <TextBlock x:Name="CyclePhaseText"
-                               Margin="0,6,0,0"
-                               FontSize="14"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               AutomationProperties.Name="週期階段"
-                               Text="—" />
-                </StackPanel>
-            </Border>
+        <Menu Grid.Row="0">
+            <MenuItem Header="檔案">
+                <MenuItem Header="設定" Click="OnSettingsClick" />
+                <MenuItem Header="關於與隱私" Click="OnAboutClick" />
+                <Separator />
+                <MenuItem Header="結束 RestCue" Click="OnExitClick" />
+            </MenuItem>
+            <MenuItem Header="檢視">
+                <MenuItem Header="今日統計" Click="OnStatisticsClick" />
+                <MenuItem Header="資料透明檢視" Click="OnDataTransparencyClick" />
+                <MenuItem Header="匯出／清除資料" Click="OnDataManagementClick" />
+            </MenuItem>
+            <MenuItem x:Name="OperationsMenu" Header="操作">
+                <MenuItem x:Name="PauseSubmenu" Header="暫停提醒">
+                    <MenuItem x:Name="PauseFor15MenuItem" Click="OnPauseFor15Click" />
+                    <MenuItem x:Name="PauseFor30MenuItem" Click="OnPauseFor30Click" />
+                    <MenuItem x:Name="PauseFor60MenuItem" Click="OnPauseFor60Click" />
+                    <Separator />
+                    <MenuItem Header="直到手動恢復" Click="OnPauseManualClick" />
+                </MenuItem>
+                <MenuItem x:Name="ResumeMenuItem" Header="繼續提醒" Click="OnResumeClick"
+                          Visibility="Collapsed" />
+                <MenuItem x:Name="FocusMenuItem" Header="專注模式" Click="OnToggleFocusClick" />
+                <MenuItem x:Name="DisableMenuItem" Header="停用提醒" Click="OnToggleDisableClick" />
+                <MenuItem x:Name="BreakNowMenuItem" Header="立即休息" Click="OnBreakNowClick" />
+            </MenuItem>
+        </Menu>
 
-            <TextBlock Style="{StaticResource FieldHintStyle}"
-                       Margin="0,12,0,0"
-                       Text="RestCue 在系統列常駐執行，關閉此視窗不會結束程式。" />
-        </StackPanel>
+        <Grid Grid.Row="1" Margin="28,8,28,28">
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock FontSize="28" FontWeight="SemiBold" Text="RestCue" />
+                <TextBlock Margin="0,4,0,0"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           Text="溫和地提醒您讓眼睛休息。" />
+
+                <Border Style="{StaticResource CardStyle}" Margin="0,16,0,0">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource MetricLabelStyle}"
+                                   Text="目前狀態" />
+                        <TextBlock x:Name="ActivityStatusText"
+                                   Margin="0,6,0,0"
+                                   FontSize="22"
+                                   FontWeight="SemiBold"
+                                   AutomationProperties.Name="目前活動狀態"
+                                   Text="正在確認…" />
+                        <TextBlock x:Name="CyclePhaseText"
+                                   Margin="0,6,0,0"
+                                   FontSize="14"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   AutomationProperties.Name="週期階段"
+                                   Text="—" />
+                    </StackPanel>
+                </Border>
+
+                <WrapPanel Margin="0,16,0,0" HorizontalAlignment="Center">
+                    <Button x:Name="BreakNowButton"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            Content="立即休息" Click="OnBreakNowClick" />
+                    <Button x:Name="PauseResumeButton"
+                            Content="暫停" Click="OnTogglePauseClick" Margin="8,0,0,0" />
+                    <Button x:Name="FocusButton"
+                            Content="專注模式" Click="OnToggleFocusClick" Margin="8,0,0,0" />
+                    <Button x:Name="DisableButton"
+                            Content="停用提醒" Click="OnToggleDisableClick" Margin="8,0,0,0" />
+                </WrapPanel>
+
+                <WrapPanel Margin="0,8,0,0" HorizontalAlignment="Center">
+                    <Button Content="設定" Click="OnSettingsClick" MinWidth="80" />
+                    <Button Content="今日統計" Click="OnStatisticsClick" Margin="8,0,0,0"
+                            MinWidth="80" />
+                </WrapPanel>
+
+                <TextBlock Style="{StaticResource FieldHintStyle}"
+                           Margin="0,12,0,0"
+                           TextAlignment="Center"
+                           Text="RestCue 在系統列常駐執行，關閉此視窗不會結束程式。" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

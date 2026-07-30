@@ -35,6 +35,9 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     public MainWindow()
     {
         InitializeComponent();
+        PauseFor15MenuItem.Header = PausePresets.FifteenMinutes.Label;
+        PauseFor30MenuItem.Header = PausePresets.ThirtyMinutes.Label;
+        PauseFor60MenuItem.Header = PausePresets.OneHour.Label;
         activityTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
             Interval = TimeSpan.FromSeconds(1)
@@ -55,6 +58,13 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         get => audioPlayer;
         set => audioPlayer = value;
     }
+
+    public Action? OpenStatistics { get; set; }
+    public Action? OpenDataTransparency { get; set; }
+    public Action? OpenDataManagement { get; set; }
+    public Action? OpenSettings { get; set; }
+    public Action? OpenAbout { get; set; }
+    public Action? ExitApplication { get; set; }
 
     public void WireLifecycleEvents()
     {
@@ -119,6 +129,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
         RefreshActivityStatus(activityTracker.Refresh());
         activityTimer.Start();
+        UpdateCycleStatus();
     }
 
     public void StopActivityTracking()
@@ -291,6 +302,129 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         reminderWindow.BreakDuration = workCycleTracker.BreakDuration;
         SetupBreakGuideSession(clock ?? new SystemClock(), workCycleTracker.BreakDuration);
         reminderWindow.Show();
+    }
+
+    private void OnStatisticsClick(object? sender, RoutedEventArgs e) => OpenStatistics?.Invoke();
+    private void OnDataTransparencyClick(object? sender, RoutedEventArgs e) => OpenDataTransparency?.Invoke();
+    private void OnDataManagementClick(object? sender, RoutedEventArgs e) => OpenDataManagement?.Invoke();
+    private void OnSettingsClick(object? sender, RoutedEventArgs e) => OpenSettings?.Invoke();
+    private void OnAboutClick(object? sender, RoutedEventArgs e) => OpenAbout?.Invoke();
+    private void OnExitClick(object? sender, RoutedEventArgs e) => ExitApplication?.Invoke();
+
+    private void OnBreakNowClick(object? sender, RoutedEventArgs e) => StartBreakNow();
+
+    private void OnTogglePauseClick(object? sender, RoutedEventArgs e)
+    {
+        if (workCycleTracker?.CurrentPhase == WorkCyclePhase.Paused)
+            Resume();
+        else
+            Pause();
+    }
+
+    private void OnPauseFor15Click(object? sender, RoutedEventArgs e) =>
+        PauseFor(PausePresets.FifteenMinutes.Duration);
+
+    private void OnPauseFor30Click(object? sender, RoutedEventArgs e) =>
+        PauseFor(PausePresets.ThirtyMinutes.Duration);
+
+    private void OnPauseFor60Click(object? sender, RoutedEventArgs e) =>
+        PauseFor(PausePresets.OneHour.Duration);
+    private void OnPauseManualClick(object? sender, RoutedEventArgs e) => Pause();
+    private void OnResumeClick(object? sender, RoutedEventArgs e) => Resume();
+
+    private void OnToggleFocusClick(object? sender, RoutedEventArgs e)
+    {
+        if (workCycleTracker?.CurrentPhase == WorkCyclePhase.FocusMode)
+            EndFocusMode();
+        else
+            StartFocusMode();
+    }
+
+    private void OnToggleDisableClick(object? sender, RoutedEventArgs e)
+    {
+        if (workCycleTracker?.CurrentPhase == WorkCyclePhase.Disabled)
+            Enable();
+        else
+            Disable();
+    }
+
+    private void UpdateMenuAndButtonStates()
+    {
+        if (workCycleTracker == null) return;
+
+        var phase = workCycleTracker.CurrentPhase;
+
+        PauseSubmenu.Visibility = Visibility.Collapsed;
+        ResumeMenuItem.Visibility = Visibility.Collapsed;
+        FocusMenuItem.Header = "專注模式";
+        FocusMenuItem.IsEnabled = true;
+        DisableMenuItem.Header = "停用提醒";
+        DisableMenuItem.IsEnabled = true;
+        BreakNowMenuItem.IsEnabled = true;
+
+        PauseResumeButton.Content = "暫停";
+        PauseResumeButton.IsEnabled = true;
+        FocusButton.Content = "專注模式";
+        FocusButton.IsEnabled = true;
+        DisableButton.Content = "停用提醒";
+        DisableButton.IsEnabled = true;
+        BreakNowButton.IsEnabled = true;
+
+        switch (phase)
+        {
+            case WorkCyclePhase.Paused:
+                ResumeMenuItem.Visibility = Visibility.Visible;
+                FocusMenuItem.IsEnabled = false;
+                BreakNowMenuItem.IsEnabled = false;
+                DisableMenuItem.IsEnabled = false;
+                PauseResumeButton.Content = "繼續";
+                FocusButton.IsEnabled = false;
+                BreakNowButton.IsEnabled = false;
+                DisableButton.IsEnabled = false;
+                break;
+
+            case WorkCyclePhase.FocusMode:
+                FocusMenuItem.Header = "結束專注模式";
+                PauseResumeButton.IsEnabled = false;
+                FocusButton.Content = "結束專注模式";
+                DisableMenuItem.IsEnabled = false;
+                DisableButton.IsEnabled = false;
+                break;
+
+            case WorkCyclePhase.Disabled:
+                DisableMenuItem.Header = "啟用提醒";
+                PauseResumeButton.IsEnabled = false;
+                FocusMenuItem.IsEnabled = false;
+                BreakNowMenuItem.IsEnabled = false;
+                DisableButton.Content = "啟用提醒";
+                FocusButton.IsEnabled = false;
+                BreakNowButton.IsEnabled = false;
+                break;
+
+            case WorkCyclePhase.BreakInProgress:
+                PauseResumeButton.IsEnabled = false;
+                FocusMenuItem.IsEnabled = false;
+                FocusButton.IsEnabled = false;
+                DisableMenuItem.IsEnabled = false;
+                DisableButton.IsEnabled = false;
+                BreakNowMenuItem.IsEnabled = false;
+                BreakNowButton.IsEnabled = false;
+                break;
+
+            case WorkCyclePhase.Idle:
+                PauseResumeButton.IsEnabled = false;
+                FocusMenuItem.IsEnabled = false;
+                FocusButton.IsEnabled = false;
+                DisableMenuItem.IsEnabled = false;
+                DisableButton.IsEnabled = false;
+                BreakNowMenuItem.IsEnabled = false;
+                BreakNowButton.IsEnabled = false;
+                break;
+
+            default:
+                PauseSubmenu.Visibility = Visibility.Visible;
+                break;
+        }
     }
 
     protected override void OnClosing(CancelEventArgs e)
@@ -632,7 +766,11 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         {
             lastReportedPhase = phase;
             PhaseChanged?.Invoke(this, phase);
-            Dispatcher.Invoke(() => UpdateCyclePhaseText(phase));
+            Dispatcher.Invoke(() =>
+            {
+                UpdateCyclePhaseText(phase);
+                UpdateMenuAndButtonStates();
+            });
         }
     }
 

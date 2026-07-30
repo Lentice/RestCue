@@ -82,118 +82,27 @@ public partial class App : System.Windows.Application
 
     internal void WireSettingsCommand(ITrayIcon trayIcon)
     {
-        trayIcon.SettingsRequested += (_, _) =>
-        {
-            if (_startup == null || _settingsRepository == null)
-            {
-                System.Diagnostics.Trace.TraceError("RestCue: settings unavailable.");
-                return;
-            }
-
-            var window = new SettingsWindow(_settingsRepository, _startup.CurrentSettings);
-            window.Show();
-        };
+        trayIcon.SettingsRequested += (_, _) => OpenSettingsWindow();
     }
 
     internal void WireDataTransparencyCommand(ITrayIcon trayIcon)
     {
-        trayIcon.DataTransparencyRequested += (_, _) =>
-        {
-            if (_usageEventRepository == null || _settingsRepository == null)
-            {
-                Trace.TraceError("RestCue: data transparency unavailable.");
-                return;
-            }
-
-            var reader = new SqliteUsageEventMetadataReader(
-                LocalSettingsPaths.DatabaseFile);
-            var service = new DataTransparencyService(
-                _settingsRepository, reader);
-            var window = new TransparencyWindow(service);
-            window.Show();
-        };
+        trayIcon.DataTransparencyRequested += (_, _) => OpenDataTransparencyWindow();
     }
 
     internal void WireDataManagementCommand(ITrayIcon trayIcon)
     {
-        trayIcon.DataManagementRequested += (_, _) =>
-        {
-            if (_usageEventRepository == null || _settingsRepository == null || _startup == null)
-            {
-                Trace.TraceError("RestCue: data management unavailable.");
-                return;
-            }
-
-            var window = new DataManagementWindow(_usageEventRepository, _settingsRepository);
-            window.DataCleared += (_, _) =>
-            {
-                foreach (var sw in Current.Windows.OfType<StatisticsWindow>())
-                {
-                    sw.Close();
-                }
-                foreach (var tw in Current.Windows.OfType<TransparencyWindow>())
-                {
-                    tw.Close();
-                }
-            };
-            window.SettingsReset += async (_, _) =>
-            {
-                var loadResult = await _settingsRepository.LoadAsync();
-                _startup.CurrentSettings = loadResult.Settings;
-                if (_statusWindow != null)
-                {
-                    _statusWindow.UpdateForegroundContextProvider(
-                        loadResult.Settings.CollectForegroundProcessNames);
-                }
-            };
-            window.Show();
-        };
+        trayIcon.DataManagementRequested += (_, _) => OpenDataManagementWindow();
     }
 
     internal void WireAboutCommand(ITrayIcon trayIcon)
     {
-        trayIcon.AboutRequested += (_, _) =>
-        {
-            foreach (var w in Current.Windows.OfType<AboutWindow>())
-            {
-                w.Activate();
-                return;
-            }
-
-            var window = new AboutWindow();
-            window.OpenDataTransparencyRequested = () =>
-            {
-                if (_usageEventRepository == null || _settingsRepository == null)
-                {
-                    Trace.TraceError("RestCue: data transparency unavailable.");
-                    return;
-                }
-
-                var reader = new SqliteUsageEventMetadataReader(
-                    LocalSettingsPaths.DatabaseFile);
-                var service = new DataTransparencyService(
-                    _settingsRepository, reader);
-                var tw = new TransparencyWindow(service);
-                tw.Show();
-            };
-            window.Show();
-        };
+        trayIcon.AboutRequested += (_, _) => OpenAboutWindow();
     }
 
     internal void WireStatisticsCommand(ITrayIcon trayIcon)
     {
-        trayIcon.StatisticsRequested += (_, _) =>
-        {
-            if (_usageEventRepository == null)
-            {
-                Trace.TraceError("RestCue: statistics unavailable, no repository.");
-                return;
-            }
-
-            var window = new StatisticsWindow(
-                new DailyStatisticsService(_usageEventRepository));
-            window.Show();
-        };
+        trayIcon.StatisticsRequested += (_, _) => OpenStatisticsWindow();
     }
 
     internal static void WireBreakNowCommand(ITrayIcon trayIcon, IStatusWindow statusWindow)
@@ -210,6 +119,97 @@ public partial class App : System.Windows.Application
         trayIcon.EndFocusModeRequested += (_, _) => statusWindow.EndFocusMode();
         trayIcon.DisableRequested += (_, _) => statusWindow.Disable();
         trayIcon.EnableRequested += (_, _) => statusWindow.Enable();
+    }
+
+    private void WireMainWindowCommands()
+    {
+        if (_statusWindow == null) return;
+
+        _statusWindow.OpenStatistics = OpenStatisticsWindow;
+        _statusWindow.OpenDataTransparency = OpenDataTransparencyWindow;
+        _statusWindow.OpenDataManagement = OpenDataManagementWindow;
+        _statusWindow.OpenSettings = OpenSettingsWindow;
+        _statusWindow.OpenAbout = OpenAboutWindow;
+        _statusWindow.ExitApplication = () => _lifecycle?.Exit();
+    }
+
+    private void OpenStatisticsWindow()
+    {
+        if (_usageEventRepository == null)
+        {
+            Trace.TraceError("RestCue: statistics unavailable, no repository.");
+            return;
+        }
+
+        new StatisticsWindow(new DailyStatisticsService(_usageEventRepository)).Show();
+    }
+
+    private void OpenDataTransparencyWindow()
+    {
+        if (_usageEventRepository == null || _settingsRepository == null)
+        {
+            Trace.TraceError("RestCue: data transparency unavailable.");
+            return;
+        }
+
+        var reader = new SqliteUsageEventMetadataReader(LocalSettingsPaths.DatabaseFile);
+        new TransparencyWindow(new DataTransparencyService(_settingsRepository, reader)).Show();
+    }
+
+    private void OpenDataManagementWindow()
+    {
+        if (_usageEventRepository == null || _settingsRepository == null || _startup == null)
+        {
+            Trace.TraceError("RestCue: data management unavailable.");
+            return;
+        }
+
+        var window = new DataManagementWindow(_usageEventRepository, _settingsRepository);
+        window.DataCleared += (_, _) =>
+        {
+            foreach (var statisticsWindow in Current.Windows.OfType<StatisticsWindow>())
+            {
+                statisticsWindow.Close();
+            }
+            foreach (var transparencyWindow in Current.Windows.OfType<TransparencyWindow>())
+            {
+                transparencyWindow.Close();
+            }
+        };
+        window.SettingsReset += async (_, _) =>
+        {
+            var loadResult = await _settingsRepository.LoadAsync();
+            _startup.CurrentSettings = loadResult.Settings;
+            _statusWindow?.UpdateForegroundContextProvider(
+                loadResult.Settings.CollectForegroundProcessNames);
+        };
+        window.Show();
+    }
+
+    private void OpenSettingsWindow()
+    {
+        if (_startup == null || _settingsRepository == null)
+        {
+            Trace.TraceError("RestCue: settings unavailable.");
+            return;
+        }
+
+        new SettingsWindow(_settingsRepository, _startup.CurrentSettings).Show();
+    }
+
+    private void OpenAboutWindow()
+    {
+        foreach (var window in Current.Windows.OfType<AboutWindow>())
+        {
+            window.Activate();
+            return;
+        }
+
+        var aboutWindow = new AboutWindow
+        {
+            OpenDataTransparencyRequested = OpenDataTransparencyWindow
+        };
+        aboutWindow.Show();
     }
 
     internal static void ExecutePause(WorkCycleTracker tracker, Action closeReminder)
@@ -235,6 +235,8 @@ public partial class App : System.Windows.Application
         WireDataManagementCommand(_trayIcon);
         WireSettingsCommand(_trayIcon);
         WireAboutCommand(_trayIcon);
+
+        WireMainWindowCommands();
 
         _statusWindow.PhaseChanged += OnPhaseChanged;
         _statusWindow.DebtLevelChanged += OnDebtLevelChanged;

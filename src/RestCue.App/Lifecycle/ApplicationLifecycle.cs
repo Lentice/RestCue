@@ -32,6 +32,12 @@ public sealed class ApplicationLifecycle : IApplicationLifecycle
 
     public ITrayIcon TrayIcon => _trayIcon;
 
+    public void Exit()
+    {
+        Dispose();
+        _shutdown();
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -48,9 +54,5 @@ public sealed class ApplicationLifecycle : IApplicationLifecycle
 
     private void OnOpenRequested(object? sender, EventArgs e) => _statusWindow.ShowOrActivate();
 
-    private void OnExitRequested(object? sender, EventArgs e)
-    {
-        Dispose();
-        _shutdown();
-    }
+    private void OnExitRequested(object? sender, EventArgs e) => Exit();
 }

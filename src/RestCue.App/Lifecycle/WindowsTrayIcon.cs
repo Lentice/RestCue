@@ -34,9 +34,9 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
     public WindowsTrayIcon()
     {
-        _pause15 = new ToolStripMenuItem("15 分鐘", null, (_, _) => PauseForRequested?.Invoke(this, TimeSpan.FromMinutes(15)));
-        _pause30 = new ToolStripMenuItem("30 分鐘", null, (_, _) => PauseForRequested?.Invoke(this, TimeSpan.FromMinutes(30)));
-        _pause60 = new ToolStripMenuItem("1 小時", null, (_, _) => PauseForRequested?.Invoke(this, TimeSpan.FromMinutes(60)));
+        _pause15 = CreatePauseItem(PausePresets.FifteenMinutes);
+        _pause30 = CreatePauseItem(PausePresets.ThirtyMinutes);
+        _pause60 = CreatePauseItem(PausePresets.OneHour);
         _pauseManual = new ToolStripMenuItem("直到手動恢復", null, (_, _) => PauseRequested?.Invoke(this, EventArgs.Empty));
         _pauseItem = new ToolStripMenuItem("暫停提醒");
         _pauseItem.DropDownItems.AddRange(
@@ -74,6 +74,9 @@ public sealed class WindowsTrayIcon : ITrayIcon
         _menu = menu;
         _notifyIcon.DoubleClick += (_, _) => OpenRequested?.Invoke(this, EventArgs.Empty);
     }
+
+    private ToolStripMenuItem CreatePauseItem(PausePreset preset) =>
+        new(preset.Label, null, (_, _) => PauseForRequested?.Invoke(this, preset.Duration));
 
     public event EventHandler? OpenRequested;
 
