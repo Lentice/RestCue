@@ -225,4 +225,9 @@ public sealed class WindowsTrayIcon : ITrayIcon
     }
 
     public void Dispose() => _notifyIcon.Dispose();
+
+    public void ShowLightTouchNotification(string title, string text)
+    {
+        _notifyIcon.ShowBalloonTip(10000, title, text, ToolTipIcon.Info);
+    }
 }

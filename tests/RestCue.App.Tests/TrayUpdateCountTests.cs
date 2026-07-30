@@ -74,6 +74,8 @@ public sealed class TrayUpdateCountTests
         public void SetFocusModeEnabled(bool enabled) { }
         public void SetDisableEnabled(bool enabled) { }
         public void SetBreakNowEnabled(bool enabled) { }
+        public void ShowLightTouchNotification(string title, string text) { }
+
         public void Dispose() { }
     }
 }

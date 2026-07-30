@@ -4,6 +4,7 @@ public enum PresentationIntensity
 {
     None = 0,
     TrayOnly = 1,
-    EdgePopup = 2,
-    PopupAndSound = 3
+    LightTouch = 2,
+    EdgePopup = 3,
+    PopupAndSound = 4
 }

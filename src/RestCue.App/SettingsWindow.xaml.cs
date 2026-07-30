@@ -57,6 +57,7 @@ public sealed partial class SettingsWindow : Window
 
         CollectProcessNamesCheck.IsChecked = currentSettings.CollectForegroundProcessNames;
         ReduceMotionCheck.IsChecked = currentSettings.ReduceMotion;
+        LightTouchSoundCheck.IsChecked = currentSettings.LightTouchSoundEnabled;
 
         switch (currentSettings.BreakGuideMode)
         {
@@ -443,6 +444,7 @@ public sealed partial class SettingsWindow : Window
         return currentSettings with
         {
             ReduceMotion = ReduceMotionCheck.IsChecked == true,
+            LightTouchSoundEnabled = LightTouchSoundCheck.IsChecked == true,
             WorkInterval = TimeSpan.FromMinutes(workInterval),
             NaturalPauseThreshold = TimeSpan.FromSeconds(naturalPause),
             MaximumReminderWait = TimeSpan.FromMinutes(maxWait),

@@ -196,6 +196,7 @@ public sealed class ApplicationLifecycleTests
         }
 
         public void SetDebtLevel(RestDebtLevel level) { }
+        public void ShowLightTouchNotification(string title, string text) { }
     }
 
     [Fact]

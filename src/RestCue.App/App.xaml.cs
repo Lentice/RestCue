@@ -289,6 +289,19 @@ public partial class App : System.Windows.Application
                 _trayIcon?.SetStatusText("RestCue – Eye Break Reminder");
             }
         };
+
+        _statusWindow.LightTouchReminderRequested += (_, _) =>
+        {
+            _trayIcon?.SetSuppressedState(true);
+            _trayIcon?.SetStatusText("RestCue – 休息提醒待處理");
+            _trayIcon?.ShowLightTouchNotification(
+                "RestCue – 休息提醒",
+                "該休息了！點擊系統列圖示查看詳情。");
+            if (_startup?.CurrentSettings.LightTouchSoundEnabled == true)
+            {
+                System.Media.SystemSounds.Asterisk.Play();
+            }
+        };
     }
 
     private void WireUsageEventEmitters()

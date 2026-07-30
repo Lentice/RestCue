@@ -58,6 +58,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
     public event EventHandler<WorkCyclePhase>? PhaseChanged;
     public event EventHandler<ReminderSuppressedEventArgs>? LowInterruptionReminderRequested;
+    public event EventHandler? LightTouchReminderRequested;
     public event EventHandler<RestDebtLevelChangedEventArgs>? DebtLevelChanged;
     public event EventHandler<SuggestionEventArgs>? SuggestionRequested;
 
@@ -134,6 +135,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
         workCycleTracker.ReminderShown += OnReminderShown;
         workCycleTracker.ReminderSuppressed += OnReminderSuppressed;
+        workCycleTracker.ReminderLightTouch += OnReminderLightTouch;
         workCycleTracker.BreakCompleted += OnBreakCompleted;
         workCycleTracker.PassivePauseDetected += OnPassivePauseDetected;
         workCycleTracker.ReminderDismissed += OnReminderDismissed;
@@ -164,6 +166,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         {
             workCycleTracker.ReminderShown -= OnReminderShown;
             workCycleTracker.ReminderSuppressed -= OnReminderSuppressed;
+            workCycleTracker.ReminderLightTouch -= OnReminderLightTouch;
             workCycleTracker.BreakCompleted -= OnBreakCompleted;
             workCycleTracker.PassivePauseDetected -= OnPassivePauseDetected;
             workCycleTracker.ReminderDismissed -= OnReminderDismissed;
@@ -679,6 +682,11 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     private void OnReminderSuppressed(object? sender, ReminderSuppressedEventArgs e)
     {
         Dispatcher.Invoke(() => LowInterruptionReminderRequested?.Invoke(this, e));
+    }
+
+    private void OnReminderLightTouch(object? sender, EventArgs e)
+    {
+        Dispatcher.Invoke(() => LightTouchReminderRequested?.Invoke(this, EventArgs.Empty));
     }
 
     private void OnBreakRequested(object? sender, EventArgs e)

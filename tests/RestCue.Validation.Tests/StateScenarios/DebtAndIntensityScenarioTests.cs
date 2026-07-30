@@ -47,8 +47,8 @@ public sealed class DebtAndIntensityScenarioTests
     }
 
     [Theory]
-    [InlineData(FullscreenState.Confirmed, PresentationIntensity.TrayOnly)]
-    [InlineData(FullscreenState.Uncertain, PresentationIntensity.TrayOnly)]
+    [InlineData(FullscreenState.Confirmed, PresentationIntensity.LightTouch)]
+    [InlineData(FullscreenState.Uncertain, PresentationIntensity.LightTouch)]
     [InlineData(FullscreenState.NotFullscreen, PresentationIntensity.PopupAndSound)]
     public void Fullscreen_state_maps_to_correct_cap(FullscreenState state, PresentationIntensity expected)
     {
@@ -59,7 +59,7 @@ public sealed class DebtAndIntensityScenarioTests
 
     [Theory]
     [InlineData(ApplicationRuleType.Normal, PresentationIntensity.PopupAndSound)]
-    [InlineData(ApplicationRuleType.TrayOnly, PresentationIntensity.TrayOnly)]
+    [InlineData(ApplicationRuleType.TrayOnly, PresentationIntensity.LightTouch)]
     [InlineData(ApplicationRuleType.Silent, PresentationIntensity.None)]
     [InlineData(ApplicationRuleType.CustomInterval, PresentationIntensity.PopupAndSound)]
     public void Application_rule_maps_to_correct_cap(ApplicationRuleType ruleType, PresentationIntensity expected)

@@ -261,6 +261,7 @@ public sealed class WindowsTrayIconPhaseMappingTests
         public void SetSuppressedState(bool isSuppressed) => IsSuppressed = isSuppressed;
 
         public void SetDebtLevel(RestDebtLevel level) { }
+        public void ShowLightTouchNotification(string title, string text) { }
     }
 }
 

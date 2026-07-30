@@ -8,8 +8,8 @@ public static class PresentationIntensityPolicy
 {
     public static PresentationIntensity DefaultUserCap => PresentationIntensity.PopupAndSound;
     public static PresentationIntensity DefaultContextCap => PresentationIntensity.PopupAndSound;
-    public static PresentationIntensity FullscreenCap => PresentationIntensity.TrayOnly;
-    public static PresentationIntensity TrayOnlyCap => PresentationIntensity.TrayOnly;
+    public static PresentationIntensity FullscreenCap => PresentationIntensity.LightTouch;
+    public static PresentationIntensity TrayOnlyCap => PresentationIntensity.LightTouch;
     public static PresentationIntensity SilentCap => PresentationIntensity.None;
 
     public static PresentationIntensity GetDebtRecommendation(RestDebtLevel level)

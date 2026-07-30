@@ -27,8 +27,8 @@ public sealed class PresentationIntensityPolicyTests
     }
 
     [Theory]
-    [InlineData(FullscreenState.Confirmed, PresentationIntensity.TrayOnly)]
-    [InlineData(FullscreenState.Uncertain, PresentationIntensity.TrayOnly)]
+    [InlineData(FullscreenState.Confirmed, PresentationIntensity.LightTouch)]
+    [InlineData(FullscreenState.Uncertain, PresentationIntensity.LightTouch)]
     [InlineData(FullscreenState.NotFullscreen, PresentationIntensity.PopupAndSound)]
     public void FromFullscreenState_returns_expected(FullscreenState state, PresentationIntensity expected)
     {
@@ -39,12 +39,12 @@ public sealed class PresentationIntensityPolicyTests
     public void FromFullscreenState_unknown_falls_back_safely()
     {
         var unknown = (FullscreenState)999;
-        Assert.Equal(PresentationIntensity.TrayOnly, PresentationIntensityPolicy.FromFullscreenState(unknown));
+        Assert.Equal(PresentationIntensity.LightTouch, PresentationIntensityPolicy.FromFullscreenState(unknown));
     }
 
     [Theory]
     [InlineData(ApplicationRuleType.Normal, PresentationIntensity.PopupAndSound)]
-    [InlineData(ApplicationRuleType.TrayOnly, PresentationIntensity.TrayOnly)]
+    [InlineData(ApplicationRuleType.TrayOnly, PresentationIntensity.LightTouch)]
     [InlineData(ApplicationRuleType.Silent, PresentationIntensity.None)]
     [InlineData(ApplicationRuleType.CustomInterval, PresentationIntensity.PopupAndSound)]
     public void FromApplicationRuleType_returns_expected(ApplicationRuleType ruleType, PresentationIntensity expected)
@@ -95,15 +95,15 @@ public sealed class PresentationIntensityPolicyTests
     }
 
     [Fact]
-    public void FullscreenCap_is_TrayOnly()
+    public void FullscreenCap_is_LightTouch()
     {
-        Assert.Equal(PresentationIntensity.TrayOnly, PresentationIntensityPolicy.FullscreenCap);
+        Assert.Equal(PresentationIntensity.LightTouch, PresentationIntensityPolicy.FullscreenCap);
     }
 
     [Fact]
-    public void TrayOnlyCap_is_TrayOnly()
+    public void TrayOnlyCap_is_LightTouch()
     {
-        Assert.Equal(PresentationIntensity.TrayOnly, PresentationIntensityPolicy.TrayOnlyCap);
+        Assert.Equal(PresentationIntensity.LightTouch, PresentationIntensityPolicy.TrayOnlyCap);
     }
 
     [Fact]

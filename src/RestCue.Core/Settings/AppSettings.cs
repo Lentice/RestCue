@@ -40,4 +40,6 @@ public sealed record AppSettings
 
     public bool ReduceMotion { get; init; }
 
+    public bool LightTouchSoundEnabled { get; init; } = true;
+
 }

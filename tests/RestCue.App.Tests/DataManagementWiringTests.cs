@@ -55,5 +55,6 @@ public sealed class DataManagementWiringTests
         public void SetBreakNowEnabled(bool enabled) { }
         public void SetSuppressedState(bool isSuppressed) { }
         public void SetDebtLevel(RestDebtLevel level) { }
+        public void ShowLightTouchNotification(string title, string text) { }
     }
 }

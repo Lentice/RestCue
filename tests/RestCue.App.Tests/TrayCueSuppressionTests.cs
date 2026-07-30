@@ -78,6 +78,8 @@ public sealed class TrayCueSuppressionTests
         public bool Visible { get; set; }
         public bool IsSuppressed { get; private set; }
         public string? StatusText { get; private set; }
+        public string? NotifiedTitle { get; private set; }
+        public string? NotifiedText { get; private set; }
 
         public void SetSuppressedState(bool isSuppressed) => IsSuppressed = isSuppressed;
 
@@ -95,5 +97,10 @@ public sealed class TrayCueSuppressionTests
         public void SetPauseText(bool isPaused) { }
         public void SetFocusModeText(bool isFocusMode) { }
         public void SetDisableText(bool isDisabled) { }
+        public void ShowLightTouchNotification(string title, string text)
+        {
+            NotifiedTitle = title;
+            NotifiedText = text;
+        }
     }
 }

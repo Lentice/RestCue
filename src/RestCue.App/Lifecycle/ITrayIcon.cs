@@ -55,4 +55,6 @@ public interface ITrayIcon : IDisposable
     void SetSuppressedState(bool isSuppressed);
 
     void SetDebtLevel(RestDebtLevel level);
+
+    void ShowLightTouchNotification(string title, string text);
 }

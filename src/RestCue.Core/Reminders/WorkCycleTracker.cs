@@ -141,18 +141,23 @@ public sealed class WorkCycleTracker
         if (hasSuppressedReminder)
         {
             var newEffective = GetEffectiveIntensity();
-            if (newEffective >= PresentationIntensity.EdgePopup && oldEffective < PresentationIntensity.EdgePopup)
+            if (newEffective >= PresentationIntensity.EdgePopup)
             {
                 hasSuppressedReminder = false;
                 showTrayCue = false;
                 EnterReminderVisible(clock.UtcNow);
             }
-            else
+            else if (newEffective != oldEffective)
             {
-                bool oldCue = oldEffective >= PresentationIntensity.TrayOnly;
-                bool newCue = newEffective >= PresentationIntensity.TrayOnly;
-                if (newCue != oldCue)
+                if (newEffective == PresentationIntensity.LightTouch)
                 {
+                    showTrayCue = true;
+                    hasSuppressedReminder = true;
+                    ReminderLightTouch?.Invoke(this, EventArgs.Empty);
+                }
+                else
+                {
+                    bool newCue = newEffective >= PresentationIntensity.TrayOnly;
                     showTrayCue = newCue;
                     ReminderSuppressed?.Invoke(this, new ReminderSuppressedEventArgs(newCue));
                 }
@@ -185,6 +190,7 @@ public sealed class WorkCycleTracker
     public event EventHandler? Disabled;
     public event EventHandler? Enabled;
     public event EventHandler<ReminderSuppressedEventArgs>? ReminderSuppressed;
+    public event EventHandler? ReminderLightTouch;
 
     public event EventHandler<string?>? ProcessNameChanged;
 
@@ -788,7 +794,7 @@ public sealed class WorkCycleTracker
         {
             var effective = GetEffectiveIntensity();
 
-            if (effective < PresentationIntensity.EdgePopup)
+            if (effective < PresentationIntensity.LightTouch)
             {
                 bool showCue = effective >= PresentationIntensity.TrayOnly;
                 if (!hasSuppressedReminder || showTrayCue != showCue)
@@ -796,6 +802,17 @@ public sealed class WorkCycleTracker
                     showTrayCue = showCue;
                     hasSuppressedReminder = true;
                     ReminderSuppressed?.Invoke(this, new ReminderSuppressedEventArgs(showCue));
+                }
+                return;
+            }
+
+            if (effective < PresentationIntensity.EdgePopup)
+            {
+                showTrayCue = true;
+                if (!hasSuppressedReminder)
+                {
+                    hasSuppressedReminder = true;
+                    ReminderLightTouch?.Invoke(this, EventArgs.Empty);
                 }
                 return;
             }

@@ -257,6 +257,82 @@ public sealed class WorkCycleTrackerNewEventSeamTests
         Assert.Equal(WorkCyclePhase.Idle, tracker.CurrentPhase);
     }
 
+    [Fact]
+    public void ReminderLightTouch_fires_when_caps_upgrade_to_LightTouch()
+    {
+        var clock = new FakeClock();
+        var tracker = new WorkCycleTracker(
+            clock,
+            workInterval: TimeSpan.FromSeconds(1),
+            idleThreshold: TimeSpan.FromMinutes(2),
+            naturalPauseThreshold: TimeSpan.FromSeconds(3),
+            maximumReminderWait: TimeSpan.FromSeconds(0.1),
+            breakDuration: TimeSpan.FromSeconds(10),
+            passiveBreakThreshold: TimeSpan.FromSeconds(20),
+            snoozeDuration: TimeSpan.FromMinutes(5),
+            reminderDisplayDuration: TimeSpan.FromSeconds(30),
+            retryCooldown: TimeSpan.FromSeconds(0.1),
+            debtLevel2: TimeSpan.FromSeconds(2),
+            debtLevel3: TimeSpan.FromSeconds(3),
+            debtLevel4: TimeSpan.FromSeconds(4));
+        tracker.SetForceAllowPopup(true);
+        tracker.SetIntensityCaps(PresentationIntensity.LightTouch, PresentationIntensity.LightTouch);
+
+        for (int cycle = 0; cycle < 10; cycle++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(0.5));
+            tracker.Tick(TimeSpan.Zero);
+            clock.Advance(TimeSpan.FromSeconds(0.5));
+            tracker.Tick(TimeSpan.Zero);
+            clock.Advance(TimeSpan.FromSeconds(0.5));
+            tracker.Tick(TimeSpan.Zero);
+            clock.Advance(TimeSpan.FromSeconds(0.5));
+            tracker.Tick(TimeSpan.Zero);
+
+            if (tracker.CurrentPhase == WorkCyclePhase.PendingReminder)
+            {
+                clock.Advance(TimeSpan.FromSeconds(0.5));
+                tracker.Tick(TimeSpan.Zero);
+            }
+            if (tracker.CurrentPhase == WorkCyclePhase.ReminderVisible)
+            {
+                tracker.Ignore();
+                clock.Advance(TimeSpan.FromSeconds(0.5));
+                tracker.Tick(TimeSpan.Zero);
+            }
+        }
+
+        tracker.SetForceAllowPopup(false);
+
+        int lightTouchCount = 0;
+        tracker.ReminderLightTouch += (_, _) => lightTouchCount++;
+
+        for (int i = 0; i < 3; i++) { clock.Advance(TimeSpan.FromSeconds(0.5)); tracker.Tick(TimeSpan.Zero); }
+        clock.Advance(TimeSpan.FromSeconds(0.5));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.True(lightTouchCount >= 1, $"Expected ReminderLightTouch to fire at least once, fired {lightTouchCount}");
+    }
+
+    [Fact]
+    public void ReminderLightTouch_does_not_refire_when_caps_unchanged()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock);
+        tracker.SetIntensityCaps(PresentationIntensity.TrayOnly, PresentationIntensity.TrayOnly);
+        int lightTouchCount = 0;
+        tracker.ReminderLightTouch += (_, _) => lightTouchCount++;
+
+        for (int i = 0; i < 31; i++) { clock.Advance(TimeSpan.FromSeconds(1)); tracker.Tick(TimeSpan.Zero); }
+        clock.Advance(TimeSpan.FromMinutes(3));
+        tracker.Tick(TimeSpan.FromSeconds(5));
+
+        tracker.SetIntensityCaps(PresentationIntensity.LightTouch, PresentationIntensity.LightTouch);
+        tracker.SetIntensityCaps(PresentationIntensity.LightTouch, PresentationIntensity.LightTouch);
+
+        Assert.Equal(0, lightTouchCount);
+    }
+
     private static WorkCycleTracker CreateTracker(IClock clock, TimeSpan? breakDuration = null)
     {
         var tracker = new WorkCycleTracker(
