@@ -89,3 +89,29 @@ Disabled, and BreakInProgress.
 Review when issue #14 introduces multi-level debt threshold re-evaluation, or if
 dogfooding shows that users expect a minimum-guaranteed silent period longer than
 the cooldown setting.
+
+## Addendum (issue #34): the threshold deadline is armed at cooldown start
+
+The decision above describes `SetNextDebtDeadline` as a seam that issue #14 calls to
+supply the next threshold time, and ADR-0004 implemented that call as a side effect of
+a rest-debt level change. That made every escalation one level late: the deadline was
+only armed *after* a threshold had been crossed, so it pointed at the threshold after
+the one that should have triggered re-evaluation, and the escalation override never
+fired earlier than the cooldown it was meant to pre-empt.
+
+`Ignore` and `TryAutoDismiss` now arm the deadline themselves, from the accumulated
+work time at the moment the cooldown starts. Recomputation on level change is retained
+only as a safety net.
+
+The storage rule stated above — the supplied deadline is kept only while `cooldownUntil`
+is active — makes ordering a correctness requirement: `cooldownUntil` must be assigned
+*before* the deadline is armed, or the arming is silently discarded. For the same
+reason, the safety-net recomputation must not push a deadline that has already come due
+out into the future; it would otherwise skip the very crossing the deadline was armed
+for, because debt evaluation runs before the retry gate within a single tick.
+
+Because the deadline is wall-clock while `AccumulatedWorkTime` is not, the two can
+drift apart by the work that a phase transition does not credit — `Ignore` and
+`TryAutoDismiss` both drop their accumulation bookkeeping, costing one tick. The
+deadline therefore lands at or slightly before the threshold. Arriving early is
+harmless; arriving late was the defect.

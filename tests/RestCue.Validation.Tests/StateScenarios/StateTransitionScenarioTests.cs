@@ -257,6 +257,84 @@ public sealed class StateTransitionScenarioTests
         Assert.Equal(WorkCyclePhase.BreakInProgress, tracker.CurrentPhase);
     }
 
+    /// <summary>
+    /// A reminder held back to a tray cue inside a fullscreen application must not hijack
+    /// the break the user then starts by hand, even when the context cap lifts mid-break.
+    /// </summary>
+    [Fact]
+    public void Held_back_reminder_does_not_hijack_a_manually_started_break()
+    {
+        var clock = new FakeClock();
+        var tracker = new WorkCycleTracker(
+            clock,
+            workInterval: TimeSpan.FromSeconds(10),
+            idleThreshold: TimeSpan.FromMinutes(2),
+            naturalPauseThreshold: TimeSpan.FromSeconds(5),
+            maximumReminderWait: TimeSpan.FromSeconds(3),
+            breakDuration: TimeSpan.FromSeconds(20),
+            passiveBreakThreshold: TimeSpan.FromSeconds(20),
+            snoozeDuration: TimeSpan.FromMinutes(5),
+            reminderDisplayDuration: TimeSpan.FromMinutes(5),
+            retryCooldown: TimeSpan.FromMinutes(5),
+            debtLevel2: TimeSpan.FromSeconds(15),
+            debtLevel3: TimeSpan.FromSeconds(20),
+            debtLevel4: TimeSpan.FromHours(4));
+
+        int trayCues = 0;
+        int reminderShown = 0;
+        int breakStarted = 0;
+        int breakCancelled = 0;
+        int breakCompleted = 0;
+        tracker.ReminderSuppressed += (_, e) => { if (e.ShowTrayCue) trayCues++; };
+        tracker.ReminderShown += (_, _) => reminderShown++;
+        tracker.BreakStarted += (_, _) => breakStarted++;
+        tracker.BreakCancelled += (_, _) => breakCancelled++;
+        tracker.BreakCompleted += (_, _) => breakCompleted++;
+
+        // A fullscreen application caps presentation at tray-only.
+        tracker.SetIntensityCaps(PresentationIntensity.TrayOnly, PresentationIntensity.PopupAndSound);
+
+        // The user works past the reminder interval and on to rest-debt Level 3, where a
+        // popup would normally be permitted. The attempt is held back to a tray cue.
+        for (int i = 0; i < 21; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.Equal(RestDebtLevel.Level3, tracker.RestDebtLevel);
+        Assert.Equal(1, trayCues);
+        Assert.Equal(0, reminderShown);
+
+        // The user notices the tray cue and starts a break from the tray.
+        tracker.ManualStartBreak();
+        Assert.Equal(WorkCyclePhase.BreakInProgress, tracker.CurrentPhase);
+        Assert.Equal(1, breakStarted);
+
+        // Mid-break they alt-tab out of the fullscreen application and the cap lifts.
+        clock.Advance(TimeSpan.FromSeconds(5));
+        tracker.Tick(TimeSpan.Zero);
+        tracker.SetIntensityCaps(PresentationIntensity.PopupAndSound, PresentationIntensity.PopupAndSound);
+
+        // The break survives, and no one is asked to start the break they are taking.
+        Assert.Equal(WorkCyclePhase.BreakInProgress, tracker.CurrentPhase);
+        Assert.Equal(0, reminderShown);
+
+        for (int i = 0; i < 20 && tracker.CurrentPhase == WorkCyclePhase.BreakInProgress; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+            Assert.Equal(0, reminderShown);
+        }
+
+        Assert.Equal(1, breakCompleted);
+        Assert.Equal(0, breakCancelled);
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(TimeSpan.Zero, tracker.AccumulatedWorkTime);
+        Assert.Equal(RestDebtLevel.Level0, tracker.RestDebtLevel);
+    }
+
     private static void ReachPendingReminder(WorkCycleTracker tracker, FakeClock clock)
     {
         for (int i = 0; i < 31; i++)

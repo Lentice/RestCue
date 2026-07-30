@@ -4269,19 +4269,71 @@ public sealed class WorkCycleTrackerTests
         tracker.Ignore();
         var cooldownUntil = cooldownBeforeIgnore + TimeSpan.FromSeconds(30);
 
-        for (int i = 0; i < 5; i++)
+        // 16s of work accumulated at Ignore; Level 2 is reached after 4 more seconds,
+        // well inside the 30s cooldown.
+        for (int i = 0; i < 3; i++)
         {
             clock.Advance(TimeSpan.FromSeconds(1));
             tracker.Tick(TimeSpan.Zero);
         }
-        Assert.Equal(RestDebtLevel.Level2, tracker.RestDebtLevel);
+        Assert.Equal(RestDebtLevel.Level1, tracker.RestDebtLevel);
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
         Assert.Equal(cooldownUntil, tracker.CooldownUntil);
 
+        // This threshold re-evaluates, rather than the one after it. Ignore() ends the
+        // current attempt and drops its accumulation bookkeeping, so one tick of work is
+        // never credited and the wall-clock deadline lands one tick short of the 20s
+        // threshold. Firing a tick early is harmless; firing a level late was the defect.
+        clock.Advance(TimeSpan.FromSeconds(1));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.Null(tracker.CooldownUntil);
+        Assert.True(clock.UtcNow < cooldownUntil,
+            "The threshold deadline, not the cooldown expiry, must have driven the re-evaluation.");
+    }
+
+    [Fact]
+    public void Debt_deadline_survives_unavailable_activity_during_cooldown()
+    {
+        var clock = new FakeClock();
+        var tracker = new WorkCycleTracker(
+            clock,
+            workInterval: TimeSpan.FromSeconds(10),
+            idleThreshold: TimeSpan.FromHours(1),
+            naturalPauseThreshold: TimeSpan.FromSeconds(5),
+            maximumReminderWait: TimeSpan.FromHours(1),
+            breakDuration: TimeSpan.FromMinutes(10),
+            passiveBreakThreshold: TimeSpan.FromSeconds(30),
+            snoozeDuration: TimeSpan.FromMinutes(5),
+            reminderDisplayDuration: TimeSpan.FromSeconds(30),
+            retryCooldown: TimeSpan.FromSeconds(30),
+            debtLevel2: TimeSpan.FromSeconds(20),
+            debtLevel3: TimeSpan.FromSeconds(25),
+            debtLevel4: TimeSpan.FromHours(4));
+        tracker.SetForceAllowPopup(true);
+
+        for (int i = 0; i < 11; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+
+        clock.Advance(TimeSpan.FromSeconds(6));
+        tracker.Tick(TimeSpan.FromSeconds(6));
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+
+        var cooldownUntil = clock.UtcNow + TimeSpan.FromSeconds(30);
+        tracker.Ignore();
+
+        // Activity is unavailable across the armed threshold deadline: nothing
+        // accumulates and nothing re-evaluates, but the deadline is not lost.
         for (int i = 0; i < 6; i++)
         {
             clock.Advance(TimeSpan.FromSeconds(1));
             tracker.TickActivityUnavailable();
         }
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
         Assert.Equal(cooldownUntil, tracker.CooldownUntil);
 
         tracker.Tick(TimeSpan.Zero);

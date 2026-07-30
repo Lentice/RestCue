@@ -143,9 +143,15 @@ public sealed class WorkCycleTracker
             var newEffective = GetEffectiveIntensity();
             if (newEffective >= PresentationIntensity.EdgePopup)
             {
-                hasSuppressedReminder = false;
-                showTrayCue = false;
-                EnterReminderVisible(clock.UtcNow);
+                // Same primary-phase guard as UpdateForegroundContext: a held-back
+                // attempt may only be promoted while one is still pending. From any
+                // other phase — a break above all — a cap change is bookkeeping only.
+                if (CurrentPhase == WorkCyclePhase.PendingReminder)
+                {
+                    hasSuppressedReminder = false;
+                    showTrayCue = false;
+                    EnterReminderVisible(clock.UtcNow);
+                }
             }
             else if (newEffective != oldEffective)
             {
@@ -265,6 +271,7 @@ public sealed class WorkCycleTracker
                 }
                 else if (!isWorking)
                 {
+                    ExitFocusMode();
                     EnterIdle();
                 }
                 break;
@@ -344,6 +351,7 @@ public sealed class WorkCycleTracker
         CurrentPhase = WorkCyclePhase.BreakInProgress;
         breakStartUtc = clock.UtcNow;
         reminderVisibleSinceUtc = null;
+        ClearSuppressedReminderState();
         BreakStarted?.Invoke(this, EventArgs.Empty);
     }
 
@@ -355,12 +363,15 @@ public sealed class WorkCycleTracker
             throw new InvalidOperationException(
                 $"Cannot start break from phase {CurrentPhase}.");
 
+        ExitFocusMode();
+
         CurrentPhase = WorkCyclePhase.BreakInProgress;
         breakStartUtc = clock.UtcNow;
         pendingSinceUtc = null;
         reminderVisibleSinceUtc = null;
         snoozeUntilUtc = null;
         wasPassivePaused = false;
+        ClearSuppressedReminderState();
         BreakStarted?.Invoke(this, EventArgs.Empty);
     }
 
@@ -409,7 +420,9 @@ public sealed class WorkCycleTracker
         snoozeUntilUtc = null;
         lastTickUtc = null;
         wasWorking = false;
-        cooldownUntil = clock.UtcNow + retryCooldown;
+        var now = clock.UtcNow;
+        cooldownUntil = now + retryCooldown;
+        ArmNextDebtDeadline(now);
         CooldownStarted?.Invoke(this, EventArgs.Empty);
         ReminderDismissed?.Invoke(this, new ReminderDismissedEventArgs(ReminderResult.Ignored));
     }
@@ -458,14 +471,25 @@ public sealed class WorkCycleTracker
             throw new InvalidOperationException(
                 $"Cannot end focus mode from phase {CurrentPhase}.");
 
-        focusModeUntilUtc = null;
-        if (TryEnterPendingReminderFromWorking(clock.UtcNow))
-        {
-            FocusModeEnded?.Invoke(this, EventArgs.Empty);
-            return;
-        }
+        ExitFocusMode();
 
-        CurrentPhase = WorkCyclePhase.Working;
+        if (!TryEnterPendingReminderFromWorking(clock.UtcNow))
+            CurrentPhase = WorkCyclePhase.Working;
+    }
+
+    /// <summary>
+    /// The single exit routine for Focus Mode: clears the focus deadline and raises
+    /// <see cref="FocusModeEnded"/> exactly once. Every exit path — timer expiry,
+    /// explicit end, idle entry, lock, sleep, disable, and manual break start — routes
+    /// through here before performing its own phase transition. The phase guard is what
+    /// makes it idempotent, so no path can double-count a focus session.
+    /// </summary>
+    private void ExitFocusMode()
+    {
+        if (CurrentPhase != WorkCyclePhase.FocusMode)
+            return;
+
+        focusModeUntilUtc = null;
         FocusModeEnded?.Invoke(this, EventArgs.Empty);
     }
 
@@ -473,6 +497,8 @@ public sealed class WorkCycleTracker
     {
         if (CurrentPhase == WorkCyclePhase.Disabled)
             throw new InvalidOperationException("Already disabled.");
+
+        ExitFocusMode();
 
         bool wasCooldownActive = cooldownUntil.HasValue;
         CurrentPhase = WorkCyclePhase.Disabled;
@@ -527,6 +553,7 @@ public sealed class WorkCycleTracker
         if (CurrentPhase is WorkCyclePhase.PendingReminder or WorkCyclePhase.ReminderVisible or WorkCyclePhase.Snoozed
             or WorkCyclePhase.Working or WorkCyclePhase.FocusMode)
         {
+            ExitFocusMode();
             ResetCycle();
         }
     }
@@ -557,6 +584,7 @@ public sealed class WorkCycleTracker
         if (CurrentPhase is WorkCyclePhase.PendingReminder or WorkCyclePhase.ReminderVisible or WorkCyclePhase.Snoozed
             or WorkCyclePhase.Working or WorkCyclePhase.FocusMode)
         {
+            ExitFocusMode();
             ResetCycle();
         }
     }
@@ -846,6 +874,7 @@ public sealed class WorkCycleTracker
             reminderVisibleSinceUtc = null;
             snoozeUntilUtc = null;
             cooldownUntil = now + retryCooldown;
+            ArmNextDebtDeadline(now);
             CooldownStarted?.Invoke(this, EventArgs.Empty);
             ReminderDismissed?.Invoke(this, new ReminderDismissedEventArgs(ReminderResult.AutoDismissed));
         }
@@ -898,11 +927,36 @@ public sealed class WorkCycleTracker
         }
     }
 
+    /// <summary>
+    /// Safety net only. The threshold deadline is armed when the cooldown starts
+    /// (see <see cref="ArmNextDebtDeadline"/>); recomputing it on a level change must
+    /// never push a deadline that has already come due out into the future, or the
+    /// retry gate below would skip the very crossing it was armed for.
+    /// </summary>
     private void UpdateDebtDeadline()
     {
         if (!cooldownUntil.HasValue)
             return;
 
+        var now = clock.UtcNow;
+        if (nextDebtDeadline.HasValue && nextDebtDeadline.Value <= now)
+            return;
+
+        ArmNextDebtDeadline(now);
+    }
+
+    /// <summary>
+    /// Arms the wall-clock time at which the next rest-debt threshold will be reached,
+    /// from the current accumulated work time. At the highest level there is no further
+    /// threshold and the retry cooldown governs alone.
+    /// </summary>
+    /// <remarks>
+    /// ADR-0003: the supplied deadline is stored only while a cooldown is active, so
+    /// <see cref="cooldownUntil"/> must already be set when this runs. This ordering is
+    /// a correctness requirement, not a style preference.
+    /// </remarks>
+    private void ArmNextDebtDeadline(DateTimeOffset now)
+    {
         var nextThreshold = DebtPolicy.GetNextThreshold(
             restDebtLevel,
             workInterval,
@@ -913,10 +967,7 @@ public sealed class WorkCycleTracker
         if (nextThreshold.HasValue)
         {
             var remaining = nextThreshold.Value - AccumulatedWorkTime;
-            if (remaining > TimeSpan.Zero)
-                SetNextDebtDeadline(clock.UtcNow + remaining);
-            else
-                SetNextDebtDeadline(clock.UtcNow);
+            SetNextDebtDeadline(remaining > TimeSpan.Zero ? now + remaining : now);
         }
         else
         {
@@ -933,7 +984,17 @@ public sealed class WorkCycleTracker
         lastTickUtc = null;
         wasWorking = false;
         wasPassivePaused = false;
+        ClearSuppressedReminderState();
+    }
+
+    /// <summary>
+    /// Forgets any held-back reminder attempt, so that a later context-cap lift has
+    /// nothing stale left to promote.
+    /// </summary>
+    private void ClearSuppressedReminderState()
+    {
         hasSuppressedReminder = false;
+        showTrayCue = false;
     }
 
     private static DateTimeOffset? EarlierOf(DateTimeOffset? a, DateTimeOffset? b)

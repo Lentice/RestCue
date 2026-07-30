@@ -96,6 +96,28 @@ base `workInterval` as its Level 1 threshold.
   debt computation.
 - No schema change: `RestDebtLevelChanged` is an in-memory event only.
 
+## Addendum (issue #34): the debt deadline is armed at cooldown start
+
+The two sections above describe the debt deadline as a side effect of a level change:
+"The debt deadline is updated on level change" and "when cooldown is active and the debt
+level changes, `UpdateDebtDeadline()` computes a new `nextDebtDeadline`". That trigger
+point is wrong. Arming only after a threshold has been crossed makes the deadline point
+at the *following* threshold, so the intent recorded in ADR-0003 — the cooldown must not
+delay re-evaluation past the next debt-level threshold — was never met.
+
+The deadline is now armed when the retry cooldown starts, by `Ignore` and by
+auto-dismiss, from the accumulated work time at that moment. `UpdateDebtDeadline()`
+survives as a safety net for level changes that happen during an already-running
+cooldown, with one added rule: it never pushes a deadline that has already come due out
+into the future. Debt evaluation runs before the retry gate inside a single `Tick`, so
+without that rule the recomputation would consume the crossing it was armed for and the
+one-level-late behaviour would persist.
+
+At Level 4 there is no further threshold, `GetNextThreshold` returns null, and the retry
+cooldown governs alone. Everything else here stands: thresholds, the debt-level to
+Presentation Intensity mapping, and the rule that `effectiveWorkInterval` affects Timing
+only are all unchanged.
+
 ## Review Trigger
 
 Review when:
