@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Windows;
+using Microsoft.Data.Sqlite;
 using RestCue.Core.DataManagement;
 using RestCue.Core.Settings;
 using RestCue.Core.UsageEvents;
@@ -57,6 +59,7 @@ public sealed partial class DataManagementWindow : Window
 
             if (result.Succeeded)
             {
+                await WriteTimestampAsync("last_data_export_utc");
                 ExportStatusText.Text = $"已匯出至: {result.WrittenPath}";
             }
             else
@@ -99,6 +102,7 @@ public sealed partial class DataManagementWindow : Window
 
             if (result.Succeeded)
             {
+                await WriteTimestampAsync("last_data_clear_utc");
                 ClearHistoryStatusText.Text = $"已清除 {result.AffectedRowCount} 筆記錄。";
                 OnDataCleared();
             }
@@ -115,6 +119,34 @@ public sealed partial class DataManagementWindow : Window
         {
             ClearHistoryButton.IsEnabled = true;
         }
+    }
+
+    private static async Task WriteTimestampAsync(string key)
+    {
+        var dbPath = Infrastructure.Settings.LocalSettingsPaths.DatabaseFile;
+        var cs = new SqliteConnectionStringBuilder
+        {
+            DataSource = System.IO.Path.GetFullPath(dbPath),
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Pooling = false,
+        }.ToString();
+
+        await using var connection = new SqliteConnection(cs);
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            INSERT INTO settings (key, value, updated_at_utc)
+            VALUES ($key, $value, $updatedAtUtc)
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                updated_at_utc = excluded.updated_at_utc;
+            """;
+        command.Parameters.AddWithValue("$key", key);
+        command.Parameters.AddWithValue("$value", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+        command.Parameters.AddWithValue("$updatedAtUtc", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+        await command.ExecuteNonQueryAsync();
     }
 
     private async void ResetSettingsButton_Click(object sender, RoutedEventArgs e)

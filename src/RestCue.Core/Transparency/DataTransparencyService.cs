@@ -7,6 +7,7 @@ public sealed class DataTransparencyService : IDataTransparencyService
 {
     private readonly ISettingsRepository settingsRepository;
     private readonly IUsageEventMetadataReader metadataReader;
+    private readonly string databasePath;
 
     private static readonly string[] NeverCollectedLabels =
     [
@@ -15,17 +16,24 @@ public sealed class DataTransparencyService : IDataTransparencyService
         "剪貼簿",
         "畫面",
         "網址",
-        "文件名稱"
+        "文件名稱",
+        "camera",
+        "microphone",
+        "mouse trajectory",
+        "input / mouse pattern analysis"
     ];
 
     public DataTransparencyService(
         ISettingsRepository settingsRepository,
-        IUsageEventMetadataReader metadataReader)
+        IUsageEventMetadataReader metadataReader,
+        string databasePath)
     {
         ArgumentNullException.ThrowIfNull(settingsRepository);
         ArgumentNullException.ThrowIfNull(metadataReader);
+        ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
         this.settingsRepository = settingsRepository;
         this.metadataReader = metadataReader;
+        this.databasePath = databasePath;
     }
 
     public async Task<DataTransparencySnapshot> GetSnapshotAsync(
@@ -58,6 +66,17 @@ public sealed class DataTransparencyService : IDataTransparencyService
 
         var settings = settingsResult.Settings;
 
+        long? databaseSizeBytes = null;
+        try
+        {
+            var fileInfo = new System.IO.FileInfo(databasePath);
+            if (fileInfo.Exists)
+                databaseSizeBytes = fileInfo.Length;
+        }
+        catch
+        {
+        }
+
         var categories = new List<DataCategoryStatus>
         {
             new(
@@ -67,7 +86,7 @@ public sealed class DataTransparencyService : IDataTransparencyService
             new(
                 "Foreground process name collection",
                 settings.CollectForegroundProcessNames
-                    ? CollectionState.NeverCollected
+                    ? CollectionState.EnabledEmpty
                     : CollectionState.DisabledByUser,
                 settings.CollectForegroundProcessNames
                     ? "Opt-in enabled but data is only in memory, never persisted"
@@ -94,6 +113,9 @@ public sealed class DataTransparencyService : IDataTransparencyService
             metadata.TotalCount,
             metadata.EarliestUtc,
             metadata.LatestUtc,
+            databaseSizeBytes,
+            metadata.LastExportUtc,
+            metadata.LastClearUtc,
             null);
     }
 
@@ -108,6 +130,9 @@ public sealed class DataTransparencyService : IDataTransparencyService
             [unavailable],
             [],
             0,
+            null,
+            null,
+            null,
             null,
             null,
             message);

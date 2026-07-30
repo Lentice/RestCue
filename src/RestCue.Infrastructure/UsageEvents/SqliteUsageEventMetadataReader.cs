@@ -6,11 +6,13 @@ namespace RestCue.Infrastructure.UsageEvents;
 
 public sealed class SqliteUsageEventMetadataReader : IUsageEventMetadataReader
 {
+    private readonly string databasePath;
     private readonly string connectionString;
 
     public SqliteUsageEventMetadataReader(string databasePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
+        this.databasePath = databasePath;
         connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = Path.GetFullPath(databasePath),
@@ -32,6 +34,8 @@ public sealed class SqliteUsageEventMetadataReader : IUsageEventMetadataReader
         var perTypeRaw = new Dictionary<string, long>();
         var unparsableRowCount = 0L;
         var schemaVersion = 0L;
+        DateTimeOffset? lastExportUtc = null;
+        DateTimeOffset? lastClearUtc = null;
 
         await using (var countCommand = connection.CreateCommand())
         {
@@ -101,6 +105,28 @@ public sealed class SqliteUsageEventMetadataReader : IUsageEventMetadataReader
             schemaVersion = (long)(await versionCommand.ExecuteScalarAsync(cancellationToken) ?? 0L);
         }
 
+        await using (var exportCmd = connection.CreateCommand())
+        {
+            exportCmd.CommandText = "SELECT value FROM settings WHERE key = 'last_data_export_utc';";
+            var val = await exportCmd.ExecuteScalarAsync(cancellationToken);
+            if (val is string exportStr && !string.IsNullOrWhiteSpace(exportStr))
+            {
+                if (DateTimeOffset.TryParse(exportStr, null, DateTimeStyles.RoundtripKind, out var exportDt))
+                    lastExportUtc = exportDt.ToUniversalTime();
+            }
+        }
+
+        await using (var clearCmd = connection.CreateCommand())
+        {
+            clearCmd.CommandText = "SELECT value FROM settings WHERE key = 'last_data_clear_utc';";
+            var val = await clearCmd.ExecuteScalarAsync(cancellationToken);
+            if (val is string clearStr && !string.IsNullOrWhiteSpace(clearStr))
+            {
+                if (DateTimeOffset.TryParse(clearStr, null, DateTimeStyles.RoundtripKind, out var clearDt))
+                    lastClearUtc = clearDt.ToUniversalTime();
+            }
+        }
+
         var perTypeCounts = new Dictionary<UsageEventType, long>();
         foreach (var (typeStr, count) in perTypeRaw)
         {
@@ -120,6 +146,8 @@ public sealed class SqliteUsageEventMetadataReader : IUsageEventMetadataReader
             latestUtc,
             perTypeCounts,
             unparsableRowCount,
-            schemaVersion);
+            schemaVersion,
+            lastExportUtc,
+            lastClearUtc);
     }
 }

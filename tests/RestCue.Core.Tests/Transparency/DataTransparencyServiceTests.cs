@@ -69,7 +69,7 @@ public sealed class DataTransparencyServiceTests
         var fgCategory = snapshot.Categories
             .First(c => c.Label == "Foreground process name collection");
         Assert.NotEqual(CollectionState.DisabledByUser, fgCategory.State);
-        Assert.Equal(CollectionState.NeverCollected, fgCategory.State);
+        Assert.Equal(CollectionState.EnabledEmpty, fgCategory.State);
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public sealed class DataTransparencyServiceTests
         var settingsRepo = new FakeSettingsRepository(
             new SettingsLoadResult(AppSettings.Default, RecoveredFromCorruption: true));
         var reader = new FakeUsageEventMetadataReader();
-        var service = new DataTransparencyService(settingsRepo, reader);
+        var service = new DataTransparencyService(settingsRepo, reader, "test.db");
         var snapshot = await service.GetSnapshotAsync();
 
         Assert.NotNull(snapshot.UnavailableMessage);
@@ -135,7 +135,7 @@ public sealed class DataTransparencyServiceTests
         var settingsRepo = new FakeSettingsRepository(
             new SettingsLoadResult(settings));
         var reader = new FakeUsageEventMetadataReader(throwOnRead);
-        var service = new DataTransparencyService(settingsRepo, reader);
+        var service = new DataTransparencyService(settingsRepo, reader, "test.db");
         return (service, reader);
     }
 
@@ -184,7 +184,7 @@ public sealed class DataTransparencyServiceTests
                 .ToDictionary(g => g.Key, g => g.LongCount());
 
             return Task.FromResult(new UsageEventMetadata(
-                totalCount, earliest, latest, perType, 0, 2));
+                totalCount, earliest, latest, perType, 0, 2, null, null));
         }
     }
 }

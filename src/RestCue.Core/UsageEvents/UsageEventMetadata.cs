@@ -6,4 +6,6 @@ public sealed record UsageEventMetadata(
     DateTimeOffset? LatestUtc,
     IReadOnlyDictionary<UsageEventType, long> PerTypeCounts,
     long UnparsableRowCount,
-    long SchemaVersion);
+    long SchemaVersion,
+    DateTimeOffset? LastExportUtc,
+    DateTimeOffset? LastClearUtc);

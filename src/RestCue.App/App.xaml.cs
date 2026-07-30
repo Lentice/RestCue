@@ -170,7 +170,8 @@ public partial class App : System.Windows.Application
         }
 
         var reader = new SqliteUsageEventMetadataReader(LocalSettingsPaths.DatabaseFile);
-        new TransparencyWindow(new DataTransparencyService(_settingsRepository, reader)).Show();
+        new TransparencyWindow(new DataTransparencyService(
+            _settingsRepository, reader, LocalSettingsPaths.DatabaseFile)).Show();
     }
 
     private void OpenDataManagementWindow()

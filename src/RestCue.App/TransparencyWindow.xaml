@@ -54,6 +54,19 @@
                     </StackPanel>
                 </Border>
 
+                <Border Style="{StaticResource StackedCardStyle}" Margin="0,12,0,0">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource SectionHeaderStyle}"
+                                   Text="資料庫狀態" />
+                        <TextBlock x:Name="DatabaseSizeText" Margin="0,8,0,0"
+                                   Style="{StaticResource MetricLabelStyle}" />
+                        <TextBlock x:Name="LastExportText" Margin="0,4,0,0"
+                                   Style="{StaticResource MetricLabelStyle}" />
+                        <TextBlock x:Name="LastClearText" Margin="0,4,0,0"
+                                   Style="{StaticResource MetricLabelStyle}" />
+                    </StackPanel>
+                </Border>
+
                 <Border Style="{StaticResource StackedCardStyle}" Margin="0,12,0,20">
                     <StackPanel>
                         <TextBlock Style="{StaticResource SectionHeaderStyle}"

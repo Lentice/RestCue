@@ -26,4 +26,7 @@ public sealed record DataTransparencySnapshot(
     long TotalEventCount,
     DateTimeOffset? EarliestUtc,
     DateTimeOffset? LatestUtc,
+    long? DatabaseSizeBytes,
+    DateTimeOffset? LastExportUtc,
+    DateTimeOffset? LastClearUtc,
     string? UnavailableMessage);

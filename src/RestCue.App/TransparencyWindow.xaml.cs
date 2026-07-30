@@ -63,6 +63,23 @@ public sealed partial class TransparencyWindow : Window
         LatestText.Text = snapshot.LatestUtc.HasValue
             ? $"最新事件: {snapshot.LatestUtc.Value.LocalDateTime:yyyy-MM-dd HH:mm:ss}"
             : "最新事件: (無資料)";
+
+        DatabaseSizeText.Text = snapshot.DatabaseSizeBytes.HasValue
+            ? $"資料庫大小: {FormatFileSize(snapshot.DatabaseSizeBytes.Value)}"
+            : "資料庫大小: (無法讀取)";
+        LastExportText.Text = snapshot.LastExportUtc.HasValue
+            ? $"最後匯出: {snapshot.LastExportUtc.Value.LocalDateTime:yyyy-MM-dd HH:mm:ss}"
+            : "最後匯出: (從未匯出)";
+        LastClearText.Text = snapshot.LastClearUtc.HasValue
+            ? "最後清除: " + $"{snapshot.LastClearUtc.Value.LocalDateTime:yyyy-MM-dd HH:mm:ss}"
+            : "最後清除: (從未清除)";
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
     }
 
     private void OnCloseClick(object sender, RoutedEventArgs e)
