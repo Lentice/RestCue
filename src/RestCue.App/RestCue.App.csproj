@@ -5,6 +5,7 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>RestCue</AssemblyName>
+    <ApplicationIcon>Assets\RestCue.ico</ApplicationIcon>
     <Description>A gentle cue to rest your eyes.</Description>
   </PropertyGroup>
   <ItemGroup>
