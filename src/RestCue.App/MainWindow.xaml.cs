@@ -898,6 +898,14 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             WorkCyclePhase.Disabled => "已停用",
             _ => "未知"
         };
+
+        StatusDot.Fill = phase switch
+        {
+            WorkCyclePhase.Working => (System.Windows.Media.Brush)FindResource("SuccessBrush"),
+            WorkCyclePhase.ReminderVisible or WorkCyclePhase.BreakInProgress => (System.Windows.Media.Brush)FindResource("AccentBrush"),
+            WorkCyclePhase.PendingReminder or WorkCyclePhase.Snoozed => (System.Windows.Media.Brush)FindResource("WarningBrush"),
+            _ => (System.Windows.Media.Brush)FindResource("TextMutedBrush")
+        };
     }
 
     internal static Core.Reminders.BreakGuideMode MapBreakGuideMode(Core.Settings.BreakGuideMode mode)
