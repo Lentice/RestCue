@@ -16,3 +16,4 @@ artifacts/
 node_modules/
 .opencode-runtime/
 .tmp-msbuild/
+.dcli-review-state/
