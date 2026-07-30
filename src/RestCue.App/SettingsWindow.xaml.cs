@@ -10,13 +10,19 @@ public sealed partial class SettingsWindow : Window
 {
     private readonly ISettingsRepository repository;
     private readonly IApplicationRuleRepository ruleRepository;
-    private readonly AppSettings currentSettings;
+    private AppSettings currentSettings;
     private readonly AppSettingsValidator validator = new();
     private readonly ObservableCollection<ApplicationRule> rules = [];
     private string? editingProcessName;
     private readonly SemaphoreSlim ruleGate = new(1, 1);
 
     public event EventHandler? ApplicationRulesChanged;
+
+    /// <summary>
+    /// Raised after settings are persisted, so the application can apply everything that
+    /// does not need the reminder engine rebuilt.
+    /// </summary>
+    public event EventHandler<AppSettings>? SettingsSaved;
 
     public SettingsWindow(
         ISettingsRepository repository,
@@ -372,6 +378,10 @@ public sealed partial class SettingsWindow : Window
             return;
         }
 
+        IReadOnlyList<string> restartRequired = RestartRequiredSettings.Changed(currentSettings, parsed);
+        currentSettings = parsed;
+        SettingsSaved?.Invoke(this, parsed);
+
         if (StartupCheck.IsChecked == true != StartupManager.IsEnabled)
         {
             try
@@ -390,7 +400,7 @@ public sealed partial class SettingsWindow : Window
             }
         }
 
-        ShowStatus("設定已儲存。部分設定將於下次啟動時生效。", isError: false);
+        ShowStatus(SettingsSaveMessage.Build(restartRequired), isError: false);
     }
 
     private void OnCloseClick(object sender, RoutedEventArgs e)

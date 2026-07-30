@@ -26,6 +26,16 @@ public sealed class AppSettingsValidator : ISettingsValidator
             errors.Add(new(nameof(settings.ReminderOpacity), "Reminder opacity must be between 20% and 100%."));
         }
 
+        // Passive-pause detection is evaluated before natural-pause detection, so a
+        // natural-pause threshold at or above it would let passive pause always win and
+        // silently retire the natural-pause reminder path.
+        if (settings.NaturalPauseThreshold >= settings.PassiveBreakThreshold)
+        {
+            errors.Add(new(
+                nameof(settings.NaturalPauseThreshold),
+                "Natural pause threshold must be less than passive break threshold."));
+        }
+
         if (settings.PassiveBreakThreshold >= settings.IdleThreshold)
         {
             errors.Add(new(

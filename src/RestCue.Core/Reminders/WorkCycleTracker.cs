@@ -69,7 +69,10 @@ public sealed class WorkCycleTracker
         ValidateThreshold(workInterval, nameof(workInterval));
         ValidateThreshold(idleThreshold, nameof(idleThreshold));
         ValidateThreshold(naturalPauseThreshold, nameof(naturalPauseThreshold));
-        ValidateThreshold(maximumReminderWait, nameof(maximumReminderWait));
+        // The settings validator accepts a maximum reminder wait of 0–10 minutes, where
+        // zero means "Timing is eligible as soon as a reminder is pending". The guard
+        // yields to the validator: only a negative wait is nonsense.
+        ValidateNonNegative(maximumReminderWait, nameof(maximumReminderWait));
         ValidateThreshold(breakDuration, nameof(breakDuration));
         ValidateThreshold(passiveBreakThreshold, nameof(passiveBreakThreshold));
         ValidateThreshold(snoozeDuration, nameof(snoozeDuration));
@@ -1009,5 +1012,12 @@ public sealed class WorkCycleTracker
         if (value <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(
                 paramName, value, "Threshold must be positive.");
+    }
+
+    private static void ValidateNonNegative(TimeSpan value, string paramName)
+    {
+        if (value < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(
+                paramName, value, "Threshold cannot be negative.");
     }
 }

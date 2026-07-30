@@ -6,11 +6,13 @@ using RestCue.Core.Domain;
 using RestCue.Core.Events;
 using RestCue.Core.Reminders;
 using RestCue.Core.Settings;
+using RestCue.Core.Time;
 using RestCue.Core.Transparency;
 using RestCue.Core.UsageEvents;
 using RestCue.Infrastructure.Activity;
 using RestCue.Infrastructure.Audio;
 using RestCue.Infrastructure.Settings;
+using RestCue.Infrastructure.Time;
 using RestCue.Infrastructure.UsageEvents;
 
 namespace RestCue.App;
@@ -46,6 +48,13 @@ public partial class App : System.Windows.Application
         try
         {
             await _startup.InitializeAsync();
+
+            // A stored value that passes validation but that the engine's constructor
+            // still refuses would fail on every launch. Degrade to defaults instead.
+            AppSettings engineSettings = _startup.ResolveEngineSettings(
+                settings => WorkCycleTrackerFactory.Create(settings, new SystemClock()),
+                message => Trace.TraceError(message));
+
             _audioPlayer = new WindowsBreakGuideAudioPlayer();
             _statusWindow.AudioPlayer = _audioPlayer;
             _ruleRepository = new SqliteApplicationRuleRepository(LocalSettingsPaths.DatabaseFile);
@@ -57,9 +66,9 @@ public partial class App : System.Windows.Application
 
             _statusWindow.StartActivityTracking(
                 new WindowsUserActivityMonitor(),
-                _startup.CurrentSettings,
+                engineSettings,
                 foregroundContextProvider: new WindowsForegroundContextProvider(
-                    _startup.CurrentSettings.CollectForegroundProcessNames),
+                    engineSettings.CollectForegroundProcessNames),
                 applicationRules: loadedRules,
                 defaultSuggestionProcessNames: defaultSuggestionNames);
 
@@ -214,7 +223,22 @@ public partial class App : System.Windows.Application
 
         var window = new SettingsWindow(_settingsRepository, _ruleRepository, _startup.CurrentSettings);
         window.ApplicationRulesChanged += OnApplicationRulesChanged;
+        window.SettingsSaved += OnSettingsSaved;
+        window.Closed += (_, _) =>
+        {
+            window.ApplicationRulesChanged -= OnApplicationRulesChanged;
+            window.SettingsSaved -= OnSettingsSaved;
+        };
         window.Show();
+    }
+
+    private void OnSettingsSaved(object? sender, AppSettings saved)
+    {
+        if (_startup == null)
+            return;
+
+        _startup.CurrentSettings = saved;
+        _statusWindow?.ApplyLiveSettings(saved);
     }
 
     private async void OnApplicationRulesChanged(object? sender, EventArgs e)

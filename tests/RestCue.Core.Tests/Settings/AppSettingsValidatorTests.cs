@@ -50,6 +50,77 @@ public sealed class AppSettingsValidatorTests
     }
 
     [Fact]
+    public void Natural_pause_threshold_below_passive_break_threshold_is_valid()
+    {
+        AppSettings settings = AppSettings.Default with
+        {
+            NaturalPauseThreshold = TimeSpan.FromSeconds(29),
+            PassiveBreakThreshold = TimeSpan.FromSeconds(30),
+        };
+        var validator = new AppSettingsValidator();
+
+        IReadOnlyList<SettingsValidationError> errors = validator.Validate(settings);
+
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void Natural_pause_threshold_equal_to_passive_break_threshold_is_invalid()
+    {
+        AppSettings settings = AppSettings.Default with
+        {
+            NaturalPauseThreshold = TimeSpan.FromSeconds(30),
+            PassiveBreakThreshold = TimeSpan.FromSeconds(30),
+        };
+        var validator = new AppSettingsValidator();
+
+        IReadOnlyList<SettingsValidationError> errors = validator.Validate(settings);
+
+        SettingsValidationError error = Assert.Single(errors);
+        Assert.Equal("NaturalPauseThreshold", error.Field);
+    }
+
+    [Fact]
+    public void Natural_pause_threshold_above_passive_break_threshold_is_invalid()
+    {
+        // The combination the product used to accept: passive pause always wins the
+        // evaluation, so natural-pause reminders silently stop existing.
+        AppSettings settings = AppSettings.Default with
+        {
+            NaturalPauseThreshold = TimeSpan.FromSeconds(30),
+            PassiveBreakThreshold = TimeSpan.FromSeconds(10),
+        };
+        var validator = new AppSettingsValidator();
+
+        IReadOnlyList<SettingsValidationError> errors = validator.Validate(settings);
+
+        SettingsValidationError error = Assert.Single(errors);
+        Assert.Equal("NaturalPauseThreshold", error.Field);
+    }
+
+    [Fact]
+    public void Both_pause_ordering_rules_are_reported_together()
+    {
+        // No in-range combination can break both rules at once, so the fixture also
+        // trips two range errors; what matters is that neither ordering rule masks the
+        // other.
+        AppSettings settings = AppSettings.Default with
+        {
+            NaturalPauseThreshold = TimeSpan.FromSeconds(60),
+            PassiveBreakThreshold = TimeSpan.FromSeconds(60),
+            IdleThreshold = TimeSpan.FromSeconds(60),
+        };
+        var validator = new AppSettingsValidator();
+
+        IReadOnlyList<SettingsValidationError> errors = validator.Validate(settings);
+
+        Assert.Contains(errors, e =>
+            e.Field == "NaturalPauseThreshold" && e.Message.Contains("passive", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(errors, e =>
+            e.Field == "PassiveBreakThreshold" && e.Message.Contains("idle", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void RetryCooldown_below_minimum_is_invalid()
     {
         AppSettings settings = AppSettings.Default with

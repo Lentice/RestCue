@@ -182,6 +182,12 @@ public sealed class WpfApplicationFixture : IDisposable
         });
     }
 
+    /// <summary>
+    /// Runs an assertion body on the UI thread. Anything it throws surfaces here, so a
+    /// failed assertion still fails the test.
+    /// </summary>
+    public void Run(Action body) => dispatcher.Invoke(body);
+
     public void Dispose()
     {
         dispatcher.InvokeShutdown();

@@ -42,6 +42,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     private IClock? clock;
     private TimeSpan snoozeDuration;
     private Core.Settings.BreakGuideMode userBreakGuideMode;
+    private double reminderOpacity = 1.0;
 
     public MainWindow()
     {
@@ -110,6 +111,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
         snoozeDuration = settings.SnoozeDuration;
         userBreakGuideMode = settings.BreakGuideMode;
+        reminderOpacity = settings.ReminderOpacity;
         this.foregroundContextProvider = foregroundContextProvider;
         this.applicationRules = new ApplicationRuleSet(applicationRules);
         defaultSuggestionNames = defaultSuggestionProcessNames is not null
@@ -117,21 +119,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             : [];
         seenSuggestionProcesses = [];
 
-        workCycleTracker = new WorkCycleTracker(
-            clock ?? new SystemClock(),
-            settings.WorkInterval,
-            settings.IdleThreshold,
-            settings.NaturalPauseThreshold,
-            settings.MaximumReminderWait,
-            settings.BreakDuration,
-            settings.PassiveBreakThreshold,
-            settings.SnoozeDuration,
-            settings.ReminderDisplayDuration,
-            settings.RetryCooldown,
-            settings.DebtLevel2Threshold,
-            settings.DebtLevel3Threshold,
-            settings.DebtLevel4Threshold,
-            settings.FocusModeDuration);
+        workCycleTracker = WorkCycleTrackerFactory.Create(settings, this.clock);
 
         workCycleTracker.ReminderShown += OnReminderShown;
         workCycleTracker.ReminderSuppressed += OnReminderSuppressed;
@@ -298,6 +286,32 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             collectProcessNames);
     }
 
+    /// <summary>
+    /// Applies the settings that do not require rebuilding the reminder engine. Process
+    /// name collection comes first because it is a privacy control: a user who has just
+    /// switched it off must not have to wait for a relaunch.
+    /// </summary>
+    /// <remarks>
+    /// The engine parameters are deliberately left alone — see
+    /// <see cref="RestartRequiredSettings"/> for why rebuilding is not the right answer.
+    /// </remarks>
+    public void ApplyLiveSettings(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        UpdateForegroundContextProvider(settings.CollectForegroundProcessNames);
+
+        reduceMotion = settings.ReduceMotion;
+        userBreakGuideMode = settings.BreakGuideMode;
+        reminderOpacity = settings.ReminderOpacity;
+
+        if (reminderWindow != null)
+        {
+            reminderWindow.ReduceMotion = reduceMotion;
+            reminderWindow.ApplySurfaceOpacity(reminderOpacity);
+        }
+    }
+
     public void UpdateApplicationRules(IEnumerable<ApplicationRule> rules)
     {
         applicationRules = new ApplicationRuleSet(rules);
@@ -395,6 +409,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             reminderWindow.Closed += OnReminderWindowClosed;
         }
 
+        reminderWindow.ApplySurfaceOpacity(reminderOpacity);
         reminderWindow.BreakDuration = workCycleTracker.BreakDuration;
         SetupBreakGuideSession(clock ?? new SystemClock(), workCycleTracker.BreakDuration);
         reminderWindow.Show();
@@ -673,6 +688,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
                 reminderWindow.Closed += OnReminderWindowClosed;
             }
 
+            reminderWindow.ApplySurfaceOpacity(reminderOpacity);
             reminderWindow.SnoozeDuration = snoozeDuration;
             reminderWindow.BreakDuration = workCycleTracker!.BreakDuration;
             reminderWindow.ShowReminder();

@@ -23,6 +23,22 @@ public partial class ReminderWindow : Window
 
     public bool ReduceMotion { get; set; }
 
+    /// <summary>
+    /// Applies the user's reminder-opacity setting to the whole surface.
+    /// </summary>
+    /// <remarks>
+    /// WPF opacity does not affect hit-testing, so the reminder stays clickable even at
+    /// the minimum value. The break guide animates <c>GuideVisual.Opacity</c>, an inner
+    /// element, so the two compose instead of fighting.
+    /// </remarks>
+    public void ApplySurfaceOpacity(double opacity)
+    {
+        Opacity = Math.Clamp(opacity, MinimumSurfaceOpacity, 1.0);
+    }
+
+    /// <summary>The validated floor from the settings contract (20%).</summary>
+    public const double MinimumSurfaceOpacity = 0.2;
+
     private static readonly System.Windows.Media.Animation.DoubleAnimation DiscretePulse = new()
     {
         From = 1.0,
