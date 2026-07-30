@@ -363,10 +363,20 @@ public sealed class WorkCycleTracker
         if (CurrentPhase != WorkCyclePhase.BreakInProgress)
             return;
 
-        CurrentPhase = WorkCyclePhase.Working;
+        CurrentPhase = AccumulatedWorkTime >= WorkCycleThreshold
+            ? WorkCyclePhase.PendingReminder
+            : WorkCyclePhase.Working;
+
+        if (CurrentPhase == WorkCyclePhase.PendingReminder)
+            pendingSinceUtc = clock.UtcNow;
+
         breakStartUtc = null;
         BreakCancelled?.Invoke(this, EventArgs.Empty);
     }
+
+    private TimeSpan WorkCycleThreshold => effectiveWorkInterval > TimeSpan.Zero
+        ? effectiveWorkInterval
+        : workInterval;
 
     public void Snooze()
     {

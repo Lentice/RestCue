@@ -4374,7 +4374,7 @@ public sealed class WorkCycleTrackerTests
         Assert.Equal(1, cancelled);
         Assert.Equal(savedAccum, tracker.AccumulatedWorkTime);
         Assert.Equal(savedLevel, tracker.RestDebtLevel);
-        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
     }
 
     [Fact]

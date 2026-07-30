@@ -109,7 +109,7 @@ public sealed class StateTransitionScenarioTests
     }
 
     [Fact]
-    public void BreakInProgress_to_Working_on_CancelBreak()
+    public void BreakInProgress_to_PendingReminder_on_CancelBreak_when_debt_owed()
     {
         var clock = new FakeClock();
         var tracker = CreateTracker(clock, workInterval: TimeSpan.FromSeconds(30), naturalPause: TimeSpan.FromSeconds(5));
@@ -118,7 +118,7 @@ public sealed class StateTransitionScenarioTests
 
         tracker.CancelBreak();
 
-        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
     }
 
     [Fact]
