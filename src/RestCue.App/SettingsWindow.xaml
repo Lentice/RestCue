@@ -287,6 +287,11 @@
                                              Content="語音 + 視覺引導" Margin="0,6,0,0" />
                                 <RadioButton x:Name="GuideVisualRadio" GroupName="GuideMode"
                                              Content="純視覺引導" Margin="0,6,0,0" />
+                                <CheckBox x:Name="ReduceMotionCheck"
+                                          Margin="0,12,0,0"
+                                          Content="減少動畫效果" />
+                                <TextBlock Style="{StaticResource FieldHintStyle}"
+                                           Text="啟用後，休息時的視覺引導僅顯示階段文字，不包含連續動畫。" />
                             </StackPanel>
                         </Border>
 

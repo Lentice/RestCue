@@ -38,4 +38,6 @@ public sealed record AppSettings
 
     public BreakGuideMode BreakGuideMode { get; init; } = BreakGuideMode.Cue;
 
+    public bool ReduceMotion { get; init; }
+
 }

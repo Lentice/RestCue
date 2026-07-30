@@ -56,6 +56,7 @@ public sealed partial class SettingsWindow : Window
             ReminderOpacityText.Text = $"{(int)(ReminderOpacitySlider.Value * 100)}%";
 
         CollectProcessNamesCheck.IsChecked = currentSettings.CollectForegroundProcessNames;
+        ReduceMotionCheck.IsChecked = currentSettings.ReduceMotion;
 
         switch (currentSettings.BreakGuideMode)
         {
@@ -441,6 +442,7 @@ public sealed partial class SettingsWindow : Window
 
         return currentSettings with
         {
+            ReduceMotion = ReduceMotionCheck.IsChecked == true,
             WorkInterval = TimeSpan.FromMinutes(workInterval),
             NaturalPauseThreshold = TimeSpan.FromSeconds(naturalPause),
             MaximumReminderWait = TimeSpan.FromMinutes(maxWait),

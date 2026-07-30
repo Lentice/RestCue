@@ -1,5 +1,7 @@
 using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using RestCue.App.Lifecycle;
@@ -18,6 +20,13 @@ namespace RestCue.App;
 
 public partial class MainWindow : System.Windows.Window, IStatusWindow
 {
+    private const int CancelBreakHotkeyId = 1;
+    private const int ModControl = 0x0002;
+    private const int ModShift = 0x0004;
+    private const int VkEscape = 0x1B;
+    private HwndSource? hwndSource;
+    private bool hotkeyRegistered;
+    private bool reduceMotion;
     private readonly DispatcherTimer activityTimer;
     private IUserActivityMonitor? activityMonitor;
     private UserActivityStatusTracker? activityTracker;
@@ -89,6 +98,9 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         IEnumerable<ApplicationRule>? applicationRules = null,
         IEnumerable<string>? defaultSuggestionProcessNames = null)
     {
+        reduceMotion = settings.ReduceMotion;
+        RegisterCancelBreakHotkey();
+
         this.activityMonitor = activityMonitor;
         this.clock = clock ?? new SystemClock();
         activityTracker = new UserActivityStatusTracker(
@@ -142,6 +154,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
     public void StopActivityTracking()
     {
+        UnregisterCancelBreakHotkey();
         EndAudioGuide();
         audioCoordinator = null;
 
@@ -287,6 +300,73 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         applicationRules = new ApplicationRuleSet(rules);
     }
 
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    private void RegisterCancelBreakHotkey()
+    {
+        if (hotkeyRegistered)
+            return;
+
+        hwndSource = PresentationSource.FromVisual(this) as HwndSource;
+        if (hwndSource == null)
+        {
+            SourceInitialized += OnSourceInitializedForHotkey;
+            return;
+        }
+
+        DoRegisterHotkey();
+    }
+
+    private void OnSourceInitializedForHotkey(object? sender, EventArgs e)
+    {
+        SourceInitialized -= OnSourceInitializedForHotkey;
+        hwndSource = PresentationSource.FromVisual(this) as HwndSource;
+        if (hwndSource != null)
+            DoRegisterHotkey();
+    }
+
+    private void DoRegisterHotkey()
+    {
+        if (hwndSource == null || hotkeyRegistered)
+            return;
+
+        var hwnd = hwndSource.Handle;
+        const uint mod = ModControl | ModShift;
+        if (RegisterHotKey(hwnd, CancelBreakHotkeyId, mod, VkEscape))
+        {
+            hotkeyRegistered = true;
+            hwndSource.AddHook(HotKeyHandler);
+        }
+    }
+
+    private void UnregisterCancelBreakHotkey()
+    {
+        if (!hotkeyRegistered || hwndSource == null)
+            return;
+
+        hwndSource.RemoveHook(HotKeyHandler);
+        UnregisterHotKey(hwndSource.Handle, CancelBreakHotkeyId);
+        hotkeyRegistered = false;
+    }
+
+    private IntPtr HotKeyHandler(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const int WM_HOTKEY = 0x0312;
+        if (msg == WM_HOTKEY && wParam.ToInt32() == CancelBreakHotkeyId)
+        {
+            if (workCycleTracker?.CurrentPhase == WorkCyclePhase.BreakInProgress)
+            {
+                OnCancelRequested(this, EventArgs.Empty);
+                handled = true;
+            }
+        }
+        return IntPtr.Zero;
+    }
+
     public void StartBreakNow()
     {
         if (workCycleTracker == null) return;
@@ -306,7 +386,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
         if (reminderWindow == null)
         {
-            reminderWindow = new ReminderWindow();
+            reminderWindow = new ReminderWindow { ReduceMotion = reduceMotion };
             reminderWindow.BreakCompleted += OnReminderBreakCompleted;
             reminderWindow.CancelRequested += OnCancelRequested;
             reminderWindow.Closed += OnReminderWindowClosed;
@@ -581,7 +661,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         {
             if (reminderWindow == null)
             {
-                reminderWindow = new ReminderWindow();
+                reminderWindow = new ReminderWindow { ReduceMotion = reduceMotion };
                 reminderWindow.BreakRequested += OnBreakRequested;
                 reminderWindow.BreakCompleted += OnReminderBreakCompleted;
                 reminderWindow.SnoozeRequested += OnSnoozeRequested;

@@ -2,20 +2,25 @@ using RestCue.Core.Time;
 
 namespace RestCue.Core.Reminders;
 
-public sealed class BreakGuideSession
+public sealed class BreakGuideSession : IBreakGuide
 {
     private readonly IClock clock;
-    private readonly TimeSpan duration;
+    private TimeSpan duration;
     private DateTimeOffset startedUtc;
     private bool completedFired;
     private bool middleFired;
+    private TaskCompletionSource<BreakResult>? tcs;
 
-    public BreakGuideSession(IClock clock, TimeSpan duration)
+    public BreakGuideSession(IClock clock)
     {
         ArgumentNullException.ThrowIfNull(clock);
+        this.clock = clock;
+    }
+
+    public BreakGuideSession(IClock clock, TimeSpan duration) : this(clock)
+    {
         if (duration <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(duration), duration, "Duration must be positive.");
-        this.clock = clock;
         this.duration = duration;
     }
 
@@ -33,6 +38,20 @@ public sealed class BreakGuideSession
         Phase = BreakGuidePhase.Running;
         startedUtc = clock.UtcNow;
         CueChanged?.Invoke(this, BreakGuideCue.Start);
+    }
+
+    public async Task<BreakResult> StartAsync(BreakGuideOptions options, CancellationToken cancellationToken = default)
+    {
+        if (Phase != BreakGuidePhase.NotStarted)
+            return BreakResult.Cancelled;
+
+        duration = options.Duration;
+        tcs = new TaskCompletionSource<BreakResult>();
+        cancellationToken.Register(() => Cancel());
+
+        Start();
+
+        return await tcs.Task;
     }
 
     public void Tick()
@@ -54,6 +73,7 @@ public sealed class BreakGuideSession
             Phase = BreakGuidePhase.Completed;
             CueChanged?.Invoke(this, BreakGuideCue.End);
             Completed?.Invoke(this, EventArgs.Empty);
+            tcs?.TrySetResult(BreakResult.Completed);
         }
     }
 
@@ -64,5 +84,6 @@ public sealed class BreakGuideSession
 
         Phase = BreakGuidePhase.Cancelled;
         Cancelled?.Invoke(this, EventArgs.Empty);
+        tcs?.TrySetResult(BreakResult.Cancelled);
     }
 }

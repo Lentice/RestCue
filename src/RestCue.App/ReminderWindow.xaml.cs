@@ -21,6 +21,15 @@ public partial class ReminderWindow : Window
 
     public Action? BreakGuideTick { get; set; }
 
+    public bool ReduceMotion { get; set; }
+
+    private static readonly System.Windows.Media.Animation.DoubleAnimation DiscretePulse = new()
+    {
+        From = 1.0,
+        To = 1.0,
+        Duration = TimeSpan.FromSeconds(0.1),
+    };
+
     public ReminderWindow()
     {
         InitializeComponent();
@@ -58,16 +67,26 @@ public partial class ReminderWindow : Window
         IgnoreButton.Visibility = Visibility.Collapsed;
         CancelButton.Visibility = Visibility.Visible;
         GuideVisual.Visibility = Visibility.Visible;
-        GuideVisual.BeginAnimation(
-            System.Windows.UIElement.OpacityProperty,
-            new System.Windows.Media.Animation.DoubleAnimation
-            {
-                From = 0.4,
-                To = 1.0,
-                Duration = TimeSpan.FromSeconds(1),
-                AutoReverse = true,
-                RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever
-            });
+
+        if (ReduceMotion)
+        {
+            GuideVisual.BeginAnimation(
+                System.Windows.UIElement.OpacityProperty, DiscretePulse);
+            PhaseText.Text = "休息中⋯ 已完成 0%";
+        }
+        else
+        {
+            GuideVisual.BeginAnimation(
+                System.Windows.UIElement.OpacityProperty,
+                new System.Windows.Media.Animation.DoubleAnimation
+                {
+                    From = 0.4,
+                    To = 1.0,
+                    Duration = TimeSpan.FromSeconds(1),
+                    AutoReverse = true,
+                    RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever
+                });
+        }
         breakGuideTimer.Start();
     }
 
