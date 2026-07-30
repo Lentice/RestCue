@@ -17,6 +17,7 @@ public sealed class RestartRequiredSettingsTests
     [InlineData(nameof(AppSettings.ReduceMotion))]
     [InlineData(nameof(AppSettings.BreakGuideMode))]
     [InlineData(nameof(AppSettings.LightTouchSoundEnabled))]
+    [InlineData(nameof(AppSettings.SnoozeDuration))]
     public void Live_appliable_settings_are_not_restart_requiring(string field)
     {
         Assert.DoesNotContain(field, RestartRequiredSettings.All);
@@ -32,6 +33,7 @@ public sealed class RestartRequiredSettingsTests
             ReduceMotion = true,
             BreakGuideMode = BreakGuideMode.Voice,
             LightTouchSoundEnabled = false,
+            SnoozeDuration = TimeSpan.FromMinutes(10),
         };
 
         Assert.Empty(RestartRequiredSettings.Changed(AppSettings.Default, next));
@@ -61,10 +63,12 @@ public sealed class RestartRequiredSettingsTests
     }
 
     [Fact]
-    public void Snooze_duration_requires_a_restart_because_the_engine_owns_the_deadline()
+    public void Snooze_duration_applies_without_a_restart()
     {
+        // It holds no accumulated state, so the engine takes it in place.
         AppSettings next = AppSettings.Default with { SnoozeDuration = TimeSpan.FromMinutes(10) };
 
-        Assert.Contains(nameof(AppSettings.SnoozeDuration), RestartRequiredSettings.Changed(AppSettings.Default, next));
+        Assert.Empty(RestartRequiredSettings.Changed(AppSettings.Default, next));
+        Assert.DoesNotContain(nameof(AppSettings.SnoozeDuration), RestartRequiredSettings.All);
     }
 }

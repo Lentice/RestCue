@@ -13,7 +13,7 @@ public sealed class WorkCycleTracker
     private readonly TimeSpan maximumReminderWait;
     private readonly TimeSpan breakDuration;
     private readonly TimeSpan passiveBreakThreshold;
-    private readonly TimeSpan snoozeDuration;
+    private TimeSpan snoozeDuration;
     private readonly TimeSpan reminderDisplayDuration;
     private readonly TimeSpan retryCooldown;
     private readonly TimeSpan focusModeDuration;
@@ -128,6 +128,22 @@ public sealed class WorkCycleTracker
     public void SetNextDebtDeadline(DateTimeOffset? deadline)
     {
         nextDebtDeadline = cooldownUntil.HasValue ? deadline : null;
+    }
+
+    /// <summary>
+    /// Updates the snooze duration in place.
+    /// </summary>
+    /// <remarks>
+    /// Snooze duration is the one engine timing value that can change without a rebuild:
+    /// it is read only when <see cref="Snooze"/> computes a deadline, so it holds no
+    /// accumulated state. A snooze already running keeps the deadline it was given; the new
+    /// value applies to the next one. This is what lets the setting apply on save without
+    /// the trusted reset that rebuilding the engine would inflict.
+    /// </remarks>
+    public void UpdateSnoozeDuration(TimeSpan duration)
+    {
+        ValidateThreshold(duration, nameof(duration));
+        snoozeDuration = duration;
     }
 
     public void SetForceAllowPopup(bool force)

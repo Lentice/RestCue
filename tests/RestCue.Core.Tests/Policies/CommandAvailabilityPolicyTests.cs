@@ -13,7 +13,9 @@ public sealed class CommandAvailabilityPolicyTests
     [InlineData(WorkCyclePhase.PendingReminder, true, false, true, false, true, false, true)]
     [InlineData(WorkCyclePhase.ReminderVisible, true, false, true, false, true, false, true)]
     [InlineData(WorkCyclePhase.Snoozed, true, false, true, false, true, false, true)]
-    [InlineData(WorkCyclePhase.BreakInProgress, false, false, false, false, true, false, false)]
+    // During a break, pause / focus mode / disable are all legal at the cost of cancelling
+    // it — a destructive consequence, not a reason to withhold the command.
+    [InlineData(WorkCyclePhase.BreakInProgress, true, false, true, false, true, false, false)]
     [InlineData(WorkCyclePhase.Idle, false, false, false, false, true, false, false)]
     [InlineData(WorkCyclePhase.Paused, false, true, false, false, true, false, false)]
     [InlineData(WorkCyclePhase.FocusMode, false, false, false, true, true, false, true)]
@@ -89,29 +91,54 @@ public sealed class CommandAvailabilityPolicyTests
     /// actually accepts, for every phase and every command. This is what would have caught
     /// both halves of the original tray-versus-window disagreement.
     /// </summary>
+    /// <remarks>
+    /// Three commands declare a preparatory step — cancelling a running break — via
+    /// <see cref="CommandAvailabilityPolicy.CancelsRunningBreak"/>. The test performs that
+    /// step exactly as the guarded helpers do, so agreement is asserted against the
+    /// operation the user actually gets rather than against a bare transition nobody
+    /// invokes.
+    /// </remarks>
     [Theory]
     [MemberData(nameof(AllPhases))]
     public void Policy_agrees_with_what_the_engine_accepts(WorkCyclePhase phase)
     {
         var a = CommandAvailabilityPolicy.ForPhase(phase);
 
-        AssertAgrees(phase, a.CanPause, nameof(a.CanPause), t => t.Pause());
+        AssertAgrees(phase, a.CanPause, nameof(a.CanPause), t => t.Pause(), cancelsBreak: true);
         AssertAgrees(phase, a.CanResume, nameof(a.CanResume), t => t.Resume());
-        AssertAgrees(phase, a.CanStartFocusMode, nameof(a.CanStartFocusMode), t => t.StartFocusMode());
+        AssertAgrees(phase, a.CanStartFocusMode, nameof(a.CanStartFocusMode), t => t.StartFocusMode(), cancelsBreak: true);
         AssertAgrees(phase, a.CanEndFocusMode, nameof(a.CanEndFocusMode), t => t.EndFocusMode());
-        AssertAgrees(phase, a.CanDisable, nameof(a.CanDisable), t => t.Disable());
+        AssertAgrees(phase, a.CanDisable, nameof(a.CanDisable), t => t.Disable(), cancelsBreak: true);
         AssertAgrees(phase, a.CanEnable, nameof(a.CanEnable), t => t.Enable());
         AssertAgrees(phase, a.CanBreakNow, nameof(a.CanBreakNow), t => t.ManualStartBreak());
+        AssertAgrees(phase, a.CanStartBreakFromReminder, nameof(a.CanStartBreakFromReminder), t => t.StartBreak());
+        AssertAgrees(phase, a.CanSnooze, nameof(a.CanSnooze), t => t.Snooze());
+        AssertAgrees(phase, a.CanIgnore, nameof(a.CanIgnore), t => t.Ignore());
+    }
+
+    [Fact]
+    public void Only_a_running_break_carries_the_cancellation_step()
+    {
+        foreach (WorkCyclePhase phase in Enum.GetValues<WorkCyclePhase>())
+        {
+            Assert.Equal(
+                phase == WorkCyclePhase.BreakInProgress,
+                CommandAvailabilityPolicy.CancelsRunningBreak(phase));
+        }
     }
 
     private static void AssertAgrees(
         WorkCyclePhase phase,
         bool policySaysAvailable,
         string command,
-        Action<WorkCycleTracker> operation)
+        Action<WorkCycleTracker> operation,
+        bool cancelsBreak = false)
     {
         var clock = new FakeClock();
         var tracker = DriveToPhase(clock, phase);
+
+        if (cancelsBreak && CommandAvailabilityPolicy.CancelsRunningBreak(phase))
+            tracker.CancelBreak();
 
         bool engineAccepts;
         try

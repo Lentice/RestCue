@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
+using RestCue.Core.Settings;
 
 namespace RestCue.App;
 
@@ -23,22 +24,6 @@ public partial class ReminderWindow : Window
 
     public bool ReduceMotion { get; set; }
 
-    /// <summary>
-    /// Applies the user's reminder-opacity setting to the whole surface.
-    /// </summary>
-    /// <remarks>
-    /// WPF opacity does not affect hit-testing, so the reminder stays clickable even at
-    /// the minimum value. The break guide animates <c>GuideVisual.Opacity</c>, an inner
-    /// element, so the two compose instead of fighting.
-    /// </remarks>
-    public void ApplySurfaceOpacity(double opacity)
-    {
-        Opacity = Math.Clamp(opacity, MinimumSurfaceOpacity, 1.0);
-    }
-
-    /// <summary>The validated floor from the settings contract (20%).</summary>
-    public const double MinimumSurfaceOpacity = 0.2;
-
     private static readonly System.Windows.Media.Animation.DoubleAnimation DiscretePulse = new()
     {
         From = 1.0,
@@ -58,9 +43,26 @@ public partial class ReminderWindow : Window
         Loaded += OnLoaded;
     }
 
+    /// <summary>
+    /// Applies the user's reminder-opacity setting to the whole surface, clamped to the
+    /// settings contract's range.
+    /// </summary>
+    /// <remarks>
+    /// WPF opacity does not affect hit-testing, so the reminder stays clickable even at the
+    /// minimum value. The break guide animates <c>GuideVisual.Opacity</c>, an inner
+    /// element, so the two compose instead of fighting.
+    /// </remarks>
+    public void ApplySurfaceOpacity(double opacity)
+    {
+        Opacity = Math.Clamp(
+            opacity,
+            SettingsRanges.MinimumReminderOpacity,
+            SettingsRanges.MaximumReminderOpacity);
+    }
+
     public void ShowReminder()
     {
-        LeaveBreakGuide();
+        ClearBreakStartGuard();
         PhaseText.Text = "看向約六公尺外";
         ActionButton.Content = "開始休息";
         SnoozeButton.Content = $"延後 {(int)Math.Round(SnoozeDuration.TotalMinutes)} 分鐘";
@@ -120,7 +122,7 @@ public partial class ReminderWindow : Window
     {
         breakGuideTimer.Stop();
         GuideVisual.BeginAnimation(System.Windows.UIElement.OpacityProperty, null);
-        LeaveBreakGuide();
+        ClearBreakStartGuard();
     }
 
     /// <summary>
@@ -131,14 +133,14 @@ public partial class ReminderWindow : Window
     /// close. Clearing it only on completion left a cancelled break with the guard stuck
     /// set, which permanently disabled "start a break" on this surface.
     /// </remarks>
-    private void LeaveBreakGuide()
+    private void ClearBreakStartGuard()
     {
         isBreakStarting = false;
     }
 
     protected override void OnClosed(EventArgs e)
     {
-        LeaveBreakGuide();
+        ClearBreakStartGuard();
         base.OnClosed(e);
     }
 
@@ -248,7 +250,7 @@ public partial class ReminderWindow : Window
 
     private void OnBreakCompleted()
     {
-        LeaveBreakGuide();
+        ClearBreakStartGuard();
         Hide();
         BreakCompleted?.Invoke(this, EventArgs.Empty);
     }

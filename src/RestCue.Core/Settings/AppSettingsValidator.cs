@@ -21,7 +21,8 @@ public sealed class AppSettingsValidator : ISettingsValidator
         AddRangeError(errors, settings.DebtLevel3Threshold, TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(240), nameof(settings.DebtLevel3Threshold));
         AddRangeError(errors, settings.DebtLevel4Threshold, TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(240), nameof(settings.DebtLevel4Threshold));
 
-        if (settings.ReminderOpacity is < 0.2 or > 1.0)
+        if (settings.ReminderOpacity < SettingsRanges.MinimumReminderOpacity ||
+            settings.ReminderOpacity > SettingsRanges.MaximumReminderOpacity)
         {
             errors.Add(new(nameof(settings.ReminderOpacity), "Reminder opacity must be between 20% and 100%."));
         }

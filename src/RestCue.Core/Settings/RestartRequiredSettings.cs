@@ -9,9 +9,8 @@ namespace RestCue.Core.Settings;
 /// time — a trusted reset the user did not ask for — so the trade-off is to keep them
 /// until relaunch and to say so. Everything not listed here applies on save.
 /// <para>
-/// Snooze duration is here even though the reminder surface only uses it for a label:
-/// the engine owns the snooze deadline, so applying it live would leave the label
-/// promising a duration the engine would not honour.
+/// Snooze duration is deliberately absent: it holds no accumulated state, so the engine
+/// accepts it in place via <c>UpdateSnoozeDuration</c> and it applies to the next snooze.
 /// </para>
 /// <para>
 /// Focus-mode duration is here because it is an engine parameter, not because any
@@ -28,7 +27,6 @@ public static class RestartRequiredSettings
         (nameof(AppSettings.MaximumReminderWait), s => s.MaximumReminderWait),
         (nameof(AppSettings.BreakDuration), s => s.BreakDuration),
         (nameof(AppSettings.PassiveBreakThreshold), s => s.PassiveBreakThreshold),
-        (nameof(AppSettings.SnoozeDuration), s => s.SnoozeDuration),
         (nameof(AppSettings.ReminderDisplayDuration), s => s.ReminderDisplayDuration),
         (nameof(AppSettings.RetryCooldown), s => s.RetryCooldown),
         (nameof(AppSettings.DebtLevel2Threshold), s => s.DebtLevel2Threshold),

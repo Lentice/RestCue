@@ -14,35 +14,16 @@ public sealed class GuardedCommandTests
     [Fact]
     public void Rejected_pause_leaves_a_running_break_intact()
     {
+        // Idle refuses pause outright — there is no preparatory step that makes it legal.
         var clock = new FakeClock();
-        var tracker = CreateTracker(clock);
-        tracker.ManualStartBreak();
+        var tracker = DriveToPhase(clock, WorkCyclePhase.Idle);
 
         int closed = 0;
-        int cancelled = 0;
-        tracker.BreakCancelled += (_, _) => cancelled++;
 
         bool applied = App.ExecutePause(tracker, () => closed++);
 
         Assert.False(applied);
-        Assert.Equal(WorkCyclePhase.BreakInProgress, tracker.CurrentPhase);
-        Assert.Equal(0, cancelled);
-        Assert.Equal(0, closed);
-    }
-
-    [Fact]
-    public void Rejected_timed_pause_leaves_a_running_break_intact()
-    {
-        var clock = new FakeClock();
-        var tracker = CreateTracker(clock);
-        tracker.ManualStartBreak();
-
-        int closed = 0;
-
-        bool applied = App.ExecutePauseFor(tracker, TimeSpan.FromMinutes(15), () => closed++);
-
-        Assert.False(applied);
-        Assert.Equal(WorkCyclePhase.BreakInProgress, tracker.CurrentPhase);
+        Assert.Equal(WorkCyclePhase.Idle, tracker.CurrentPhase);
         Assert.Equal(0, closed);
     }
 
@@ -50,16 +31,92 @@ public sealed class GuardedCommandTests
     public void Rejected_focus_mode_leaves_the_reminder_surface_open()
     {
         var clock = new FakeClock();
-        var tracker = CreateTracker(clock);
-        tracker.ManualStartBreak();
+        var tracker = DriveToPhase(clock, WorkCyclePhase.Disabled);
 
         int closed = 0;
 
         bool applied = App.ExecuteStartFocusMode(tracker, () => closed++);
 
         Assert.False(applied);
-        Assert.Equal(WorkCyclePhase.BreakInProgress, tracker.CurrentPhase);
+        Assert.Equal(WorkCyclePhase.Disabled, tracker.CurrentPhase);
         Assert.Equal(0, closed);
+    }
+
+    [Fact]
+    public void Rejected_resume_changes_nothing()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock);
+
+        Assert.False(App.ExecuteResume(tracker));
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Pausing_during_a_break_cancels_the_break_and_reaches_Paused()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock);
+        tracker.ManualStartBreak();
+
+        int cancelled = 0;
+        int closed = 0;
+        tracker.BreakCancelled += (_, _) => cancelled++;
+
+        bool applied = App.ExecutePause(tracker, () => closed++);
+
+        Assert.True(applied);
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+        Assert.Equal(1, cancelled);
+        Assert.Equal(1, closed);
+    }
+
+    [Fact]
+    public void Timed_pause_during_a_break_cancels_the_break_and_reaches_Paused()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock);
+        tracker.ManualStartBreak();
+
+        int cancelled = 0;
+        tracker.BreakCancelled += (_, _) => cancelled++;
+
+        bool applied = App.ExecutePauseFor(tracker, TimeSpan.FromMinutes(15), () => { });
+
+        Assert.True(applied);
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+        Assert.Equal(1, cancelled);
+    }
+
+    [Fact]
+    public void Focus_mode_during_a_break_cancels_the_break_and_reaches_FocusMode()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock);
+        tracker.ManualStartBreak();
+
+        int cancelled = 0;
+        tracker.BreakCancelled += (_, _) => cancelled++;
+
+        bool applied = App.ExecuteStartFocusMode(tracker, () => { });
+
+        Assert.True(applied);
+        Assert.Equal(WorkCyclePhase.FocusMode, tracker.CurrentPhase);
+        Assert.Equal(1, cancelled);
+    }
+
+    [Fact]
+    public void Pausing_outside_a_break_records_no_cancellation()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock);
+
+        int cancelled = 0;
+        tracker.BreakCancelled += (_, _) => cancelled++;
+
+        Assert.True(App.ExecutePause(tracker, () => { }));
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+        Assert.Equal(0, cancelled);
     }
 
     [Fact]

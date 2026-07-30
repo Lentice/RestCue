@@ -27,6 +27,13 @@ public readonly record struct CommandAvailability
 
     public required bool CanBreakNow { get; init; }
 
+    /// <summary>The primary action on a visible reminder.</summary>
+    public required bool CanStartBreakFromReminder { get; init; }
+
+    public required bool CanSnooze { get; init; }
+
+    public required bool CanIgnore { get; init; }
+
     /// <summary>The pause control is showing "resume" rather than "pause".</summary>
     public required bool ShowResume { get; init; }
 
@@ -66,24 +73,46 @@ public static class CommandAvailabilityPolicy
 {
     public static CommandAvailability ForPhase(WorkCyclePhase phase)
     {
-        bool isActiveCycle = phase
-            is WorkCyclePhase.Working
-            or WorkCyclePhase.PendingReminder
-            or WorkCyclePhase.ReminderVisible
-            or WorkCyclePhase.Snoozed;
+        bool isActiveCycle = IsActiveCycle(phase);
+        bool isBreak = phase == WorkCyclePhase.BreakInProgress;
 
         return new CommandAvailability
         {
-            CanPause = isActiveCycle,
+            // Pause, Focus Mode, and Disable are all legal during a running break, at the
+            // cost of cancelling it. The cancellation is the guarded helpers' explicit,
+            // recorded first step — see CancelsRunningBreak.
+            CanPause = isActiveCycle || isBreak,
             CanResume = phase == WorkCyclePhase.Paused,
-            CanStartFocusMode = isActiveCycle,
+            CanStartFocusMode = isActiveCycle || isBreak,
             CanEndFocusMode = phase == WorkCyclePhase.FocusMode,
             CanDisable = phase != WorkCyclePhase.Disabled,
             CanEnable = phase == WorkCyclePhase.Disabled,
             CanBreakNow = isActiveCycle || phase == WorkCyclePhase.FocusMode,
+            CanStartBreakFromReminder = phase == WorkCyclePhase.ReminderVisible,
+            CanSnooze = phase == WorkCyclePhase.ReminderVisible,
+            CanIgnore = phase == WorkCyclePhase.ReminderVisible,
             ShowResume = phase == WorkCyclePhase.Paused,
             ShowEndFocusMode = phase == WorkCyclePhase.FocusMode,
             ShowEnable = phase == WorkCyclePhase.Disabled,
         };
     }
+
+    /// <summary>
+    /// Whether entering Pause, Focus Mode, or Disabled from this phase cancels a running
+    /// break. True only during a break, and only for those three commands — which is why
+    /// their guarded helpers cancel before transitioning, and why the engine refuses the
+    /// bare transition from this phase.
+    /// </summary>
+    public static bool CancelsRunningBreak(WorkCyclePhase phase) =>
+        phase == WorkCyclePhase.BreakInProgress;
+
+    /// <summary>
+    /// The phases of an ordinary, uninterrupted work cycle. Shared so that no surface
+    /// re-lists them.
+    /// </summary>
+    public static bool IsActiveCycle(WorkCyclePhase phase) => phase
+        is WorkCyclePhase.Working
+        or WorkCyclePhase.PendingReminder
+        or WorkCyclePhase.ReminderVisible
+        or WorkCyclePhase.Snoozed;
 }

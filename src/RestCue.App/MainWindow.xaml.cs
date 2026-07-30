@@ -202,37 +202,33 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     /// phase changing between the check and the call — because no reminder command may
     /// throw out of an event handler.
     /// </remarks>
-    private void RunCommand(string name, Func<WorkCycleTracker, bool> command)
+    /// <returns>True when the command took effect.</returns>
+    private bool RunCommand(string name, Func<WorkCycleTracker, bool> command)
     {
-        if (workCycleTracker == null) return;
+        if (workCycleTracker == null) return false;
 
         try
         {
             if (command(workCycleTracker))
+            {
                 UpdateCycleStatus();
-            else
-                System.Diagnostics.Trace.TraceWarning(
-                    $"RestCue: {name} not available in phase {workCycleTracker.CurrentPhase}.");
+                return true;
+            }
+
+            System.Diagnostics.Trace.TraceWarning(
+                $"RestCue: {name} not available in phase {workCycleTracker.CurrentPhase}.");
         }
         catch (InvalidOperationException ex)
         {
             System.Diagnostics.Trace.TraceWarning(
                 $"RestCue: {name} rejected — {ex.Message}");
         }
+
+        return false;
     }
 
-    public void Disable()
-    {
-        if (workCycleTracker == null) return;
-        try
-        {
-            if (App.ExecuteDisable(workCycleTracker, CloseReminderIfOpen))
-                UpdateCycleStatus();
-        }
-        catch (InvalidOperationException)
-        {
-        }
-    }
+    public void Disable() => RunCommand("Disable",
+        tracker => App.ExecuteDisable(tracker, CloseReminderIfOpen));
 
     public void Enable() => RunCommand("Enable", App.ExecuteEnable);
 
@@ -260,11 +256,17 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         reduceMotion = settings.ReduceMotion;
         userBreakGuideMode = settings.BreakGuideMode;
         reminderOpacity = settings.ReminderOpacity;
+        snoozeDuration = settings.SnoozeDuration;
+
+        // The engine holds the snooze deadline, so the label and the behaviour have to move
+        // together or the button would promise a duration nothing honours.
+        workCycleTracker?.UpdateSnoozeDuration(settings.SnoozeDuration);
 
         if (reminderWindow != null)
         {
             reminderWindow.ReduceMotion = reduceMotion;
             reminderWindow.ApplySurfaceOpacity(reminderOpacity);
+            reminderWindow.SnoozeDuration = snoozeDuration;
         }
     }
 
@@ -367,20 +369,9 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     {
         if (workCycleTracker == null) return;
 
-        bool started;
-        try
-        {
-            started = App.ExecuteManualStartBreak(workCycleTracker, CloseReminderIfOpen);
-        }
-        catch (InvalidOperationException ex)
-        {
-            System.Diagnostics.Trace.TraceWarning($"RestCue: BreakNow rejected — {ex.Message}");
+        if (!RunCommand("BreakNow",
+                tracker => App.ExecuteManualStartBreak(tracker, CloseReminderIfOpen)))
             return;
-        }
-
-        if (!started) return;
-
-        UpdateCycleStatus();
 
         EnsureReminderWindow();
         reminderWindow!.BreakDuration = workCycleTracker.BreakDuration;
@@ -629,23 +620,11 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
     private void OnBreakRequested(object? sender, EventArgs e)
     {
-        if (workCycleTracker == null) return;
-
-        bool started = false;
-        try
-        {
-            started = App.ExecuteStartBreak(workCycleTracker);
-        }
-        catch (InvalidOperationException ex)
-        {
-            System.Diagnostics.Trace.TraceWarning($"RestCue: StartBreak rejected — {ex.Message}");
-        }
-
         // A reminder dismissed at the same moment as the click leaves nothing to start.
-        if (!started || reminderWindow == null) return;
+        if (!RunCommand("StartBreak", App.ExecuteStartBreak) || reminderWindow == null)
+            return;
 
-        UpdateCycleStatus();
-        SetupBreakGuideSession(clock ?? new SystemClock(), workCycleTracker.BreakDuration);
+        SetupBreakGuideSession(clock ?? new SystemClock(), workCycleTracker!.BreakDuration);
     }
 
     private void SetupBreakGuideSession(IClock clock, TimeSpan duration)

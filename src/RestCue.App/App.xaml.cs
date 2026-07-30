@@ -323,161 +323,133 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>
-    /// Enters Pause, guarding before acting: a rejected request must cost the user
-    /// nothing, so the reminder surface is only closed once the transition is known to be
-    /// legal. Returns false when the command was not available.
+    /// Enters Pause. Returns false when the command was not available.
     /// </summary>
-    internal static bool ExecutePause(WorkCycleTracker tracker, Action closeReminder)
-    {
-        ArgumentNullException.ThrowIfNull(tracker);
-        ArgumentNullException.ThrowIfNull(closeReminder);
-
-        if (!CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase).CanPause)
-            return false;
-
-        closeReminder();
-        tracker.Pause();
-        return true;
-    }
+    /// <remarks>
+    /// Guard before effect: a rejected request must cost the user nothing, so the reminder
+    /// surface is only closed once the transition is known to be legal. Pausing during a
+    /// running break is legal and cancels it — deliberately, and as a recorded step.
+    /// </remarks>
+    internal static bool ExecutePause(WorkCycleTracker tracker, Action closeReminder) =>
+        ExecuteModeEntry(
+            tracker,
+            closeReminder,
+            a => a.CanPause,
+            t => t.Pause());
 
     /// <inheritdoc cref="ExecutePause"/>
     internal static bool ExecutePauseFor(
-        WorkCycleTracker tracker, TimeSpan duration, Action closeReminder)
+        WorkCycleTracker tracker, TimeSpan duration, Action closeReminder) =>
+        ExecuteModeEntry(
+            tracker,
+            closeReminder,
+            a => a.CanPause,
+            t => t.Pause(duration));
+
+    /// <inheritdoc cref="ExecutePause"/>
+    internal static bool ExecuteStartFocusMode(WorkCycleTracker tracker, Action closeReminder) =>
+        ExecuteModeEntry(
+            tracker,
+            closeReminder,
+            a => a.CanStartFocusMode,
+            t => t.StartFocusMode());
+
+    /// <summary>
+    /// The shared shape of every mode entry: establish legality, then close the reminder
+    /// surface and cancel any running break, then transition. Nothing destructive happens
+    /// before the command is known to be available.
+    /// </summary>
+    private static bool ExecuteModeEntry(
+        WorkCycleTracker tracker,
+        Action closeReminder,
+        Func<CommandAvailability, bool> isAvailable,
+        Action<WorkCycleTracker> transition)
     {
         ArgumentNullException.ThrowIfNull(tracker);
         ArgumentNullException.ThrowIfNull(closeReminder);
 
-        if (!CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase).CanPause)
+        WorkCyclePhase phase = tracker.CurrentPhase;
+        if (!isAvailable(CommandAvailabilityPolicy.ForPhase(phase)))
             return false;
 
         closeReminder();
-        tracker.Pause(duration);
+
+        // CancelBreak is a no-op outside a break, but keeping it explicit is the point:
+        // the cancellation is a recorded consequence, not a side effect of the phase
+        // changing underneath the break.
+        if (CommandAvailabilityPolicy.CancelsRunningBreak(phase))
+            tracker.CancelBreak();
+
+        transition(tracker);
         return true;
     }
 
     /// <inheritdoc cref="ExecutePause"/>
-    internal static bool ExecuteStartFocusMode(WorkCycleTracker tracker, Action closeReminder)
-    {
-        ArgumentNullException.ThrowIfNull(tracker);
-        ArgumentNullException.ThrowIfNull(closeReminder);
-
-        if (!CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase).CanStartFocusMode)
-            return false;
-
-        closeReminder();
-        tracker.StartFocusMode();
-        return true;
-    }
+    internal static bool ExecuteEndFocusMode(WorkCycleTracker tracker) =>
+        ExecuteGuarded(tracker, a => a.CanEndFocusMode, t => t.EndFocusMode());
 
     /// <inheritdoc cref="ExecutePause"/>
-    internal static bool ExecuteEndFocusMode(WorkCycleTracker tracker)
-    {
-        ArgumentNullException.ThrowIfNull(tracker);
-
-        if (!CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase).CanEndFocusMode)
-            return false;
-
-        tracker.EndFocusMode();
-        return true;
-    }
-
-    /// <inheritdoc cref="ExecutePause"/>
-    internal static bool ExecuteResume(WorkCycleTracker tracker)
-    {
-        ArgumentNullException.ThrowIfNull(tracker);
-
-        if (!CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase).CanResume)
-            return false;
-
-        tracker.Resume();
-        return true;
-    }
+    internal static bool ExecuteResume(WorkCycleTracker tracker) =>
+        ExecuteGuarded(tracker, a => a.CanResume, t => t.Resume());
 
     /// <summary>
     /// Disables reminders. Legal in every phase but one, including during a running break —
     /// so the break is cancelled as an explicit, recorded step rather than silently
     /// dropped when the phase changes.
     /// </summary>
-    internal static bool ExecuteDisable(WorkCycleTracker tracker, Action closeReminder)
-    {
-        ArgumentNullException.ThrowIfNull(tracker);
-        ArgumentNullException.ThrowIfNull(closeReminder);
-
-        if (!CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase).CanDisable)
-            return false;
-
-        closeReminder();
-        tracker.CancelBreak();
-        tracker.Disable();
-        return true;
-    }
+    internal static bool ExecuteDisable(WorkCycleTracker tracker, Action closeReminder) =>
+        ExecuteModeEntry(
+            tracker,
+            closeReminder,
+            a => a.CanDisable,
+            t => t.Disable());
 
     /// <inheritdoc cref="ExecutePause"/>
-    internal static bool ExecuteEnable(WorkCycleTracker tracker)
-    {
-        ArgumentNullException.ThrowIfNull(tracker);
-
-        if (!CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase).CanEnable)
-            return false;
-
-        tracker.Enable();
-        return true;
-    }
+    internal static bool ExecuteEnable(WorkCycleTracker tracker) =>
+        ExecuteGuarded(tracker, a => a.CanEnable, t => t.Enable());
 
     /// <summary>
     /// Starts a break by hand. Guarded like the mode commands, so a click that lands on the
     /// wrong side of a state change is a no-op rather than a crash.
     /// </summary>
-    internal static bool ExecuteManualStartBreak(WorkCycleTracker tracker, Action closeReminder)
-    {
-        ArgumentNullException.ThrowIfNull(tracker);
-        ArgumentNullException.ThrowIfNull(closeReminder);
-
-        if (!CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase).CanBreakNow)
-            return false;
-
-        closeReminder();
-        tracker.ManualStartBreak();
-        return true;
-    }
+    internal static bool ExecuteManualStartBreak(WorkCycleTracker tracker, Action closeReminder) =>
+        ExecuteModeEntry(
+            tracker,
+            closeReminder,
+            a => a.CanBreakNow,
+            t => t.ManualStartBreak());
 
     /// <summary>
     /// Starts a break from a visible reminder. Snooze and Ignore share the same shape: all
     /// three are only legal from ReminderVisible, and none of them may throw out of an
     /// event handler.
     /// </summary>
-    internal static bool ExecuteStartBreak(WorkCycleTracker tracker)
-    {
-        ArgumentNullException.ThrowIfNull(tracker);
-
-        if (tracker.CurrentPhase != WorkCyclePhase.ReminderVisible)
-            return false;
-
-        tracker.StartBreak();
-        return true;
-    }
+    internal static bool ExecuteStartBreak(WorkCycleTracker tracker) =>
+        ExecuteGuarded(tracker, a => a.CanStartBreakFromReminder, t => t.StartBreak());
 
     /// <inheritdoc cref="ExecuteStartBreak"/>
-    internal static bool ExecuteSnooze(WorkCycleTracker tracker)
-    {
-        ArgumentNullException.ThrowIfNull(tracker);
-
-        if (tracker.CurrentPhase != WorkCyclePhase.ReminderVisible)
-            return false;
-
-        tracker.Snooze();
-        return true;
-    }
+    internal static bool ExecuteSnooze(WorkCycleTracker tracker) =>
+        ExecuteGuarded(tracker, a => a.CanSnooze, t => t.Snooze());
 
     /// <inheritdoc cref="ExecuteStartBreak"/>
-    internal static bool ExecuteIgnore(WorkCycleTracker tracker)
+    internal static bool ExecuteIgnore(WorkCycleTracker tracker) =>
+        ExecuteGuarded(tracker, a => a.CanIgnore, t => t.Ignore());
+
+    /// <summary>
+    /// Runs a command that has no preparatory step, asking the availability policy — never
+    /// its own phase comparison — whether it is legal.
+    /// </summary>
+    private static bool ExecuteGuarded(
+        WorkCycleTracker tracker,
+        Func<CommandAvailability, bool> isAvailable,
+        Action<WorkCycleTracker> operation)
     {
         ArgumentNullException.ThrowIfNull(tracker);
 
-        if (tracker.CurrentPhase != WorkCyclePhase.ReminderVisible)
+        if (!isAvailable(CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase)))
             return false;
 
-        tracker.Ignore();
+        operation(tracker);
         return true;
     }
 
@@ -752,16 +724,10 @@ public partial class App : System.Windows.Application
 
         // During an active cycle the debt level is the more useful status; the mode
         // phases name themselves.
-        tray.SetStatusText(IsActiveCyclePhase(phase)
+        tray.SetStatusText(CommandAvailabilityPolicy.IsActiveCycle(phase)
             ? GetStatusTextForDebtLevel(debtLevel)
             : GetStatusTextForPhase(phase));
     }
-
-    private static bool IsActiveCyclePhase(WorkCyclePhase phase) =>
-        phase is WorkCyclePhase.Working
-            or WorkCyclePhase.PendingReminder
-            or WorkCyclePhase.ReminderVisible
-            or WorkCyclePhase.Snoozed;
 
     /// <summary>
     /// Handles a reminder that was held back to a low-interruption presentation.
@@ -818,8 +784,7 @@ public partial class App : System.Windows.Application
 
         _trayIcon.SetDebtLevel(e.Current);
 
-        if (_lastPhase is WorkCyclePhase.Working or WorkCyclePhase.PendingReminder
-            or WorkCyclePhase.ReminderVisible or WorkCyclePhase.Snoozed)
+        if (CommandAvailabilityPolicy.IsActiveCycle(_lastPhase))
         {
             _trayIcon.SetStatusText(GetStatusTextForDebtLevel(e.Current));
         }

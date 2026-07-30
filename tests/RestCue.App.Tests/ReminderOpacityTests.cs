@@ -1,4 +1,5 @@
 using System.Windows;
+using RestCue.Core.Settings;
 using Xunit;
 
 namespace RestCue.App.Tests;
@@ -47,7 +48,7 @@ public sealed class ReminderOpacityTests
             try
             {
                 window.ApplySurfaceOpacity(0.0);
-                Assert.Equal(ReminderWindow.MinimumSurfaceOpacity, window.Opacity, 3);
+                Assert.Equal(SettingsRanges.MinimumReminderOpacity, window.Opacity, 3);
             }
             finally
             {
@@ -82,7 +83,7 @@ public sealed class ReminderOpacityTests
             var window = new ReminderWindow();
             try
             {
-                window.ApplySurfaceOpacity(ReminderWindow.MinimumSurfaceOpacity);
+                window.ApplySurfaceOpacity(SettingsRanges.MinimumReminderOpacity);
 
                 // WPF opacity is a render-time concern; hit-testing is unaffected. Assert
                 // it rather than trusting it, since a translucent-but-dead reminder would

@@ -77,6 +77,65 @@ public sealed class WorkCycleTrackerZeroMaxWaitTests
         Assert.Equal(1, trayCues);
     }
 
+    [Fact]
+    public void Updated_snooze_duration_applies_to_the_next_snooze()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock, TimeSpan.FromSeconds(3));
+        tracker.SetForceAllowPopup(true);
+
+        tracker.UpdateSnoozeDuration(TimeSpan.FromMinutes(1));
+
+        for (int i = 0; i < 20 && tracker.CurrentPhase != WorkCyclePhase.ReminderVisible; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+        Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
+
+        tracker.Snooze();
+
+        // The old five-minute default would still be snoozing here.
+        clock.Advance(TimeSpan.FromSeconds(59));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.Snoozed, tracker.CurrentPhase);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void A_snooze_already_running_keeps_the_deadline_it_was_given()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock, TimeSpan.FromSeconds(3));
+        tracker.SetForceAllowPopup(true);
+
+        for (int i = 0; i < 20 && tracker.CurrentPhase != WorkCyclePhase.ReminderVisible; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            tracker.Tick(TimeSpan.Zero);
+        }
+
+        tracker.Snooze();
+        tracker.UpdateSnoozeDuration(TimeSpan.FromSeconds(1));
+
+        // Shortening the setting must not cut short the snooze the user already asked for.
+        clock.Advance(TimeSpan.FromSeconds(2));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(WorkCyclePhase.Snoozed, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void A_non_positive_snooze_duration_is_rejected()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock, TimeSpan.FromMinutes(3));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => tracker.UpdateSnoozeDuration(TimeSpan.Zero));
+    }
+
     private static WorkCycleTracker CreateTracker(FakeClock clock, TimeSpan maximumReminderWait)
     {
         return new WorkCycleTracker(
