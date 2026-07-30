@@ -21,9 +21,6 @@ namespace RestCue.App;
 public partial class MainWindow : System.Windows.Window, IStatusWindow
 {
     private const int CancelBreakHotkeyId = 1;
-    private const int ModControl = 0x0002;
-    private const int ModShift = 0x0004;
-    private const int VkEscape = 0x1B;
     private HwndSource? hwndSource;
     private bool hotkeyRegistered;
     private bool reduceMotion;
@@ -183,102 +180,61 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         Activate();
     }
 
-    public void Pause()
+    public void Pause() => RunCommand("Pause",
+        tracker => App.ExecutePause(tracker, CloseReminderIfOpen));
+
+    public void PauseFor(TimeSpan duration) => RunCommand("PauseFor",
+        tracker => App.ExecutePauseFor(tracker, duration, CloseReminderIfOpen));
+
+    public void Resume() => RunCommand("Resume", App.ExecuteResume);
+
+    public void StartFocusMode() => RunCommand("StartFocusMode",
+        tracker => App.ExecuteStartFocusMode(tracker, CloseReminderIfOpen));
+
+    public void EndFocusMode() => RunCommand("EndFocusMode", App.ExecuteEndFocusMode);
+
+    /// <summary>
+    /// Runs a guarded command and refreshes the surfaces if it took effect.
+    /// </summary>
+    /// <remarks>
+    /// The helpers check availability before acting, so a rejected command is a no-op
+    /// rather than an exception. The catch remains as a floor for the genuine race — the
+    /// phase changing between the check and the call — because no reminder command may
+    /// throw out of an event handler.
+    /// </remarks>
+    private void RunCommand(string name, Func<WorkCycleTracker, bool> command)
     {
         if (workCycleTracker == null) return;
+
         try
         {
-            App.ExecutePause(workCycleTracker, CloseReminderIfOpen);
-            UpdateCycleStatus();
+            if (command(workCycleTracker))
+                UpdateCycleStatus();
+            else
+                System.Diagnostics.Trace.TraceWarning(
+                    $"RestCue: {name} not available in phase {workCycleTracker.CurrentPhase}.");
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
             System.Diagnostics.Trace.TraceWarning(
-                "RestCue: Pause or PauseFor rejected — invalid state transition.");
-        }
-    }
-
-    public void PauseFor(TimeSpan duration)
-    {
-        if (workCycleTracker == null) return;
-        try
-        {
-            CloseReminderIfOpen();
-            workCycleTracker.Pause(duration);
-            UpdateCycleStatus();
-        }
-        catch (InvalidOperationException)
-        {
-            System.Diagnostics.Trace.TraceWarning(
-                "RestCue: PauseFor rejected — invalid state transition.");
-        }
-    }
-
-    public void Resume()
-    {
-        if (workCycleTracker == null) return;
-        try
-        {
-            workCycleTracker.Resume();
-            UpdateCycleStatus();
-        }
-        catch (InvalidOperationException)
-        {
-        }
-    }
-
-    public void StartFocusMode()
-    {
-        if (workCycleTracker == null) return;
-        try
-        {
-            App.ExecuteStartFocusMode(workCycleTracker, CloseReminderIfOpen);
-            UpdateCycleStatus();
-        }
-        catch (InvalidOperationException)
-        {
-        }
-    }
-
-    public void EndFocusMode()
-    {
-        if (workCycleTracker == null) return;
-        try
-        {
-            workCycleTracker.EndFocusMode();
-            UpdateCycleStatus();
-        }
-        catch (InvalidOperationException)
-        {
+                $"RestCue: {name} rejected — {ex.Message}");
         }
     }
 
     public void Disable()
     {
         if (workCycleTracker == null) return;
-        CloseReminderIfOpen();
         try
         {
-            workCycleTracker.Disable();
-            UpdateCycleStatus();
+            if (App.ExecuteDisable(workCycleTracker, CloseReminderIfOpen))
+                UpdateCycleStatus();
         }
         catch (InvalidOperationException)
         {
         }
     }
 
-    public void Enable()
-    {
-        if (workCycleTracker == null) return;
-        try
-        {
-            workCycleTracker.Enable();
-            UpdateCycleStatus();
-        }
-        catch (InvalidOperationException)
-        {
-        }
-    }
+    public void Enable() => RunCommand("Enable", App.ExecuteEnable);
 
     public void UpdateForegroundContextProvider(bool collectProcessNames)
     {
@@ -317,47 +273,70 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
         applicationRules = new ApplicationRuleSet(rules);
     }
 
+    /// <summary>
+    /// Creates the reminder surface if needed, wiring its full action set once.
+    /// </summary>
+    /// <remarks>
+    /// Wiring used to depend on why the surface was opening — only cancel for a manually
+    /// started break, everything for a reminder — so a surface reused across the two cases
+    /// showed buttons that did nothing. Wiring once at construction makes that impossible
+    /// rather than merely unreachable.
+    /// </remarks>
+    private void EnsureReminderWindow()
+    {
+        if (reminderWindow == null)
+        {
+            reminderWindow = new ReminderWindow();
+            reminderWindow.BreakRequested += OnBreakRequested;
+            reminderWindow.BreakCompleted += OnReminderBreakCompleted;
+            reminderWindow.SnoozeRequested += OnSnoozeRequested;
+            reminderWindow.IgnoreRequested += OnIgnoreRequested;
+            reminderWindow.CancelRequested += OnCancelRequested;
+            reminderWindow.Closed += OnReminderWindowClosed;
+        }
+
+        reminderWindow.ReduceMotion = reduceMotion;
+        reminderWindow.ApplySurfaceOpacity(reminderOpacity);
+    }
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
+    /// <summary>
+    /// Registers the global break-cancel shortcut.
+    /// </summary>
+    /// <remarks>
+    /// The handle is forced into existence rather than waited for: registration used to be
+    /// deferred until the main window was first shown, so a user who only ever used the
+    /// tray never got the shortcut at all.
+    /// </remarks>
     private void RegisterCancelBreakHotkey()
     {
         if (hotkeyRegistered)
             return;
 
-        hwndSource = PresentationSource.FromVisual(this) as HwndSource;
+        IntPtr handle = new WindowInteropHelper(this).EnsureHandle();
+        hwndSource = HwndSource.FromHwnd(handle);
         if (hwndSource == null)
         {
-            SourceInitialized += OnSourceInitializedForHotkey;
+            System.Diagnostics.Trace.TraceError(
+                "RestCue: no window handle available for the global break-cancel shortcut.");
             return;
         }
 
-        DoRegisterHotkey();
-    }
+        hotkeyRegistered = CancelBreakShortcut.TryRegister(
+            () => RegisterHotKey(
+                handle,
+                CancelBreakHotkeyId,
+                CancelBreakShortcut.Modifiers,
+                CancelBreakShortcut.VirtualKey),
+            message => System.Diagnostics.Trace.TraceError(message));
 
-    private void OnSourceInitializedForHotkey(object? sender, EventArgs e)
-    {
-        SourceInitialized -= OnSourceInitializedForHotkey;
-        hwndSource = PresentationSource.FromVisual(this) as HwndSource;
-        if (hwndSource != null)
-            DoRegisterHotkey();
-    }
-
-    private void DoRegisterHotkey()
-    {
-        if (hwndSource == null || hotkeyRegistered)
-            return;
-
-        var hwnd = hwndSource.Handle;
-        const uint mod = ModControl | ModShift;
-        if (RegisterHotKey(hwnd, CancelBreakHotkeyId, mod, VkEscape))
-        {
-            hotkeyRegistered = true;
+        if (hotkeyRegistered)
             hwndSource.AddHook(HotKeyHandler);
-        }
     }
 
     private void UnregisterCancelBreakHotkey()
@@ -388,29 +367,23 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     {
         if (workCycleTracker == null) return;
 
-        CloseReminderIfOpen();
-
+        bool started;
         try
         {
-            workCycleTracker.ManualStartBreak();
+            started = App.ExecuteManualStartBreak(workCycleTracker, CloseReminderIfOpen);
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
+            System.Diagnostics.Trace.TraceWarning($"RestCue: BreakNow rejected — {ex.Message}");
             return;
         }
 
+        if (!started) return;
+
         UpdateCycleStatus();
 
-        if (reminderWindow == null)
-        {
-            reminderWindow = new ReminderWindow { ReduceMotion = reduceMotion };
-            reminderWindow.BreakCompleted += OnReminderBreakCompleted;
-            reminderWindow.CancelRequested += OnCancelRequested;
-            reminderWindow.Closed += OnReminderWindowClosed;
-        }
-
-        reminderWindow.ApplySurfaceOpacity(reminderOpacity);
-        reminderWindow.BreakDuration = workCycleTracker.BreakDuration;
+        EnsureReminderWindow();
+        reminderWindow!.BreakDuration = workCycleTracker.BreakDuration;
         SetupBreakGuideSession(clock ?? new SystemClock(), workCycleTracker.BreakDuration);
         reminderWindow.Show();
     }
@@ -459,83 +432,43 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
             Disable();
     }
 
+    /// <summary>
+    /// Applies the availability policy to the main window's menu and buttons. Like the
+    /// tray applier, it keeps no phase switch of its own — the policy is the only place
+    /// that reasons about phases.
+    /// </summary>
     private void UpdateMenuAndButtonStates()
     {
         if (workCycleTracker == null) return;
 
-        var phase = workCycleTracker.CurrentPhase;
+        ApplyCommandAvailability(
+            CommandAvailabilityPolicy.ForPhase(workCycleTracker.CurrentPhase));
+    }
 
-        PauseSubmenu.Visibility = Visibility.Collapsed;
-        ResumeMenuItem.Visibility = Visibility.Collapsed;
-        FocusMenuItem.Header = "專注模式";
-        FocusMenuItem.IsEnabled = true;
-        DisableMenuItem.Header = "停用提醒";
-        DisableMenuItem.IsEnabled = true;
-        BreakNowMenuItem.IsEnabled = true;
+    internal void ApplyCommandAvailability(CommandAvailability availability)
+    {
+        // The timed-pause submenu is an elaboration of the pause command, so it follows
+        // pause availability rather than a phase list of its own.
+        PauseSubmenu.Visibility = availability.CanPause ? Visibility.Visible : Visibility.Collapsed;
+        ResumeMenuItem.Visibility = availability.ShowResume ? Visibility.Visible : Visibility.Collapsed;
 
-        PauseResumeButton.Content = "暫停";
-        PauseResumeButton.IsEnabled = true;
-        FocusButton.Content = "專注模式";
-        FocusButton.IsEnabled = true;
-        DisableButton.Content = "停用提醒";
-        DisableButton.IsEnabled = true;
-        BreakNowButton.IsEnabled = true;
+        string pauseLabel = availability.ShowResume ? "繼續" : "暫停";
+        string focusLabel = availability.ShowEndFocusMode ? "結束專注模式" : "專注模式";
+        string disableLabel = availability.ShowEnable ? "啟用提醒" : "停用提醒";
 
-        switch (phase)
-        {
-            case WorkCyclePhase.Paused:
-                ResumeMenuItem.Visibility = Visibility.Visible;
-                FocusMenuItem.IsEnabled = false;
-                BreakNowMenuItem.IsEnabled = false;
-                DisableMenuItem.IsEnabled = false;
-                PauseResumeButton.Content = "繼續";
-                FocusButton.IsEnabled = false;
-                BreakNowButton.IsEnabled = false;
-                DisableButton.IsEnabled = false;
-                break;
+        FocusMenuItem.Header = focusLabel;
+        FocusMenuItem.IsEnabled = availability.FocusToggleEnabled;
+        DisableMenuItem.Header = disableLabel;
+        DisableMenuItem.IsEnabled = availability.DisableToggleEnabled;
+        BreakNowMenuItem.IsEnabled = availability.CanBreakNow;
 
-            case WorkCyclePhase.FocusMode:
-                FocusMenuItem.Header = "結束專注模式";
-                PauseResumeButton.IsEnabled = false;
-                FocusButton.Content = "結束專注模式";
-                DisableMenuItem.IsEnabled = false;
-                DisableButton.IsEnabled = false;
-                break;
-
-            case WorkCyclePhase.Disabled:
-                DisableMenuItem.Header = "啟用提醒";
-                PauseResumeButton.IsEnabled = false;
-                FocusMenuItem.IsEnabled = false;
-                BreakNowMenuItem.IsEnabled = false;
-                DisableButton.Content = "啟用提醒";
-                FocusButton.IsEnabled = false;
-                BreakNowButton.IsEnabled = false;
-                break;
-
-            case WorkCyclePhase.BreakInProgress:
-                PauseResumeButton.IsEnabled = false;
-                FocusMenuItem.IsEnabled = false;
-                FocusButton.IsEnabled = false;
-                DisableMenuItem.IsEnabled = false;
-                DisableButton.IsEnabled = false;
-                BreakNowMenuItem.IsEnabled = false;
-                BreakNowButton.IsEnabled = false;
-                break;
-
-            case WorkCyclePhase.Idle:
-                PauseResumeButton.IsEnabled = false;
-                FocusMenuItem.IsEnabled = false;
-                FocusButton.IsEnabled = false;
-                DisableMenuItem.IsEnabled = false;
-                DisableButton.IsEnabled = false;
-                BreakNowMenuItem.IsEnabled = false;
-                BreakNowButton.IsEnabled = false;
-                break;
-
-            default:
-                PauseSubmenu.Visibility = Visibility.Visible;
-                break;
-        }
+        PauseResumeButton.Content = pauseLabel;
+        PauseResumeButton.IsEnabled = availability.PauseToggleEnabled;
+        FocusButton.Content = focusLabel;
+        FocusButton.IsEnabled = availability.FocusToggleEnabled;
+        DisableButton.Content = disableLabel;
+        DisableButton.IsEnabled = availability.DisableToggleEnabled;
+        BreakNowButton.IsEnabled = availability.CanBreakNow;
     }
 
     protected override void OnClosing(CancelEventArgs e)
@@ -677,19 +610,8 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     {
         Dispatcher.Invoke(() =>
         {
-            if (reminderWindow == null)
-            {
-                reminderWindow = new ReminderWindow { ReduceMotion = reduceMotion };
-                reminderWindow.BreakRequested += OnBreakRequested;
-                reminderWindow.BreakCompleted += OnReminderBreakCompleted;
-                reminderWindow.SnoozeRequested += OnSnoozeRequested;
-                reminderWindow.IgnoreRequested += OnIgnoreRequested;
-                reminderWindow.CancelRequested += OnCancelRequested;
-                reminderWindow.Closed += OnReminderWindowClosed;
-            }
-
-            reminderWindow.ApplySurfaceOpacity(reminderOpacity);
-            reminderWindow.SnoozeDuration = snoozeDuration;
+            EnsureReminderWindow();
+            reminderWindow!.SnoozeDuration = snoozeDuration;
             reminderWindow.BreakDuration = workCycleTracker!.BreakDuration;
             reminderWindow.ShowReminder();
         });
@@ -707,9 +629,22 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
     private void OnBreakRequested(object? sender, EventArgs e)
     {
-        workCycleTracker?.StartBreak();
-        if (reminderWindow == null || workCycleTracker == null) return;
+        if (workCycleTracker == null) return;
 
+        bool started = false;
+        try
+        {
+            started = App.ExecuteStartBreak(workCycleTracker);
+        }
+        catch (InvalidOperationException ex)
+        {
+            System.Diagnostics.Trace.TraceWarning($"RestCue: StartBreak rejected — {ex.Message}");
+        }
+
+        // A reminder dismissed at the same moment as the click leaves nothing to start.
+        if (!started || reminderWindow == null) return;
+
+        UpdateCycleStatus();
         SetupBreakGuideSession(clock ?? new SystemClock(), workCycleTracker.BreakDuration);
     }
 
@@ -817,16 +752,14 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
 
     private void OnSnoozeRequested(object? sender, EventArgs e)
     {
-        workCycleTracker?.Snooze();
+        RunCommand("Snooze", App.ExecuteSnooze);
         CloseReminderIfOpen();
-        UpdateCycleStatus();
     }
 
     private void OnIgnoreRequested(object? sender, EventArgs e)
     {
-        workCycleTracker?.Ignore();
+        RunCommand("Ignore", App.ExecuteIgnore);
         CloseReminderIfOpen();
-        UpdateCycleStatus();
     }
 
     private void OnPaused(object? sender, EventArgs e)

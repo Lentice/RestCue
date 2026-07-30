@@ -60,6 +60,7 @@ public partial class ReminderWindow : Window
 
     public void ShowReminder()
     {
+        LeaveBreakGuide();
         PhaseText.Text = "看向約六公尺外";
         ActionButton.Content = "開始休息";
         SnoozeButton.Content = $"延後 {(int)Math.Round(SnoozeDuration.TotalMinutes)} 分鐘";
@@ -119,6 +120,26 @@ public partial class ReminderWindow : Window
     {
         breakGuideTimer.Stop();
         GuideVisual.BeginAnimation(System.Windows.UIElement.OpacityProperty, null);
+        LeaveBreakGuide();
+    }
+
+    /// <summary>
+    /// Clears the double-activation guard on the primary action.
+    /// </summary>
+    /// <remarks>
+    /// Every exit from break-guide presentation clears it — completion, cancellation, or
+    /// close. Clearing it only on completion left a cancelled break with the guard stuck
+    /// set, which permanently disabled "start a break" on this surface.
+    /// </remarks>
+    private void LeaveBreakGuide()
+    {
+        isBreakStarting = false;
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        LeaveBreakGuide();
+        base.OnClosed(e);
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -227,7 +248,7 @@ public partial class ReminderWindow : Window
 
     private void OnBreakCompleted()
     {
-        isBreakStarting = false;
+        LeaveBreakGuide();
         Hide();
         BreakCompleted?.Invoke(this, EventArgs.Empty);
     }

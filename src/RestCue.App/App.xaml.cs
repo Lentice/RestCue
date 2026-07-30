@@ -4,6 +4,7 @@ using RestCue.App.Lifecycle;
 using RestCue.App.UsageEvents;
 using RestCue.Core.Domain;
 using RestCue.Core.Events;
+using RestCue.Core.Policies;
 using RestCue.Core.Reminders;
 using RestCue.Core.Settings;
 using RestCue.Core.Time;
@@ -34,6 +35,8 @@ public partial class App : System.Windows.Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
 
         _statusWindow = new MainWindow();
         _trayIcon = new WindowsTrayIcon();
@@ -90,8 +93,55 @@ public partial class App : System.Windows.Application
         }
     }
 
+    private void OnDispatcherUnhandledException(
+        object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+    {
+        HandleUnhandledException(
+            e.Exception,
+            message => Trace.TraceError(message),
+            () => _eventWriter?.Write(
+                UsageEventType.ErrorOccurred,
+                DateTimeOffset.UtcNow,
+                new ErrorOccurredPayload("UnhandledDispatcherException")));
+
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// The application's floor: an unexpected failure is recorded and survived rather than
+    /// fatal, so a click that lands on the wrong side of a state change cannot cost the
+    /// user their accumulated work time.
+    /// </summary>
+    /// <remarks>
+    /// It records rather than swallowing, and it is a backstop rather than a substitute
+    /// for the per-command guards.
+    /// </remarks>
+    internal static void HandleUnhandledException(
+        Exception exception,
+        Action<string> logError,
+        Action recordDiagnostic)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        ArgumentNullException.ThrowIfNull(logError);
+        ArgumentNullException.ThrowIfNull(recordDiagnostic);
+
+        logError($"RestCue: unhandled exception survived — {exception}");
+
+        try
+        {
+            recordDiagnostic();
+        }
+        catch (Exception diagnosticFailure)
+        {
+            // Recording must never be the thing that takes the application down.
+            logError($"RestCue: failed to record the unhandled exception — {diagnosticFailure.Message}");
+        }
+    }
+
     protected override void OnExit(ExitEventArgs e)
     {
+        DispatcherUnhandledException -= OnDispatcherUnhandledException;
+
         _eventWriter?.Write(UsageEventType.AppStopped, DateTimeOffset.UtcNow);
         UnwireUsageEventEmitters();
 
@@ -272,16 +322,163 @@ public partial class App : System.Windows.Application
         aboutWindow.Show();
     }
 
-    internal static void ExecutePause(WorkCycleTracker tracker, Action closeReminder)
+    /// <summary>
+    /// Enters Pause, guarding before acting: a rejected request must cost the user
+    /// nothing, so the reminder surface is only closed once the transition is known to be
+    /// legal. Returns false when the command was not available.
+    /// </summary>
+    internal static bool ExecutePause(WorkCycleTracker tracker, Action closeReminder)
     {
+        ArgumentNullException.ThrowIfNull(tracker);
+        ArgumentNullException.ThrowIfNull(closeReminder);
+
+        if (!CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase).CanPause)
+            return false;
+
         closeReminder();
         tracker.Pause();
+        return true;
     }
 
-    internal static void ExecuteStartFocusMode(WorkCycleTracker tracker, Action closeReminder)
+    /// <inheritdoc cref="ExecutePause"/>
+    internal static bool ExecutePauseFor(
+        WorkCycleTracker tracker, TimeSpan duration, Action closeReminder)
     {
+        ArgumentNullException.ThrowIfNull(tracker);
+        ArgumentNullException.ThrowIfNull(closeReminder);
+
+        if (!CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase).CanPause)
+            return false;
+
+        closeReminder();
+        tracker.Pause(duration);
+        return true;
+    }
+
+    /// <inheritdoc cref="ExecutePause"/>
+    internal static bool ExecuteStartFocusMode(WorkCycleTracker tracker, Action closeReminder)
+    {
+        ArgumentNullException.ThrowIfNull(tracker);
+        ArgumentNullException.ThrowIfNull(closeReminder);
+
+        if (!CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase).CanStartFocusMode)
+            return false;
+
         closeReminder();
         tracker.StartFocusMode();
+        return true;
+    }
+
+    /// <inheritdoc cref="ExecutePause"/>
+    internal static bool ExecuteEndFocusMode(WorkCycleTracker tracker)
+    {
+        ArgumentNullException.ThrowIfNull(tracker);
+
+        if (!CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase).CanEndFocusMode)
+            return false;
+
+        tracker.EndFocusMode();
+        return true;
+    }
+
+    /// <inheritdoc cref="ExecutePause"/>
+    internal static bool ExecuteResume(WorkCycleTracker tracker)
+    {
+        ArgumentNullException.ThrowIfNull(tracker);
+
+        if (!CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase).CanResume)
+            return false;
+
+        tracker.Resume();
+        return true;
+    }
+
+    /// <summary>
+    /// Disables reminders. Legal in every phase but one, including during a running break —
+    /// so the break is cancelled as an explicit, recorded step rather than silently
+    /// dropped when the phase changes.
+    /// </summary>
+    internal static bool ExecuteDisable(WorkCycleTracker tracker, Action closeReminder)
+    {
+        ArgumentNullException.ThrowIfNull(tracker);
+        ArgumentNullException.ThrowIfNull(closeReminder);
+
+        if (!CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase).CanDisable)
+            return false;
+
+        closeReminder();
+        tracker.CancelBreak();
+        tracker.Disable();
+        return true;
+    }
+
+    /// <inheritdoc cref="ExecutePause"/>
+    internal static bool ExecuteEnable(WorkCycleTracker tracker)
+    {
+        ArgumentNullException.ThrowIfNull(tracker);
+
+        if (!CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase).CanEnable)
+            return false;
+
+        tracker.Enable();
+        return true;
+    }
+
+    /// <summary>
+    /// Starts a break by hand. Guarded like the mode commands, so a click that lands on the
+    /// wrong side of a state change is a no-op rather than a crash.
+    /// </summary>
+    internal static bool ExecuteManualStartBreak(WorkCycleTracker tracker, Action closeReminder)
+    {
+        ArgumentNullException.ThrowIfNull(tracker);
+        ArgumentNullException.ThrowIfNull(closeReminder);
+
+        if (!CommandAvailabilityPolicy.ForPhase(tracker.CurrentPhase).CanBreakNow)
+            return false;
+
+        closeReminder();
+        tracker.ManualStartBreak();
+        return true;
+    }
+
+    /// <summary>
+    /// Starts a break from a visible reminder. Snooze and Ignore share the same shape: all
+    /// three are only legal from ReminderVisible, and none of them may throw out of an
+    /// event handler.
+    /// </summary>
+    internal static bool ExecuteStartBreak(WorkCycleTracker tracker)
+    {
+        ArgumentNullException.ThrowIfNull(tracker);
+
+        if (tracker.CurrentPhase != WorkCyclePhase.ReminderVisible)
+            return false;
+
+        tracker.StartBreak();
+        return true;
+    }
+
+    /// <inheritdoc cref="ExecuteStartBreak"/>
+    internal static bool ExecuteSnooze(WorkCycleTracker tracker)
+    {
+        ArgumentNullException.ThrowIfNull(tracker);
+
+        if (tracker.CurrentPhase != WorkCyclePhase.ReminderVisible)
+            return false;
+
+        tracker.Snooze();
+        return true;
+    }
+
+    /// <inheritdoc cref="ExecuteStartBreak"/>
+    internal static bool ExecuteIgnore(WorkCycleTracker tracker)
+    {
+        ArgumentNullException.ThrowIfNull(tracker);
+
+        if (tracker.CurrentPhase != WorkCyclePhase.ReminderVisible)
+            return false;
+
+        tracker.Ignore();
+        return true;
     }
 
     private void WireTrayCommands()
@@ -302,29 +499,17 @@ public partial class App : System.Windows.Application
         _statusWindow.DebtLevelChanged += OnDebtLevelChanged;
         _statusWindow.LowInterruptionReminderRequested += (_, e) =>
         {
-            if (e.ShowTrayCue)
-            {
-                _trayIcon?.SetSuppressedState(true);
-                _trayIcon?.SetStatusText("RestCue – 休息提醒待處理");
-            }
-            else
-            {
-                _trayIcon?.SetSuppressedState(false);
-                _trayIcon?.SetStatusText("RestCue – Eye Break Reminder");
-            }
+            if (_trayIcon != null)
+                ApplySuppressedReminderToTray(_trayIcon, e.ShowTrayCue);
         };
 
         _statusWindow.LightTouchReminderRequested += (_, _) =>
         {
-            _trayIcon?.SetSuppressedState(true);
-            _trayIcon?.SetStatusText("RestCue – 休息提醒待處理");
-            _trayIcon?.ShowLightTouchNotification(
-                "RestCue – 休息提醒",
-                "該休息了！點擊系統列圖示查看詳情。");
-            if (_startup?.CurrentSettings.LightTouchSoundEnabled == true)
-            {
-                System.Media.SystemSounds.Asterisk.Play();
-            }
+            if (_trayIcon != null)
+                ApplyLightTouchReminderToTray(
+                    _trayIcon,
+                    _startup?.CurrentSettings.LightTouchSoundEnabled == true,
+                    System.Media.SystemSounds.Asterisk.Play);
         };
     }
 
@@ -398,7 +583,7 @@ public partial class App : System.Windows.Application
 
     private void OnPhaseChangedForWorkSession(object? sender, WorkCyclePhase newPhase)
     {
-        bool isWorking = newPhase is WorkCyclePhase.Working;
+        bool isWorking = ContinuousWorkPolicy.IsContinuousWork(newPhase);
         if (isWorking && !_wasWorking)
         {
             _eventWriter?.Write(UsageEventType.WorkSessionStarted, DateTimeOffset.UtcNow);
@@ -544,63 +729,80 @@ public partial class App : System.Windows.Application
         };
     }
 
+    /// <summary>
+    /// Applies the availability policy to the tray menu. There is no phase switch here:
+    /// the policy is the only place that reasons about phases, so this surface cannot
+    /// drift away from the main window's.
+    /// </summary>
     internal static void ApplyPhaseToTray(ITrayIcon tray, WorkCyclePhase phase, RestDebtLevel debtLevel)
     {
+        ArgumentNullException.ThrowIfNull(tray);
+
+        CommandAvailability availability = CommandAvailabilityPolicy.ForPhase(phase);
+
         tray.SetSuppressedState(false);
-        tray.SetPauseText(false);
-        tray.SetPauseEnabled(true);
-        tray.SetFocusModeText(false);
-        tray.SetFocusModeEnabled(true);
-        tray.SetDisableText(false);
-        tray.SetDisableEnabled(true);
-        tray.SetBreakNowEnabled(true);
+        tray.SetPauseText(availability.ShowResume);
+        tray.SetPauseEnabled(availability.PauseToggleEnabled);
+        tray.SetFocusModeText(availability.ShowEndFocusMode);
+        tray.SetFocusModeEnabled(availability.FocusToggleEnabled);
+        tray.SetDisableText(availability.ShowEnable);
+        tray.SetDisableEnabled(availability.DisableToggleEnabled);
+        tray.SetBreakNowEnabled(availability.CanBreakNow);
         tray.SetDebtLevel(debtLevel);
-        tray.SetStatusText(GetStatusTextForPhase(phase));
 
-        switch (phase)
+        // During an active cycle the debt level is the more useful status; the mode
+        // phases name themselves.
+        tray.SetStatusText(IsActiveCyclePhase(phase)
+            ? GetStatusTextForDebtLevel(debtLevel)
+            : GetStatusTextForPhase(phase));
+    }
+
+    private static bool IsActiveCyclePhase(WorkCyclePhase phase) =>
+        phase is WorkCyclePhase.Working
+            or WorkCyclePhase.PendingReminder
+            or WorkCyclePhase.ReminderVisible
+            or WorkCyclePhase.Snoozed;
+
+    /// <summary>
+    /// Handles a reminder that was held back to a low-interruption presentation.
+    /// </summary>
+    /// <remarks>
+    /// A named function rather than an inline closure, so the tray-cue behaviour can be
+    /// tested by calling it instead of by a test reimplementing it.
+    /// </remarks>
+    internal static void ApplySuppressedReminderToTray(ITrayIcon tray, bool showTrayCue)
+    {
+        ArgumentNullException.ThrowIfNull(tray);
+
+        tray.SetSuppressedState(showTrayCue);
+        tray.SetStatusText(showTrayCue
+            ? PendingReminderStatusText
+            : "RestCue – Eye Break Reminder");
+    }
+
+    /// <summary>
+    /// Handles a reminder presented at the light-touch tier: tray cue plus a toast, and a
+    /// sound only when the user has left it enabled.
+    /// </summary>
+    internal static void ApplyLightTouchReminderToTray(
+        ITrayIcon tray, bool soundEnabled, Action playSound)
+    {
+        ArgumentNullException.ThrowIfNull(tray);
+        ArgumentNullException.ThrowIfNull(playSound);
+
+        tray.SetSuppressedState(true);
+        tray.SetStatusText(PendingReminderStatusText);
+        tray.ShowLightTouchNotification(
+            "RestCue – 休息提醒",
+            "該休息了！點擊系統列圖示查看詳情。");
+
+        if (soundEnabled)
         {
-            case WorkCyclePhase.Paused:
-                tray.SetPauseText(true);
-                tray.SetFocusModeEnabled(false);
-                tray.SetBreakNowEnabled(false);
-                tray.SetStatusText("RestCue – 已暫停");
-                break;
-
-            case WorkCyclePhase.FocusMode:
-                tray.SetFocusModeText(true);
-                tray.SetPauseEnabled(false);
-                tray.SetStatusText("RestCue – 專注模式");
-                break;
-
-            case WorkCyclePhase.Disabled:
-                tray.SetDisableText(true);
-                tray.SetPauseEnabled(false);
-                tray.SetFocusModeEnabled(false);
-                tray.SetBreakNowEnabled(false);
-                tray.SetStatusText("RestCue – 已停用");
-                break;
-
-            case WorkCyclePhase.BreakInProgress:
-                tray.SetPauseEnabled(false);
-                tray.SetFocusModeEnabled(false);
-                tray.SetBreakNowEnabled(false);
-                tray.SetStatusText("RestCue – 休息中");
-                break;
-
-            case WorkCyclePhase.Idle:
-                tray.SetFocusModeEnabled(false);
-                tray.SetBreakNowEnabled(false);
-                tray.SetStatusText("RestCue – 離開中");
-                break;
-
-            case WorkCyclePhase.Working:
-            case WorkCyclePhase.PendingReminder:
-            case WorkCyclePhase.ReminderVisible:
-            case WorkCyclePhase.Snoozed:
-                tray.SetStatusText(GetStatusTextForDebtLevel(debtLevel));
-                break;
+            playSound();
         }
     }
+
+    internal const string PendingReminderStatusText = "RestCue – 休息提醒待處理";
 
     private void OnPhaseChanged(object? sender, WorkCyclePhase phase)
     {

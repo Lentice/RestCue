@@ -1,6 +1,7 @@
 using System.Reflection;
 using RestCue.App.Lifecycle;
 using RestCue.Core.Domain;
+using RestCue.Core.Policies;
 using RestCue.Core.Reminders;
 using Xunit;
 
@@ -8,46 +9,59 @@ namespace RestCue.App.Tests;
 
 public sealed class WindowsTrayIconPhaseMappingTests
 {
+    /// <summary>
+    /// The tray applier must produce exactly what the availability policy dictates, for
+    /// every phase. Asserted against the policy rather than against a second hand-written
+    /// table, because a second table is how the tray and the main window drifted apart in
+    /// the first place. The policy's own table is asserted — and checked against what the
+    /// engine accepts — in the core policy suite.
+    /// </summary>
     [Theory]
-    [InlineData(WorkCyclePhase.Working, true, true, true)]
-    [InlineData(WorkCyclePhase.PendingReminder, true, true, true)]
-    [InlineData(WorkCyclePhase.ReminderVisible, true, true, true)]
-    [InlineData(WorkCyclePhase.Snoozed, true, true, true)]
-    [InlineData(WorkCyclePhase.Idle, true, false, false)]
-    [InlineData(WorkCyclePhase.Paused, true, false, false)]
-    [InlineData(WorkCyclePhase.FocusMode, false, true, true)]
-    [InlineData(WorkCyclePhase.Disabled, false, false, false)]
-    [InlineData(WorkCyclePhase.BreakInProgress, false, false, false)]
-    public void TrayCommandAvailability_MatchesPhase(
-        WorkCyclePhase phase,
-        bool expectPauseEnabled,
-        bool expectFocusEnabled,
-        bool expectBreakNowEnabled)
+    [MemberData(nameof(AllPhases))]
+    public void TrayCommandAvailability_MatchesPolicy(WorkCyclePhase phase)
     {
         var tray = new FakeTrayIcon();
+        CommandAvailability expected = CommandAvailabilityPolicy.ForPhase(phase);
 
         App.ApplyPhaseToTray(tray, phase, RestDebtLevel.Level0);
 
-        Assert.Equal(expectPauseEnabled, tray.PauseEnabled);
-        Assert.Equal(expectFocusEnabled, tray.FocusModeEnabled);
-        Assert.Equal(expectBreakNowEnabled, tray.BreakNowEnabled);
+        Assert.Equal(expected.PauseToggleEnabled, tray.PauseEnabled);
+        Assert.Equal(expected.FocusToggleEnabled, tray.FocusModeEnabled);
+        Assert.Equal(expected.DisableToggleEnabled, tray.DisableEnabled);
+        Assert.Equal(expected.CanBreakNow, tray.BreakNowEnabled);
     }
 
     [Theory]
-    [InlineData(WorkCyclePhase.Working)]
-    [InlineData(WorkCyclePhase.PendingReminder)]
-    [InlineData(WorkCyclePhase.ReminderVisible)]
-    [InlineData(WorkCyclePhase.Snoozed)]
-    [InlineData(WorkCyclePhase.Idle)]
-    [InlineData(WorkCyclePhase.Paused)]
-    [InlineData(WorkCyclePhase.FocusMode)]
-    [InlineData(WorkCyclePhase.BreakInProgress)]
-    [InlineData(WorkCyclePhase.Disabled)]
-    public void DisableCommand_AlwaysEnabled(WorkCyclePhase phase)
+    [MemberData(nameof(AllPhases))]
+    public void TrayCommandLabels_MatchPolicy(WorkCyclePhase phase)
+    {
+        var tray = new FakeTrayIcon();
+        CommandAvailability expected = CommandAvailabilityPolicy.ForPhase(phase);
+
+        App.ApplyPhaseToTray(tray, phase, RestDebtLevel.Level0);
+
+        Assert.Equal(expected.ShowResume, tray.ShowsResumeText);
+        Assert.Equal(expected.ShowEndFocusMode, tray.ShowsEndFocusModeText);
+        Assert.Equal(expected.ShowEnable, tray.ShowsEnableText);
+    }
+
+    [Theory]
+    [MemberData(nameof(AllPhases))]
+    public void DisableCommand_IsReachableInEveryPhase(WorkCyclePhase phase)
     {
         var tray = new FakeTrayIcon();
         App.ApplyPhaseToTray(tray, phase, RestDebtLevel.Level0);
         Assert.True(tray.DisableEnabled);
+    }
+
+    public static TheoryData<WorkCyclePhase> AllPhases()
+    {
+        var data = new TheoryData<WorkCyclePhase>();
+        foreach (WorkCyclePhase phase in Enum.GetValues<WorkCyclePhase>())
+        {
+            data.Add(phase);
+        }
+        return data;
     }
 
     [Fact]
@@ -244,17 +258,17 @@ public sealed class WindowsTrayIconPhaseMappingTests
 
         public void SetBreakNowEnabled(bool enabled) => BreakNowEnabled = enabled;
 
-        public void SetPauseText(bool isPaused)
-        {
-        }
+        public bool ShowsResumeText { get; private set; }
 
-        public void SetFocusModeText(bool isFocusMode)
-        {
-        }
+        public bool ShowsEndFocusModeText { get; private set; }
 
-        public void SetDisableText(bool isDisabled)
-        {
-        }
+        public bool ShowsEnableText { get; private set; }
+
+        public void SetPauseText(bool isPaused) => ShowsResumeText = isPaused;
+
+        public void SetFocusModeText(bool isFocusMode) => ShowsEndFocusModeText = isFocusMode;
+
+        public void SetDisableText(bool isDisabled) => ShowsEnableText = isDisabled;
 
         public void SetStatusText(string text) => StatusText = text;
 

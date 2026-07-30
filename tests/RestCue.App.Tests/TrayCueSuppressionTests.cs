@@ -12,14 +12,11 @@ public sealed class TrayCueSuppressionTests
     {
         var tray = new TrackingFakeTrayIcon();
 
-        var trayOnlyArgs = new ReminderSuppressedEventArgs(showTrayCue: true);
-        var silentArgs = new ReminderSuppressedEventArgs(showTrayCue: false);
-
-        ApplyLowInterruptionHandler(tray, trayOnlyArgs);
+        Apply(tray, new ReminderSuppressedEventArgs(showTrayCue: true));
         Assert.True(tray.IsSuppressed);
-        Assert.Equal("RestCue – 休息提醒待處理", tray.StatusText);
+        Assert.Equal(App.PendingReminderStatusText, tray.StatusText);
 
-        ApplyLowInterruptionHandler(tray, silentArgs);
+        Apply(tray, new ReminderSuppressedEventArgs(showTrayCue: false));
         Assert.False(tray.IsSuppressed);
         Assert.Equal("RestCue – Eye Break Reminder", tray.StatusText);
     }
@@ -29,26 +26,47 @@ public sealed class TrayCueSuppressionTests
     {
         var tray = new TrackingFakeTrayIcon();
 
-        ApplyLowInterruptionHandler(tray, new ReminderSuppressedEventArgs(showTrayCue: true));
+        Apply(tray, new ReminderSuppressedEventArgs(showTrayCue: true));
 
         Assert.True(tray.IsSuppressed);
-        Assert.Equal("RestCue – 休息提醒待處理", tray.StatusText);
+        Assert.Equal(App.PendingReminderStatusText, tray.StatusText);
     }
 
-    private static void ApplyLowInterruptionHandler(
-        ITrayIcon tray, ReminderSuppressedEventArgs e)
+    [Fact]
+    public void Light_touch_shows_a_cue_a_toast_and_a_sound()
     {
-        if (e.ShowTrayCue)
-        {
-            tray.SetSuppressedState(true);
-            tray.SetStatusText("RestCue – 休息提醒待處理");
-        }
-        else
-        {
-            tray.SetSuppressedState(false);
-            tray.SetStatusText("RestCue – Eye Break Reminder");
-        }
+        var tray = new TrackingFakeTrayIcon();
+        int sounds = 0;
+
+        App.ApplyLightTouchReminderToTray(tray, soundEnabled: true, () => sounds++);
+
+        Assert.True(tray.IsSuppressed);
+        Assert.Equal(App.PendingReminderStatusText, tray.StatusText);
+        Assert.Equal("RestCue – 休息提醒", tray.NotifiedTitle);
+        Assert.NotNull(tray.NotifiedText);
+        Assert.Equal(1, sounds);
     }
+
+    [Fact]
+    public void Light_touch_stays_silent_when_the_user_disabled_the_sound()
+    {
+        var tray = new TrackingFakeTrayIcon();
+        int sounds = 0;
+
+        App.ApplyLightTouchReminderToTray(tray, soundEnabled: false, () => sounds++);
+
+        // The cue and the toast still happen; only the sound is withheld.
+        Assert.True(tray.IsSuppressed);
+        Assert.NotNull(tray.NotifiedTitle);
+        Assert.Equal(0, sounds);
+    }
+
+    /// <summary>
+    /// Calls the shipping handler. This test used to reimplement it, which meant the
+    /// behaviour was untested while appearing covered.
+    /// </summary>
+    private static void Apply(ITrayIcon tray, ReminderSuppressedEventArgs e) =>
+        App.ApplySuppressedReminderToTray(tray, e.ShowTrayCue);
 
     private sealed class TrackingFakeTrayIcon : ITrayIcon
     {
