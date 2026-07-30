@@ -569,8 +569,7 @@ public sealed class WorkCycleTracker
         if (isWorking && wasWorking && lastTickUtc.HasValue)
         {
             var delta = now - lastTickUtc.Value;
-            if (delta > TimeSpan.Zero)
-                AccumulatedWorkTime += delta;
+            AccumulatedWorkTime = RestNeedPolicy.Accumulate(AccumulatedWorkTime, delta);
         }
 
         wasWorking = isWorking;
@@ -633,38 +632,43 @@ public sealed class WorkCycleTracker
 
     private void TickPending(DateTimeOffset now, bool isWorking, TimeSpan idleDuration)
     {
-        if (idleDuration >= idleThreshold)
+        if (ReminderTimingPolicy.IsIdle(idleDuration, idleThreshold))
         {
             EnterIdle();
             return;
         }
 
-        if (idleDuration >= passiveBreakThreshold)
+        if (wasPassivePaused && !ReminderTimingPolicy.IsPassivePause(idleDuration, passiveBreakThreshold))
+        {
+            pendingSinceUtc = now;
+            wasPassivePaused = false;
+        }
+
+        if (ReminderTimingPolicy.IsPassivePause(idleDuration, passiveBreakThreshold))
         {
             if (!wasPassivePaused)
             {
                 wasPassivePaused = true;
                 PassivePauseDetected?.Invoke(this, EventArgs.Empty);
             }
-
             return;
         }
 
-        if (wasPassivePaused)
-        {
-            pendingSinceUtc = now;
-            wasPassivePaused = false;
-        }
+        var elapsed = pendingSinceUtc.HasValue ? now - pendingSinceUtc.Value : TimeSpan.Zero;
 
-        var elapsed = now - pendingSinceUtc!.Value;
+        var timingParams = new TimingParameters(
+            IdleDuration: idleDuration,
+            ElapsedInPhase: elapsed,
+            NaturalPauseThreshold: naturalPauseThreshold,
+            MaximumReminderWait: maximumReminderWait,
+            PassiveBreakThreshold: passiveBreakThreshold,
+            IdleThreshold: idleThreshold,
+            ReminderDisplayDuration: reminderDisplayDuration,
+            IsPaused: false, IsFocused: false, IsFullscreen: false, IsMuted: false);
 
-        if (idleDuration >= naturalPauseThreshold)
-        {
-            EnterReminderVisible(now);
-            return;
-        }
+        var decision = ReminderTimingPolicy.EvaluatePendingReminder(timingParams);
 
-        if (elapsed >= maximumReminderWait)
+        if (decision is TimingDecision.ShowReminder or TimingDecision.ShowReminderMaxWait)
         {
             EnterReminderVisible(now);
         }
@@ -672,28 +676,43 @@ public sealed class WorkCycleTracker
 
     private void TickReminderVisible(DateTimeOffset now, TimeSpan idleDuration)
     {
-        if (idleDuration >= idleThreshold)
-        {
-            EnterIdle();
-            return;
-        }
+        var elapsed = reminderVisibleSinceUtc.HasValue ? now - reminderVisibleSinceUtc.Value : TimeSpan.Zero;
 
-        if (idleDuration >= passiveBreakThreshold)
-        {
-            CurrentPhase = WorkCyclePhase.PendingReminder;
-            pendingSinceUtc = now;
-            reminderVisibleSinceUtc = null;
-            wasPassivePaused = true;
-            PassivePauseDetected?.Invoke(this, EventArgs.Empty);
-            return;
-        }
+        var timingParams = new TimingParameters(
+            IdleDuration: idleDuration,
+            ElapsedInPhase: elapsed,
+            NaturalPauseThreshold: naturalPauseThreshold,
+            MaximumReminderWait: maximumReminderWait,
+            PassiveBreakThreshold: passiveBreakThreshold,
+            IdleThreshold: idleThreshold,
+            ReminderDisplayDuration: reminderDisplayDuration,
+            IsPaused: false, IsFocused: false, IsFullscreen: false, IsMuted: false);
 
-        TryAutoDismiss(now);
+        var decision = ReminderTimingPolicy.EvaluateReminderVisible(timingParams);
+
+        switch (decision)
+        {
+            case TimingDecision.EnterIdle:
+                EnterIdle();
+                break;
+
+            case TimingDecision.PassivePauseDetected:
+                CurrentPhase = WorkCyclePhase.PendingReminder;
+                pendingSinceUtc = now;
+                reminderVisibleSinceUtc = null;
+                wasPassivePaused = true;
+                PassivePauseDetected?.Invoke(this, EventArgs.Empty);
+                break;
+
+            case TimingDecision.AutoDismiss:
+                TryAutoDismiss(now);
+                break;
+        }
     }
 
     private void TickSnoozed(DateTimeOffset now, bool isWorking, TimeSpan idleDuration)
     {
-        if (!isWorking && idleDuration >= idleThreshold)
+        if (ReminderTimingPolicy.IsIdle(idleDuration, idleThreshold))
         {
             EnterIdle();
             return;
@@ -836,7 +855,7 @@ public sealed class WorkCycleTracker
 
     private void EvaluateDebtLevel()
     {
-        var newLevel = DebtPolicy.Evaluate(
+        var newLevel = RestNeedPolicy.Evaluate(
             AccumulatedWorkTime,
             workInterval,
             debtLevel2Threshold,
