@@ -8,7 +8,7 @@ public sealed class WindowsFullscreenDetector : IFullscreenDetector
 
     public WindowsFullscreenDetector(IFullscreenWin32Api? win32Api = null)
     {
-        this.win32 = win32Api ?? new FullscreenWin32Api();
+        win32 = win32Api ?? new FullscreenWin32Api();
     }
 
     public bool IsForegroundFullscreen()

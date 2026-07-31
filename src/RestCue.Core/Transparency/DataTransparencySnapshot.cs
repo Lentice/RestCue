@@ -1,6 +1,7 @@
-namespace RestCue.Core.Transparency;
 
-using UsageEvents;
+using RestCue.Core.UsageEvents;
+
+namespace RestCue.Core.Transparency;
 
 public enum CollectionState
 {

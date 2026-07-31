@@ -16,8 +16,8 @@ public sealed class WindowsForegroundContextProvider : IForegroundContextProvide
         IFullscreenDetector? fullscreenDetector = null)
     {
         this.canCollectProcessNames = canCollectProcessNames;
-        this.win32 = win32Api ?? new FullscreenWin32Api();
-        this.fullscreenDetector = fullscreenDetector ?? new WindowsFullscreenDetector(this.win32);
+        win32 = win32Api ?? new FullscreenWin32Api();
+        this.fullscreenDetector = fullscreenDetector ?? new WindowsFullscreenDetector(win32);
     }
 
     public ForegroundContext GetCurrentContext()

@@ -134,7 +134,7 @@ public sealed class SqliteUsageEventMetadataReaderTests : IDisposable
     [Fact]
     public async Task Unknown_event_type_string_is_counted_as_unparsable()
     {
-        var (reader, dbPath) = await CreateReaderAsync();
+        var (_, dbPath) = await CreateReaderAsync();
 
         var validTime = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 

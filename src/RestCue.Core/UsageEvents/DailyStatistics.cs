@@ -1,6 +1,7 @@
-namespace RestCue.Core.UsageEvents;
 
-using Domain;
+using RestCue.Core.Domain;
+
+namespace RestCue.Core.UsageEvents;
 
 public enum DailyStatisticsStatus
 {

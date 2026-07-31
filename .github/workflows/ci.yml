@@ -20,5 +20,12 @@ jobs:
           cache-dependency-path: |
             **/*.csproj
       - run: dotnet restore RestCue.sln
+
+      # Formatting gate. Whitespace only: it needs no Roslyn analyzer pass, so
+      # it adds a few seconds rather than a few minutes. Run before the build
+      # so a formatting-only PR fails fast.
+      - name: Verify formatting
+        run: dotnet format whitespace RestCue.sln --no-restore --verify-no-changes
+
       - run: dotnet build RestCue.sln --configuration Release --no-restore
       - run: dotnet test RestCue.sln --configuration Release --no-build

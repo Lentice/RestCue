@@ -1,7 +1,8 @@
-namespace RestCue.Core.Transparency;
 
-using Settings;
-using UsageEvents;
+using RestCue.Core.Settings;
+using RestCue.Core.UsageEvents;
+
+namespace RestCue.Core.Transparency;
 
 public sealed class DataTransparencyService : IDataTransparencyService
 {

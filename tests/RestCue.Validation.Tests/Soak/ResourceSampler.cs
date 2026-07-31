@@ -12,7 +12,7 @@ public sealed class ResourceSampler : IDisposable
 
     public ResourceSampler(string outputPath, string dbPath)
     {
-        this.process = Process.GetCurrentProcess();
+        process = Process.GetCurrentProcess();
         this.dbPath = dbPath;
         writer = OpenArtifactWriter(outputPath);
         writer.WriteLine("Sample,ElapsedSeconds,TotalProcessorSeconds,WorkingSetMB,PrivateMemoryMB,HandleCount,ThreadCount,DatabaseFileKB");

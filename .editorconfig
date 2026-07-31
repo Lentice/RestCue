@@ -1,15 +1,29 @@
 root = true
 
-[*.{cs,csproj}]
+[*]
 charset = utf-8
-end_of_line = crlf
+end_of_line = lf
 insert_final_newline = true
+trim_trailing_whitespace = true
 indent_style = space
 indent_size = 4
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+# Keep single-line guard clauses (`if (x == null) return;`) intact — that is the
+# established shape in this codebase.
+csharp_preserve_single_line_statements = true
+csharp_preserve_single_line_blocks = true
+# A braced `case` body is not indented an extra level, matching the codebase.
+csharp_indent_case_contents_when_block = false
 
 dotnet_sort_system_directives_first = true
 dotnet_style_qualification_for_field = false:suggestion
 dotnet_style_qualification_for_property = false:suggestion
 csharp_style_namespace_declarations = file_scoped:suggestion
 csharp_style_var_when_type_is_apparent = true:suggestion
-

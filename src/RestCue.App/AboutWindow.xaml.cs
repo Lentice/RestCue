@@ -26,9 +26,6 @@ public sealed partial class AboutWindow : Window
 
     private void OnViewDataClick(object sender, RoutedEventArgs e)
     {
-        if (OpenDataTransparencyRequested != null)
-        {
-            OpenDataTransparencyRequested();
-        }
+        OpenDataTransparencyRequested?.Invoke();
     }
 }

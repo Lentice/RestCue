@@ -17,6 +17,26 @@ Run `dotnet build RestCue.sln` and `dotnet test RestCue.sln`.
 
 Every completed ticket must report changes, tests, known limitations, and data/schema impact.
 
+## Lint
+
+One gate, run in CI before the build:
+
+```
+dotnet format whitespace RestCue.sln --verify-no-changes
+```
+
+Drop `--verify-no-changes` to fix in place. Rules live in `.editorconfig`.
+Deliberately kept to whitespace only — the `style` and `analyzers` passes
+need a full Roslyn analysis and cost minutes rather than seconds.
+
+Conventions, all matching what the codebase already did:
+
+- Line endings are LF, pinned by `.gitattributes`.
+- Private fields are `camelCase` with **no** `_` prefix. Where a constructor
+  parameter shares the name, assign through `this.`.
+- `const` and `static readonly` fields are `PascalCase`.
+- Single-line guard clauses (`if (x == null) return;`) stay on one line.
+
 ## Agent skills
 
 ### Issue tracker

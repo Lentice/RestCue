@@ -663,8 +663,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     {
         if (audioCoordinator != null)
         {
-            if (breakGuideSession != null)
-                breakGuideSession.CueChanged -= OnAudioCueChanged;
+            breakGuideSession?.CueChanged -= OnAudioCueChanged;
             audioCoordinator.EndGuide();
         }
     }
@@ -673,10 +672,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     {
         Dispatcher.Invoke(() =>
         {
-            if (reminderWindow != null)
-            {
-                reminderWindow.PhaseText.Text = RestCue.Core.Reminders.BreakGuideText.ForCue(cue);
-            }
+            reminderWindow?.PhaseText.Text = RestCue.Core.Reminders.BreakGuideText.ForCue(cue);
         });
     }
 
@@ -704,10 +700,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     {
         Dispatcher.Invoke(() =>
         {
-            if (reminderWindow != null)
-            {
-                reminderWindow.CompleteBreak();
-            }
+            reminderWindow?.CompleteBreak();
         });
     }
 
