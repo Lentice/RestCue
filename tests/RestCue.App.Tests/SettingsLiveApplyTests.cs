@@ -228,10 +228,10 @@ public sealed class SettingsLiveApplyTests
 
     private sealed class StepClock : RestCue.Core.Time.IClock
     {
-        private DateTimeOffset _utcNow = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        private DateTimeOffset utcNow = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
-        public DateTimeOffset UtcNow => _utcNow;
+        public DateTimeOffset UtcNow => utcNow;
 
-        public void Advance(TimeSpan duration) => _utcNow += duration;
+        public void Advance(TimeSpan duration) => utcNow += duration;
     }
 }

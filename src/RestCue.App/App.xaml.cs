@@ -20,17 +20,17 @@ namespace RestCue.App;
 
 public partial class App : System.Windows.Application
 {
-    private ApplicationLifecycle? _lifecycle;
-    private ApplicationStartup? _startup;
-    private WindowsTrayIcon? _trayIcon;
-    private MainWindow? _statusWindow;
-    private BackgroundUsageEventWriter? _eventWriter;
-    private IUsageEventRepository? _usageEventRepository;
-    private ISettingsRepository? _settingsRepository;
-    private IApplicationRuleRepository? _ruleRepository;
-    private WorkCycleTracker? _tracker;
-    private WindowsBreakGuideAudioPlayer? _audioPlayer;
-    private WorkCyclePhase _lastPhase;
+    private ApplicationLifecycle? lifecycle;
+    private ApplicationStartup? startup;
+    private WindowsTrayIcon? trayIcon;
+    private MainWindow? statusWindow;
+    private BackgroundUsageEventWriter? eventWriter;
+    private IUsageEventRepository? usageEventRepository;
+    private ISettingsRepository? settingsRepository;
+    private IApplicationRuleRepository? ruleRepository;
+    private WorkCycleTracker? tracker;
+    private WindowsBreakGuideAudioPlayer? audioPlayer;
+    private WorkCyclePhase lastPhase;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -38,36 +38,36 @@ public partial class App : System.Windows.Application
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
 
-        _statusWindow = new MainWindow();
-        _trayIcon = new WindowsTrayIcon();
-        _lifecycle = new ApplicationLifecycle(
-            _trayIcon,
-            _statusWindow,
+        statusWindow = new MainWindow();
+        trayIcon = new WindowsTrayIcon();
+        lifecycle = new ApplicationLifecycle(
+            trayIcon,
+            statusWindow,
             Shutdown);
-        _settingsRepository = new SqliteSettingsRepository(
+        settingsRepository = new SqliteSettingsRepository(
             LocalSettingsPaths.DatabaseFile,
             new AppSettingsValidator());
-        _startup = new ApplicationStartup(_settingsRepository, _lifecycle);
+        startup = new ApplicationStartup(settingsRepository, lifecycle);
         try
         {
-            await _startup.InitializeAsync();
+            await startup.InitializeAsync();
 
             // A stored value that passes validation but that the engine's constructor
             // still refuses would fail on every launch. Degrade to defaults instead.
-            AppSettings engineSettings = _startup.ResolveEngineSettings(
+            AppSettings engineSettings = startup.ResolveEngineSettings(
                 settings => WorkCycleTrackerFactory.Create(settings, new SystemClock()),
                 message => Trace.TraceError(message));
 
-            _audioPlayer = new WindowsBreakGuideAudioPlayer();
-            _statusWindow.AudioPlayer = _audioPlayer;
-            _ruleRepository = new SqliteApplicationRuleRepository(LocalSettingsPaths.DatabaseFile);
-            var loadedRules = await _ruleRepository.LoadAllAsync();
+            audioPlayer = new WindowsBreakGuideAudioPlayer();
+            statusWindow.AudioPlayer = audioPlayer;
+            ruleRepository = new SqliteApplicationRuleRepository(LocalSettingsPaths.DatabaseFile);
+            var loadedRules = await ruleRepository.LoadAllAsync();
 
             var defaultSuggestionNames = DefaultApplicationRules.All
                 .Select(r => r.ProcessName)
                 .Except(loadedRules.Select(r => r.ProcessName), StringComparer.OrdinalIgnoreCase);
 
-            _statusWindow.StartActivityTracking(
+            statusWindow.StartActivityTracking(
                 new WindowsUserActivityMonitor(),
                 engineSettings,
                 foregroundContextProvider: new WindowsForegroundContextProvider(
@@ -77,14 +77,14 @@ public partial class App : System.Windows.Application
 
             WireSuggestionPrompting();
 
-            _statusWindow.WireLifecycleEvents();
+            statusWindow.WireLifecycleEvents();
             WireUsageEventPersistence();
             WireUsageEventEmitters();
             WireTrayCommands();
         }
         catch (Exception exception)
         {
-            _eventWriter?.Write(UsageEventType.ErrorOccurred, DateTimeOffset.UtcNow,
+            eventWriter?.Write(UsageEventType.ErrorOccurred, DateTimeOffset.UtcNow,
                 new ErrorOccurredPayload("StartupFailure"));
             ApplicationStartupFailureHandler.Handle(
                 exception,
@@ -99,7 +99,7 @@ public partial class App : System.Windows.Application
         HandleUnhandledException(
             e.Exception,
             message => Trace.TraceError(message),
-            () => _eventWriter?.Write(
+            () => eventWriter?.Write(
                 UsageEventType.ErrorOccurred,
                 DateTimeOffset.UtcNow,
                 new ErrorOccurredPayload("UnhandledDispatcherException")));
@@ -142,17 +142,17 @@ public partial class App : System.Windows.Application
     {
         DispatcherUnhandledException -= OnDispatcherUnhandledException;
 
-        _eventWriter?.Write(UsageEventType.AppStopped, DateTimeOffset.UtcNow);
+        eventWriter?.Write(UsageEventType.AppStopped, DateTimeOffset.UtcNow);
         UnwireUsageEventEmitters();
 
-        if (_statusWindow != null)
+        if (statusWindow != null)
         {
-            _statusWindow.UnwireLifecycleEvents();
-            _statusWindow.StopActivityTracking();
+            statusWindow.UnwireLifecycleEvents();
+            statusWindow.StopActivityTracking();
         }
         UnwireUsageEventPersistence();
-        _audioPlayer?.Dispose();
-        _lifecycle?.Dispose();
+        audioPlayer?.Dispose();
+        lifecycle?.Dispose();
         base.OnExit(e);
     }
 
@@ -199,30 +199,30 @@ public partial class App : System.Windows.Application
 
     private void WireMainWindowCommands()
     {
-        if (_statusWindow == null) return;
+        if (statusWindow == null) return;
 
-        _statusWindow.OpenStatistics = OpenStatisticsWindow;
-        _statusWindow.OpenDataTransparency = OpenDataTransparencyWindow;
-        _statusWindow.OpenDataManagement = OpenDataManagementWindow;
-        _statusWindow.OpenSettings = OpenSettingsWindow;
-        _statusWindow.OpenAbout = OpenAboutWindow;
-        _statusWindow.ExitApplication = () => _lifecycle?.Exit();
+        statusWindow.OpenStatistics = OpenStatisticsWindow;
+        statusWindow.OpenDataTransparency = OpenDataTransparencyWindow;
+        statusWindow.OpenDataManagement = OpenDataManagementWindow;
+        statusWindow.OpenSettings = OpenSettingsWindow;
+        statusWindow.OpenAbout = OpenAboutWindow;
+        statusWindow.ExitApplication = () => lifecycle?.Exit();
     }
 
     private void OpenStatisticsWindow()
     {
-        if (_usageEventRepository == null)
+        if (usageEventRepository == null)
         {
             Trace.TraceError("RestCue: statistics unavailable, no repository.");
             return;
         }
 
-        new StatisticsWindow(new DailyStatisticsService(_usageEventRepository)).Show();
+        new StatisticsWindow(new DailyStatisticsService(usageEventRepository)).Show();
     }
 
     private void OpenDataTransparencyWindow()
     {
-        if (_usageEventRepository == null || _settingsRepository == null)
+        if (usageEventRepository == null || settingsRepository == null)
         {
             Trace.TraceError("RestCue: data transparency unavailable.");
             return;
@@ -230,18 +230,18 @@ public partial class App : System.Windows.Application
 
         var reader = new SqliteUsageEventMetadataReader(LocalSettingsPaths.DatabaseFile);
         new TransparencyWindow(new DataTransparencyService(
-            _settingsRepository, reader, LocalSettingsPaths.DatabaseFile)).Show();
+            settingsRepository, reader, LocalSettingsPaths.DatabaseFile)).Show();
     }
 
     private void OpenDataManagementWindow()
     {
-        if (_usageEventRepository == null || _settingsRepository == null || _startup == null)
+        if (usageEventRepository == null || settingsRepository == null || startup == null)
         {
             Trace.TraceError("RestCue: data management unavailable.");
             return;
         }
 
-        var window = new DataManagementWindow(_usageEventRepository, _settingsRepository);
+        var window = new DataManagementWindow(usageEventRepository, settingsRepository);
         window.DataCleared += (_, _) =>
         {
             foreach (var statisticsWindow in Current.Windows.OfType<StatisticsWindow>())
@@ -255,9 +255,9 @@ public partial class App : System.Windows.Application
         };
         window.SettingsReset += async (_, _) =>
         {
-            var loadResult = await _settingsRepository.LoadAsync();
-            _startup.CurrentSettings = loadResult.Settings;
-            _statusWindow?.UpdateForegroundContextProvider(
+            var loadResult = await settingsRepository.LoadAsync();
+            startup.CurrentSettings = loadResult.Settings;
+            statusWindow?.UpdateForegroundContextProvider(
                 loadResult.Settings.CollectForegroundProcessNames);
         };
         window.Show();
@@ -265,13 +265,13 @@ public partial class App : System.Windows.Application
 
     private void OpenSettingsWindow()
     {
-        if (_startup == null || _settingsRepository == null || _ruleRepository == null)
+        if (startup == null || settingsRepository == null || ruleRepository == null)
         {
             Trace.TraceError("RestCue: settings unavailable.");
             return;
         }
 
-        var window = new SettingsWindow(_settingsRepository, _ruleRepository, _startup.CurrentSettings);
+        var window = new SettingsWindow(settingsRepository, ruleRepository, startup.CurrentSettings);
         window.ApplicationRulesChanged += OnApplicationRulesChanged;
         window.SettingsSaved += OnSettingsSaved;
         window.Closed += (_, _) =>
@@ -284,22 +284,22 @@ public partial class App : System.Windows.Application
 
     private void OnSettingsSaved(object? sender, AppSettings saved)
     {
-        if (_startup == null)
+        if (startup == null)
             return;
 
-        _startup.CurrentSettings = saved;
-        _statusWindow?.ApplyLiveSettings(saved);
+        startup.CurrentSettings = saved;
+        statusWindow?.ApplyLiveSettings(saved);
     }
 
     private async void OnApplicationRulesChanged(object? sender, EventArgs e)
     {
-        if (_ruleRepository == null || _statusWindow == null)
+        if (ruleRepository == null || statusWindow == null)
             return;
 
         try
         {
-            var loadedRules = await _ruleRepository.LoadAllAsync();
-            _statusWindow.UpdateApplicationRules(loadedRules);
+            var loadedRules = await ruleRepository.LoadAllAsync();
+            statusWindow.UpdateApplicationRules(loadedRules);
         }
         catch (Exception ex)
         {
@@ -455,73 +455,67 @@ public partial class App : System.Windows.Application
 
     private void WireTrayCommands()
     {
-        if (_trayIcon == null || _statusWindow == null) return;
+        if (trayIcon == null || statusWindow == null) return;
 
-        WireModeCommands(_trayIcon, _statusWindow);
-        WireBreakNowCommand(_trayIcon, _statusWindow);
-        WireStatisticsCommand(_trayIcon);
-        WireDataTransparencyCommand(_trayIcon);
-        WireDataManagementCommand(_trayIcon);
-        WireSettingsCommand(_trayIcon);
-        WireAboutCommand(_trayIcon);
+        WireModeCommands(trayIcon, statusWindow);
+        WireBreakNowCommand(trayIcon, statusWindow);
+        WireStatisticsCommand(trayIcon);
+        WireDataTransparencyCommand(trayIcon);
+        WireDataManagementCommand(trayIcon);
+        WireSettingsCommand(trayIcon);
+        WireAboutCommand(trayIcon);
 
         WireMainWindowCommands();
 
-        _statusWindow.PhaseChanged += OnPhaseChanged;
-        _statusWindow.DebtLevelChanged += OnDebtLevelChanged;
-        _statusWindow.LowInterruptionReminderRequested += (_, e) =>
+        statusWindow.PhaseChanged += OnPhaseChanged;
+        statusWindow.DebtLevelChanged += OnDebtLevelChanged;
+        statusWindow.LowInterruptionReminderRequested += (_, e) =>
         {
-            if (_trayIcon != null)
-                ApplySuppressedReminderToTray(_trayIcon, e.ShowTrayCue);
+            if (trayIcon != null)
+                ApplySuppressedReminderToTray(trayIcon, e.ShowTrayCue);
         };
 
-        _statusWindow.LightTouchReminderRequested += (_, _) =>
+        statusWindow.LightTouchReminderRequested += (_, _) =>
         {
-            if (_trayIcon != null)
+            if (trayIcon != null)
                 ApplyLightTouchReminderToTray(
-                    _trayIcon,
-                    _startup?.CurrentSettings.LightTouchSoundEnabled == true,
+                    trayIcon,
+                    startup?.CurrentSettings.LightTouchSoundEnabled == true,
                     System.Media.SystemSounds.Asterisk.Play);
         };
     }
 
     private void WireUsageEventEmitters()
     {
-        _eventWriter?.Write(UsageEventType.AppStarted, DateTimeOffset.UtcNow);
+        eventWriter?.Write(UsageEventType.AppStarted, DateTimeOffset.UtcNow);
 
-        if (_tracker != null)
+        if (tracker != null)
         {
-            _tracker.ReminderSuppressed += OnReminderSuppressedEvent;
-            _statusWindow!.PhaseChanged += OnPhaseChangedForWorkSession;
+            tracker.ReminderSuppressed += OnReminderSuppressedEvent;
+            statusWindow!.PhaseChanged += OnPhaseChangedForWorkSession;
         }
     }
 
     private void UnwireUsageEventEmitters()
     {
-        if (_tracker != null)
-        {
-            _tracker.ReminderSuppressed -= OnReminderSuppressedEvent;
-        }
-        if (_statusWindow != null)
-        {
-            _statusWindow.PhaseChanged -= OnPhaseChangedForWorkSession;
-        }
+        tracker?.ReminderSuppressed -= OnReminderSuppressedEvent;
+        statusWindow?.PhaseChanged -= OnPhaseChangedForWorkSession;
     }
 
-    private ISuggestionStore? _suggestionStore;
+    private ISuggestionStore? suggestionStore;
 
     private void WireSuggestionPrompting()
     {
-        if (_ruleRepository == null || _statusWindow == null) return;
+        if (ruleRepository == null || statusWindow == null) return;
 
-        _suggestionStore = new SqliteSuggestionStore(LocalSettingsPaths.DatabaseFile);
+        suggestionStore = new SqliteSuggestionStore(LocalSettingsPaths.DatabaseFile);
 
-        _statusWindow.SuggestionRequested += OnSuggestionRequested;
+        statusWindow.SuggestionRequested += OnSuggestionRequested;
     }
 
     private async void OnSuggestionRequested(object? sender, SuggestionEventArgs e)
     {
-        if (_ruleRepository == null || _suggestionStore == null) return;
+        if (ruleRepository == null || suggestionStore == null) return;
 
         var result = System.Windows.MessageBox.Show(
             $"已檢測到「{e.ProcessName}」正在執行。\n\nRestCue 建議為此應用程式套用「僅系統列」規則，避免休息提醒干擾。\n\n要套用此建議嗎？",
@@ -536,41 +530,41 @@ public partial class App : System.Windows.Application
                 ProcessName = e.ProcessName,
                 RuleType = ApplicationRuleType.TrayOnly,
             };
-            await _ruleRepository.SaveAsync(rule);
-            var loadedRules = await _ruleRepository.LoadAllAsync();
-            _statusWindow?.UpdateApplicationRules(loadedRules);
+            await ruleRepository.SaveAsync(rule);
+            var loadedRules = await ruleRepository.LoadAllAsync();
+            statusWindow?.UpdateApplicationRules(loadedRules);
         }
         else
         {
-            await _suggestionStore.DismissAsync(e.ProcessName);
+            await suggestionStore.DismissAsync(e.ProcessName);
         }
     }
 
     private void OnReminderSuppressedEvent(object? sender, ReminderSuppressedEventArgs e)
     {
-        _eventWriter?.Write(UsageEventType.ContextSuppressed, DateTimeOffset.UtcNow);
+        eventWriter?.Write(UsageEventType.ContextSuppressed, DateTimeOffset.UtcNow);
     }
 
-    private bool _wasWorking;
+    private bool wasWorking;
 
     private void OnPhaseChangedForWorkSession(object? sender, WorkCyclePhase newPhase)
     {
         bool isWorking = ContinuousWorkPolicy.IsContinuousWork(newPhase);
-        if (isWorking && !_wasWorking)
+        if (isWorking && !wasWorking)
         {
-            _eventWriter?.Write(UsageEventType.WorkSessionStarted, DateTimeOffset.UtcNow);
+            eventWriter?.Write(UsageEventType.WorkSessionStarted, DateTimeOffset.UtcNow);
         }
-        else if (!isWorking && _wasWorking)
+        else if (!isWorking && wasWorking)
         {
-            _eventWriter?.Write(UsageEventType.WorkSessionEnded, DateTimeOffset.UtcNow);
+            eventWriter?.Write(UsageEventType.WorkSessionEnded, DateTimeOffset.UtcNow);
         }
-        _wasWorking = isWorking;
+        wasWorking = isWorking;
     }
 
     private void WireUsageEventPersistence()
     {
-        _tracker = _statusWindow?.WorkCycleTracker;
-        if (_tracker == null) return;
+        tracker = statusWindow?.WorkCycleTracker;
+        if (tracker == null) return;
 
         IUsageEventRepository? repo = null;
         try
@@ -584,57 +578,57 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        _usageEventRepository = repo;
-        _eventWriter = new BackgroundUsageEventWriter(
+        usageEventRepository = repo;
+        eventWriter = new BackgroundUsageEventWriter(
             repo,
             msg => Trace.TraceError(msg));
 
-        _tracker.ReminderShown += OnReminderShown;
-        _tracker.BreakStarted += OnBreakStartedEvent;
-        _tracker.BreakCompleted += OnBreakCompletedEvent;
-        _tracker.BreakCancelled += OnBreakCancelledEvent;
-        _tracker.PassivePauseDetected += OnPassivePauseDetectedEvent;
-        _tracker.ReminderDismissed += OnReminderDismissedEvent;
-        _tracker.IdleStarted += OnIdleStarted;
-        _tracker.IdleEnded += OnIdleEnded;
-        _tracker.CooldownStarted += OnCooldownStarted;
-        _tracker.CooldownEnded += OnCooldownEnded;
-        _tracker.Paused += OnPausedEvent;
-        _tracker.Resumed += OnResumedEvent;
-        _tracker.FocusModeStarted += OnFocusModeStartedEvent;
-        _tracker.FocusModeEnded += OnFocusModeEndedEvent;
-        _tracker.Disabled += OnDisabledEvent;
-        _tracker.Enabled += OnEnabledEvent;
-        _tracker.RestDebtLevelChanged += OnRestDebtLevelChangedEvent;
-        _tracker.ProcessNameChanged += OnProcessNameChangedEvent;
+        tracker.ReminderShown += OnReminderShown;
+        tracker.BreakStarted += OnBreakStartedEvent;
+        tracker.BreakCompleted += OnBreakCompletedEvent;
+        tracker.BreakCancelled += OnBreakCancelledEvent;
+        tracker.PassivePauseDetected += OnPassivePauseDetectedEvent;
+        tracker.ReminderDismissed += OnReminderDismissedEvent;
+        tracker.IdleStarted += OnIdleStarted;
+        tracker.IdleEnded += OnIdleEnded;
+        tracker.CooldownStarted += OnCooldownStarted;
+        tracker.CooldownEnded += OnCooldownEnded;
+        tracker.Paused += OnPausedEvent;
+        tracker.Resumed += OnResumedEvent;
+        tracker.FocusModeStarted += OnFocusModeStartedEvent;
+        tracker.FocusModeEnded += OnFocusModeEndedEvent;
+        tracker.Disabled += OnDisabledEvent;
+        tracker.Enabled += OnEnabledEvent;
+        tracker.RestDebtLevelChanged += OnRestDebtLevelChangedEvent;
+        tracker.ProcessNameChanged += OnProcessNameChangedEvent;
     }
 
     private void UnwireUsageEventPersistence()
     {
-        if (_tracker == null) return;
+        if (tracker == null) return;
 
-        _tracker.ReminderShown -= OnReminderShown;
-        _tracker.BreakStarted -= OnBreakStartedEvent;
-        _tracker.BreakCompleted -= OnBreakCompletedEvent;
-        _tracker.BreakCancelled -= OnBreakCancelledEvent;
-        _tracker.PassivePauseDetected -= OnPassivePauseDetectedEvent;
-        _tracker.ReminderDismissed -= OnReminderDismissedEvent;
-        _tracker.IdleStarted -= OnIdleStarted;
-        _tracker.IdleEnded -= OnIdleEnded;
-        _tracker.CooldownStarted -= OnCooldownStarted;
-        _tracker.CooldownEnded -= OnCooldownEnded;
-        _tracker.Paused -= OnPausedEvent;
-        _tracker.Resumed -= OnResumedEvent;
-        _tracker.FocusModeStarted -= OnFocusModeStartedEvent;
-        _tracker.FocusModeEnded -= OnFocusModeEndedEvent;
-        _tracker.Disabled -= OnDisabledEvent;
-        _tracker.Enabled -= OnEnabledEvent;
-        _tracker.RestDebtLevelChanged -= OnRestDebtLevelChangedEvent;
-        _tracker.ProcessNameChanged -= OnProcessNameChangedEvent;
+        tracker.ReminderShown -= OnReminderShown;
+        tracker.BreakStarted -= OnBreakStartedEvent;
+        tracker.BreakCompleted -= OnBreakCompletedEvent;
+        tracker.BreakCancelled -= OnBreakCancelledEvent;
+        tracker.PassivePauseDetected -= OnPassivePauseDetectedEvent;
+        tracker.ReminderDismissed -= OnReminderDismissedEvent;
+        tracker.IdleStarted -= OnIdleStarted;
+        tracker.IdleEnded -= OnIdleEnded;
+        tracker.CooldownStarted -= OnCooldownStarted;
+        tracker.CooldownEnded -= OnCooldownEnded;
+        tracker.Paused -= OnPausedEvent;
+        tracker.Resumed -= OnResumedEvent;
+        tracker.FocusModeStarted -= OnFocusModeStartedEvent;
+        tracker.FocusModeEnded -= OnFocusModeEndedEvent;
+        tracker.Disabled -= OnDisabledEvent;
+        tracker.Enabled -= OnEnabledEvent;
+        tracker.RestDebtLevelChanged -= OnRestDebtLevelChangedEvent;
+        tracker.ProcessNameChanged -= OnProcessNameChangedEvent;
 
-        _eventWriter?.Dispose();
-        _eventWriter = null;
-        _tracker = null;
+        eventWriter?.Dispose();
+        eventWriter = null;
+        tracker = null;
     }
 
     private void OnReminderShown(object? sender, EventArgs e) => WriteUsageEvent(UsageEventType.ReminderShown);
@@ -662,19 +656,19 @@ public partial class App : System.Windows.Application
             ReminderResult.AutoDismissed => UsageEventType.ReminderAutoDismissed,
             _ => UsageEventType.ReminderDismissed,
         };
-        _eventWriter?.Write(individualType, DateTimeOffset.UtcNow);
+        eventWriter?.Write(individualType, DateTimeOffset.UtcNow);
     }
 
     private void OnRestDebtLevelChangedEvent(object? sender, RestDebtLevelChangedEventArgs e) =>
-        _eventWriter?.Write(UsageEventType.RestDebtLevelChanged, DateTimeOffset.UtcNow,
+        eventWriter?.Write(UsageEventType.RestDebtLevelChanged, DateTimeOffset.UtcNow,
             new RestDebtLevelChangedPayload(e.Previous, e.Current));
 
     private void OnProcessNameChangedEvent(object? sender, string? processName) =>
-        _eventWriter?.Write(UsageEventType.ForegroundProcessChanged, DateTimeOffset.UtcNow,
+        eventWriter?.Write(UsageEventType.ForegroundProcessChanged, DateTimeOffset.UtcNow,
             new ForegroundProcessChangedPayload(processName ?? string.Empty));
 
     private void WriteUsageEvent(UsageEventType type) =>
-        _eventWriter?.Write(type, DateTimeOffset.UtcNow);
+        eventWriter?.Write(type, DateTimeOffset.UtcNow);
 
     internal static string GetStatusTextForPhase(WorkCyclePhase phase)
     {
@@ -772,21 +766,21 @@ public partial class App : System.Windows.Application
 
     private void OnPhaseChanged(object? sender, WorkCyclePhase phase)
     {
-        if (_trayIcon == null || _statusWindow == null) return;
+        if (trayIcon == null || statusWindow == null) return;
 
-        _lastPhase = phase;
-        ApplyPhaseToTray(_trayIcon, phase, _statusWindow.CurrentDebtLevel);
+        lastPhase = phase;
+        ApplyPhaseToTray(trayIcon, phase, statusWindow.CurrentDebtLevel);
     }
 
     private void OnDebtLevelChanged(object? sender, RestDebtLevelChangedEventArgs e)
     {
-        if (_trayIcon == null || _statusWindow == null) return;
+        if (trayIcon == null || statusWindow == null) return;
 
-        _trayIcon.SetDebtLevel(e.Current);
+        trayIcon.SetDebtLevel(e.Current);
 
-        if (CommandAvailabilityPolicy.IsActiveCycle(_lastPhase))
+        if (CommandAvailabilityPolicy.IsActiveCycle(lastPhase))
         {
-            _trayIcon.SetStatusText(GetStatusTextForDebtLevel(e.Current));
+            trayIcon.SetStatusText(GetStatusTextForDebtLevel(e.Current));
         }
     }
 }

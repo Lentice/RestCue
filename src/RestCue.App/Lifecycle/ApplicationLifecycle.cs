@@ -2,57 +2,57 @@ namespace RestCue.App.Lifecycle;
 
 public sealed class ApplicationLifecycle : IApplicationLifecycle
 {
-    private readonly ITrayIcon _trayIcon;
-    private readonly IStatusWindow _statusWindow;
-    private readonly Action _shutdown;
-    private bool _started;
-    private bool _disposed;
+    private readonly ITrayIcon trayIcon;
+    private readonly IStatusWindow statusWindow;
+    private readonly Action shutdown;
+    private bool started;
+    private bool disposed;
 
     public ApplicationLifecycle(ITrayIcon trayIcon, IStatusWindow statusWindow, Action shutdown)
     {
-        _trayIcon = trayIcon;
-        _statusWindow = statusWindow;
-        _shutdown = shutdown;
+        this.trayIcon = trayIcon;
+        this.statusWindow = statusWindow;
+        this.shutdown = shutdown;
     }
 
     public void Start()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        ObjectDisposedException.ThrowIf(disposed, this);
 
-        if (_started)
+        if (started)
         {
             return;
         }
 
-        _trayIcon.OpenRequested += OnOpenRequested;
-        _trayIcon.ExitRequested += OnExitRequested;
-        _trayIcon.Visible = true;
-        _started = true;
+        trayIcon.OpenRequested += OnOpenRequested;
+        trayIcon.ExitRequested += OnExitRequested;
+        trayIcon.Visible = true;
+        started = true;
     }
 
-    public ITrayIcon TrayIcon => _trayIcon;
+    public ITrayIcon TrayIcon => trayIcon;
 
     public void Exit()
     {
         Dispose();
-        _shutdown();
+        shutdown();
     }
 
     public void Dispose()
     {
-        if (_disposed)
+        if (disposed)
         {
             return;
         }
 
-        _trayIcon.OpenRequested -= OnOpenRequested;
-        _trayIcon.ExitRequested -= OnExitRequested;
-        _trayIcon.Visible = false;
-        _trayIcon.Dispose();
-        _disposed = true;
+        trayIcon.OpenRequested -= OnOpenRequested;
+        trayIcon.ExitRequested -= OnExitRequested;
+        trayIcon.Visible = false;
+        trayIcon.Dispose();
+        disposed = true;
     }
 
-    private void OnOpenRequested(object? sender, EventArgs e) => _statusWindow.ShowOrActivate();
+    private void OnOpenRequested(object? sender, EventArgs e) => statusWindow.ShowOrActivate();
 
     private void OnExitRequested(object? sender, EventArgs e) => Exit();
 }

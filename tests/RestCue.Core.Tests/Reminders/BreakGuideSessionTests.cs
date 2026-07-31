@@ -172,8 +172,8 @@ public sealed class BreakGuideSessionTests
 
     private sealed class FakeClock : IClock
     {
-        private DateTimeOffset _utcNow = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        public DateTimeOffset UtcNow => _utcNow;
-        public void Advance(TimeSpan duration) => _utcNow += duration;
+        private DateTimeOffset utcNow = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        public DateTimeOffset UtcNow => utcNow;
+        public void Advance(TimeSpan duration) => utcNow += duration;
     }
 }

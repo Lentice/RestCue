@@ -45,9 +45,9 @@ public sealed class WorkCycleTracker
     private bool hasSuppressedReminder;
     private bool showTrayCue;
 
-    private PresentationIntensity _contextCap = PresentationIntensityPolicy.DefaultContextCap;
-    private PresentationIntensity _userCap = PresentationIntensityPolicy.DefaultUserCap;
-    private bool _forceAllowPopup;
+    private PresentationIntensity contextCap = PresentationIntensityPolicy.DefaultContextCap;
+    private PresentationIntensity userCap = PresentationIntensityPolicy.DefaultUserCap;
+    private bool forceAllowPopup;
 
     public WorkCycleTracker(
         IClock clock,
@@ -148,14 +148,14 @@ public sealed class WorkCycleTracker
 
     public void SetForceAllowPopup(bool force)
     {
-        _forceAllowPopup = force;
+        forceAllowPopup = force;
     }
 
     public void SetIntensityCaps(PresentationIntensity contextCap, PresentationIntensity userCap)
     {
         var oldEffective = GetEffectiveIntensity();
-        _contextCap = Enum.IsDefined(contextCap) ? contextCap : PresentationIntensityPolicy.DefaultContextCap;
-        _userCap = Enum.IsDefined(userCap) ? userCap : PresentationIntensityPolicy.DefaultUserCap;
+        this.contextCap = Enum.IsDefined(contextCap) ? contextCap : PresentationIntensityPolicy.DefaultContextCap;
+        this.userCap = Enum.IsDefined(userCap) ? userCap : PresentationIntensityPolicy.DefaultUserCap;
 
         if (hasSuppressedReminder)
         {
@@ -193,7 +193,7 @@ public sealed class WorkCycleTracker
     private PresentationIntensity GetEffectiveIntensity()
     {
         var debtRec = PresentationIntensityPolicy.GetDebtRecommendation(restDebtLevel);
-        var result = PresentationIntensityPolicy.Effective(debtRec, _contextCap, _userCap);
+        var result = PresentationIntensityPolicy.Effective(debtRec, contextCap, userCap);
         EffectiveIntensity = result;
         return result;
     }
@@ -219,13 +219,13 @@ public sealed class WorkCycleTracker
 
     public event EventHandler<string?>? ProcessNameChanged;
 
-    private string? _lastProcessName;
+    private string? lastProcessName;
 
     public void TrackForegroundProcess(string? processName)
     {
-        if (string.Equals(_lastProcessName, processName, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(lastProcessName, processName, StringComparison.OrdinalIgnoreCase))
             return;
-        _lastProcessName = processName;
+        lastProcessName = processName;
         ProcessNameChanged?.Invoke(this, processName);
     }
 
@@ -842,7 +842,7 @@ public sealed class WorkCycleTracker
         if (wasCooldownActive)
             CooldownEnded?.Invoke(this, EventArgs.Empty);
 
-        if (!_forceAllowPopup)
+        if (!forceAllowPopup)
         {
             var effective = GetEffectiveIntensity();
 

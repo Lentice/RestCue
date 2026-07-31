@@ -99,7 +99,7 @@ public sealed class WindowsTrayIconPhaseMappingTests
     {
         using var tray = new WindowsTrayIcon();
         tray.SetPauseEnabled(false);
-        Assert.False(GetMenuItemEnabled(tray, "_pauseItem"));
+        Assert.False(GetMenuItemEnabled(tray, "pauseItem"));
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public sealed class WindowsTrayIconPhaseMappingTests
         using var tray = new WindowsTrayIcon();
         tray.SetPauseEnabled(false);
         tray.SetPauseEnabled(true);
-        Assert.True(GetMenuItemEnabled(tray, "_pauseItem"));
+        Assert.True(GetMenuItemEnabled(tray, "pauseItem"));
     }
 
     [Fact]
@@ -116,7 +116,7 @@ public sealed class WindowsTrayIconPhaseMappingTests
     {
         using var tray = new WindowsTrayIcon();
         tray.SetFocusModeEnabled(false);
-        Assert.False(GetMenuItemEnabled(tray, "_focusItem"));
+        Assert.False(GetMenuItemEnabled(tray, "focusItem"));
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public sealed class WindowsTrayIconPhaseMappingTests
     {
         using var tray = new WindowsTrayIcon();
         tray.SetDisableEnabled(false);
-        Assert.False(GetMenuItemEnabled(tray, "_disableItem"));
+        Assert.False(GetMenuItemEnabled(tray, "disableItem"));
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public sealed class WindowsTrayIconPhaseMappingTests
     {
         using var tray = new WindowsTrayIcon();
         tray.SetBreakNowEnabled(false);
-        Assert.False(GetMenuItemEnabled(tray, "_breakNowItem"));
+        Assert.False(GetMenuItemEnabled(tray, "breakNowItem"));
     }
 
     [Fact]
@@ -141,7 +141,7 @@ public sealed class WindowsTrayIconPhaseMappingTests
         using var tray = new WindowsTrayIcon();
         tray.SetBreakNowEnabled(false);
         tray.SetBreakNowEnabled(true);
-        Assert.True(GetMenuItemEnabled(tray, "_breakNowItem"));
+        Assert.True(GetMenuItemEnabled(tray, "breakNowItem"));
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public sealed class WindowsTrayIconPhaseMappingTests
         tray.BreakNowRequested += (_, _) => invoked = true;
 
         var field = typeof(WindowsTrayIcon)
-            .GetField("_breakNowItem", BindingFlags.NonPublic | BindingFlags.Instance);
+            .GetField("breakNowItem", BindingFlags.NonPublic | BindingFlags.Instance);
         var menuItem = field!.GetValue(tray);
         var performClick = menuItem!.GetType().GetMethod("PerformClick", Type.EmptyTypes);
         performClick!.Invoke(menuItem, null);
@@ -181,7 +181,7 @@ public sealed class WindowsTrayIconPhaseMappingTests
 
     public sealed class FakeTrayIcon : ITrayIcon
     {
-        private bool _visible;
+        private bool visible;
 
 #pragma warning disable CS0067
         public event EventHandler? OpenRequested;
@@ -231,10 +231,10 @@ public sealed class WindowsTrayIconPhaseMappingTests
 
         public bool Visible
         {
-            get => _visible;
+            get => visible;
             set
             {
-                _visible = value;
+                visible = value;
                 if (value)
                 {
                     VisibleSetToTrueCount++;

@@ -224,9 +224,9 @@ public sealed class BackgroundUsageEventWriterTests : IDisposable
 
     private sealed class FakeClock : IClock
     {
-        private DateTimeOffset _utcNow = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        public DateTimeOffset UtcNow => _utcNow;
-        public void Advance(TimeSpan duration) => _utcNow += duration;
+        private DateTimeOffset utcNow = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        public DateTimeOffset UtcNow => utcNow;
+        public void Advance(TimeSpan duration) => utcNow += duration;
     }
 
     private sealed class FakeUsageEventRepository : RestCue.Core.UsageEvents.IUsageEventRepository
@@ -234,8 +234,8 @@ public sealed class BackgroundUsageEventWriterTests : IDisposable
         private readonly bool throwOnWrite;
         private readonly bool blockWrites;
         private readonly Action? onWrite;
-        private readonly ManualResetEventSlim _blocker = new(false);
-        private readonly object _lock = new();
+        private readonly ManualResetEventSlim blocker = new(false);
+        private readonly object syncRoot = new();
 
         public List<UsageEvent> Writes { get; } = [];
 
@@ -246,7 +246,7 @@ public sealed class BackgroundUsageEventWriterTests : IDisposable
             this.blockWrites = blockWrites;
         }
 
-        public void StopBlocking() => _blocker.Set();
+        public void StopBlocking() => blocker.Set();
 
         public Task WriteAsync(UsageEventType eventType, DateTimeOffset occurredUtc, UsageEventPayload? payload = null, CancellationToken ct = default)
         {
@@ -254,9 +254,9 @@ public sealed class BackgroundUsageEventWriterTests : IDisposable
                 throw new InvalidOperationException("Simulated write failure.");
 
             if (blockWrites)
-                _blocker.Wait();
+                blocker.Wait();
 
-            lock (_lock)
+            lock (syncRoot)
             {
                 Writes.Add(new UsageEvent(0, occurredUtc, eventType, payload));
             }

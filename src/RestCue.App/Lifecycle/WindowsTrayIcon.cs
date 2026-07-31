@@ -6,25 +6,25 @@ namespace RestCue.App.Lifecycle;
 
 public sealed class WindowsTrayIcon : ITrayIcon
 {
-    private readonly NotifyIcon _notifyIcon;
+    private readonly NotifyIcon notifyIcon;
 
-    private readonly ToolStripMenuItem _pauseItem;
-    private readonly ToolStripMenuItem _pause15;
-    private readonly ToolStripMenuItem _pause30;
-    private readonly ToolStripMenuItem _pause60;
-    private readonly ToolStripMenuItem _pauseManual;
-    private readonly ToolStripMenuItem _resumeItem;
-    private readonly ToolStripMenuItem _focusItem;
-    private readonly ToolStripMenuItem _disableItem;
-    private readonly ToolStripMenuItem _breakNowItem;
+    private readonly ToolStripMenuItem pauseItem;
+    private readonly ToolStripMenuItem pause15;
+    private readonly ToolStripMenuItem pause30;
+    private readonly ToolStripMenuItem pause60;
+    private readonly ToolStripMenuItem pauseManual;
+    private readonly ToolStripMenuItem resumeItem;
+    private readonly ToolStripMenuItem focusItem;
+    private readonly ToolStripMenuItem disableItem;
+    private readonly ToolStripMenuItem breakNowItem;
 
-    private bool _isPaused;
-    private bool _isFocusMode;
-    private bool _isDisabled;
-    private RestDebtLevel _currentDebtLevel;
-    private bool _isSuppressed;
-    private ContextMenuStrip _menu;
-    private int _pauseMenuIndex;
+    private bool isPaused;
+    private bool isFocusMode;
+    private bool isDisabled;
+    private RestDebtLevel currentDebtLevel;
+    private bool isSuppressed;
+    private ContextMenuStrip menu;
+    private int pauseMenuIndex;
     private static readonly Icon NormalIcon = TrayIconFactory.Create(Color.FromArgb(47, 111, 235));
     private static readonly Icon Level1Icon = TrayIconFactory.Create(Color.FromArgb(46, 125, 91));
     private static readonly Icon Level2Icon = TrayIconFactory.Create(Color.FromArgb(196, 128, 20));
@@ -34,19 +34,19 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
     public WindowsTrayIcon()
     {
-        _pause15 = CreatePauseItem(PausePresets.FifteenMinutes);
-        _pause30 = CreatePauseItem(PausePresets.ThirtyMinutes);
-        _pause60 = CreatePauseItem(PausePresets.OneHour);
-        _pauseManual = new ToolStripMenuItem("直到手動恢復", null, (_, _) => PauseRequested?.Invoke(this, EventArgs.Empty));
-        _pauseItem = new ToolStripMenuItem("暫停提醒");
-        _pauseItem.DropDownItems.AddRange(
-            _pause15, _pause30, _pause60,
+        pause15 = CreatePauseItem(PausePresets.FifteenMinutes);
+        pause30 = CreatePauseItem(PausePresets.ThirtyMinutes);
+        pause60 = CreatePauseItem(PausePresets.OneHour);
+        pauseManual = new ToolStripMenuItem("直到手動恢復", null, (_, _) => PauseRequested?.Invoke(this, EventArgs.Empty));
+        pauseItem = new ToolStripMenuItem("暫停提醒");
+        pauseItem.DropDownItems.AddRange(
+            pause15, pause30, pause60,
             new ToolStripSeparator(),
-            _pauseManual);
-        _resumeItem = new ToolStripMenuItem("繼續提醒", null, TogglePause);
-        _focusItem = new ToolStripMenuItem("專注模式", null, ToggleFocusMode);
-        _disableItem = new ToolStripMenuItem("停用提醒", null, ToggleDisable);
-        _breakNowItem = new ToolStripMenuItem("立即休息", null, (_, _) => BreakNowRequested?.Invoke(this, EventArgs.Empty));
+            pauseManual);
+        resumeItem = new ToolStripMenuItem("繼續提醒", null, TogglePause);
+        focusItem = new ToolStripMenuItem("專注模式", null, ToggleFocusMode);
+        disableItem = new ToolStripMenuItem("停用提醒", null, ToggleDisable);
+        breakNowItem = new ToolStripMenuItem("立即休息", null, (_, _) => BreakNowRequested?.Invoke(this, EventArgs.Empty));
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("開啟 RestCue", null, (_, _) => OpenRequested?.Invoke(this, EventArgs.Empty));
@@ -57,22 +57,22 @@ public sealed class WindowsTrayIcon : ITrayIcon
         menu.Items.Add("設定", null, (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty));
         menu.Items.Add("關於與隱私", null, (_, _) => AboutRequested?.Invoke(this, EventArgs.Empty));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(_pauseItem);
-        _pauseMenuIndex = menu.Items.Count - 1;
-        menu.Items.Add(_focusItem);
-        menu.Items.Add(_disableItem);
-        menu.Items.Add(_breakNowItem);
+        menu.Items.Add(pauseItem);
+        pauseMenuIndex = menu.Items.Count - 1;
+        menu.Items.Add(focusItem);
+        menu.Items.Add(disableItem);
+        menu.Items.Add(breakNowItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("結束 RestCue", null, (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty));
 
-        _notifyIcon = new NotifyIcon
+        notifyIcon = new NotifyIcon
         {
             ContextMenuStrip = menu,
             Icon = NormalIcon,
             Text = "RestCue – Eye Break Reminder"
         };
-        _menu = menu;
-        _notifyIcon.DoubleClick += (_, _) => OpenRequested?.Invoke(this, EventArgs.Empty);
+        this.menu = menu;
+        notifyIcon.DoubleClick += (_, _) => OpenRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private ToolStripMenuItem CreatePauseItem(PausePreset preset) =>
@@ -110,62 +110,62 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
     public bool Visible
     {
-        get => _notifyIcon.Visible;
-        set => _notifyIcon.Visible = value;
+        get => notifyIcon.Visible;
+        set => notifyIcon.Visible = value;
     }
 
     public void SetPauseText(bool isPaused)
     {
-        _isPaused = isPaused;
+        this.isPaused = isPaused;
         if (isPaused)
         {
-            _menu.Items.RemoveAt(_pauseMenuIndex);
-            _menu.Items.Insert(_pauseMenuIndex, _resumeItem);
+            menu.Items.RemoveAt(pauseMenuIndex);
+            menu.Items.Insert(pauseMenuIndex, resumeItem);
         }
         else
         {
-            _menu.Items.RemoveAt(_pauseMenuIndex);
-            _menu.Items.Insert(_pauseMenuIndex, _pauseItem);
+            menu.Items.RemoveAt(pauseMenuIndex);
+            menu.Items.Insert(pauseMenuIndex, pauseItem);
         }
     }
 
     public void SetFocusModeText(bool isFocusMode)
     {
-        _isFocusMode = isFocusMode;
-        _focusItem.Text = isFocusMode ? "結束專注模式" : "專注模式";
+        this.isFocusMode = isFocusMode;
+        focusItem.Text = isFocusMode ? "結束專注模式" : "專注模式";
     }
 
     public void SetDisableText(bool isDisabled)
     {
-        _isDisabled = isDisabled;
-        _disableItem.Text = isDisabled ? "啟用提醒" : "停用提醒";
+        this.isDisabled = isDisabled;
+        disableItem.Text = isDisabled ? "啟用提醒" : "停用提醒";
     }
 
     public void SetStatusText(string text)
     {
-        _notifyIcon.Text = text;
+        notifyIcon.Text = text;
     }
 
-    public void SetPauseEnabled(bool enabled) => _pauseItem.Enabled = enabled;
+    public void SetPauseEnabled(bool enabled) => pauseItem.Enabled = enabled;
 
-    public void SetFocusModeEnabled(bool enabled) => _focusItem.Enabled = enabled;
+    public void SetFocusModeEnabled(bool enabled) => focusItem.Enabled = enabled;
 
-    public void SetDisableEnabled(bool enabled) => _disableItem.Enabled = enabled;
+    public void SetDisableEnabled(bool enabled) => disableItem.Enabled = enabled;
 
-    public void SetBreakNowEnabled(bool enabled) => _breakNowItem.Enabled = enabled;
+    public void SetBreakNowEnabled(bool enabled) => breakNowItem.Enabled = enabled;
 
     public void SetSuppressedState(bool isSuppressed)
     {
-        _isSuppressed = isSuppressed;
-        _notifyIcon.Icon = GetIconForCurrentState();
+        this.isSuppressed = isSuppressed;
+        notifyIcon.Icon = GetIconForCurrentState();
     }
 
     public void SetDebtLevel(RestDebtLevel level)
     {
-        _currentDebtLevel = level;
-        if (!_isSuppressed)
+        currentDebtLevel = level;
+        if (!isSuppressed)
         {
-            _notifyIcon.Icon = GetIconForDebtLevel(level);
+            notifyIcon.Icon = GetIconForDebtLevel(level);
         }
     }
 
@@ -183,14 +183,14 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
     private Icon GetIconForCurrentState()
     {
-        if (_isSuppressed)
+        if (isSuppressed)
             return SuppressedIcon;
-        return GetIconForDebtLevel(_currentDebtLevel);
+        return GetIconForDebtLevel(currentDebtLevel);
     }
 
     private void TogglePause(object? sender, EventArgs e)
     {
-        if (_isPaused)
+        if (isPaused)
         {
             ResumeRequested?.Invoke(this, EventArgs.Empty);
         }
@@ -202,7 +202,7 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
     private void ToggleFocusMode(object? sender, EventArgs e)
     {
-        if (_isFocusMode)
+        if (isFocusMode)
         {
             EndFocusModeRequested?.Invoke(this, EventArgs.Empty);
         }
@@ -214,7 +214,7 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
     private void ToggleDisable(object? sender, EventArgs e)
     {
-        if (_isDisabled)
+        if (isDisabled)
         {
             EnableRequested?.Invoke(this, EventArgs.Empty);
         }
@@ -224,10 +224,10 @@ public sealed class WindowsTrayIcon : ITrayIcon
         }
     }
 
-    public void Dispose() => _notifyIcon.Dispose();
+    public void Dispose() => notifyIcon.Dispose();
 
     public void ShowLightTouchNotification(string title, string text)
     {
-        _notifyIcon.ShowBalloonTip(10000, title, text, ToolTipIcon.Info);
+        notifyIcon.ShowBalloonTip(10000, title, text, ToolTipIcon.Info);
     }
 }

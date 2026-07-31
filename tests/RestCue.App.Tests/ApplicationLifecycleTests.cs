@@ -90,7 +90,7 @@ public sealed class ApplicationLifecycleTests
 
     private sealed class FakeTrayIcon : ITrayIcon
     {
-        private bool _visible;
+        private bool visible;
 
 #pragma warning disable CS0067
         public event EventHandler? OpenRequested;
@@ -134,10 +134,10 @@ public sealed class ApplicationLifecycleTests
 
         public bool Visible
         {
-            get => _visible;
+            get => visible;
             set
             {
-                _visible = value;
+                visible = value;
                 if (value)
                 {
                     VisibleSetToTrueCount++;
