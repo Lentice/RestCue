@@ -5,6 +5,7 @@ using System.Windows.Interop;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using RestCue.App.Lifecycle;
+using RestCue.App.UsageEvents;
 using RestCue.Core.Activity;
 using RestCue.Core.Audio;
 using RestCue.Core.Domain;
@@ -18,7 +19,7 @@ using RestCue.Infrastructure.Time;
 
 namespace RestCue.App;
 
-public partial class MainWindow : System.Windows.Window, IStatusWindow
+public partial class MainWindow : System.Windows.Window, IStatusWindow, IWorkPhaseSource
 {
     private const int CancelBreakHotkeyId = 1;
     private HwndSource? hwndSource;
@@ -63,6 +64,12 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     public RestDebtLevel CurrentDebtLevel { get; private set; }
 
     public WorkCycleTracker? WorkCycleTracker => workCycleTracker;
+
+    /// <summary>
+    /// The phase right now, or <c>null</c> before activity tracking has started.
+    /// Lets a late subscriber to <see cref="PhaseChanged"/> recover what it missed.
+    /// </summary>
+    WorkCyclePhase? IWorkPhaseSource.CurrentPhase => workCycleTracker?.CurrentPhase;
 
     public IBreakGuideAudioPlayer? AudioPlayer
     {
@@ -785,6 +792,12 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow
     }
 
     private WorkCyclePhase? lastReportedPhase;
+
+    /// <summary>
+    /// Publishes the current phase the way the activity timer's tick does, so a test can
+    /// drive a transition without waiting on the dispatcher timer.
+    /// </summary>
+    internal void PublishCycleStatus() => UpdateCycleStatus();
 
     private void UpdateCycleStatus()
     {

@@ -492,14 +492,20 @@ public partial class App : System.Windows.Application
         if (tracker != null)
         {
             tracker.ReminderSuppressed += OnReminderSuppressedEvent;
-            statusWindow!.PhaseChanged += OnPhaseChangedForWorkSession;
+
+            // Attached after the status window has already published its opening phase.
+            // The recorder seeds itself from that phase rather than assuming no work is
+            // in progress, so the first work session gets a real start boundary.
+            workSessionRecorder = new WorkSessionRecorder(
+                type => eventWriter?.Write(type, DateTimeOffset.UtcNow));
+            workSessionRecorder.Attach(statusWindow!);
         }
     }
 
     private void UnwireUsageEventEmitters()
     {
         tracker?.ReminderSuppressed -= OnReminderSuppressedEvent;
-        statusWindow?.PhaseChanged -= OnPhaseChangedForWorkSession;
+        workSessionRecorder?.Detach();
     }
 
     private ISuggestionStore? suggestionStore;
@@ -545,21 +551,7 @@ public partial class App : System.Windows.Application
         eventWriter?.Write(UsageEventType.ContextSuppressed, DateTimeOffset.UtcNow);
     }
 
-    private bool wasWorking;
-
-    private void OnPhaseChangedForWorkSession(object? sender, WorkCyclePhase newPhase)
-    {
-        bool isWorking = ContinuousWorkPolicy.IsContinuousWork(newPhase);
-        if (isWorking && !wasWorking)
-        {
-            eventWriter?.Write(UsageEventType.WorkSessionStarted, DateTimeOffset.UtcNow);
-        }
-        else if (!isWorking && wasWorking)
-        {
-            eventWriter?.Write(UsageEventType.WorkSessionEnded, DateTimeOffset.UtcNow);
-        }
-        wasWorking = isWorking;
-    }
+    private WorkSessionRecorder? workSessionRecorder;
 
     private void WireUsageEventPersistence()
     {
