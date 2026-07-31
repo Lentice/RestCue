@@ -83,6 +83,48 @@ public sealed class StartupWorkSessionWiringTests
         });
     }
 
+    /// <summary>
+    /// Shutdown cancels a running break while the work-session recorder is still attached.
+    /// The post-cancel phase counts as continuous work, so republishing it there would open
+    /// a work session at the instant the application stops. <c>EndBreakForShutdown</c>
+    /// deliberately does not republish, and this pins that.
+    /// </summary>
+    [Fact]
+    public void Ending_the_break_on_shutdown_does_not_open_a_work_session()
+    {
+        wpf.Run(() =>
+        {
+            var window = new MainWindow();
+            try
+            {
+                StartTracking(window);
+
+                var recorded = new List<UsageEventType>();
+                var recorder = new WorkSessionRecorder(recorded.Add);
+                recorder.Attach(window);
+
+                WorkCycleTracker tracker = window.WorkCycleTracker!;
+                int cancellations = 0;
+                tracker.BreakCancelled += (_, _) => cancellations++;
+
+                tracker.ManualStartBreak();
+                window.PublishCycleStatus();
+                recorded.Clear();
+
+                window.EndBreakForShutdown();
+
+                Assert.Equal(1, cancellations);
+                Assert.NotEqual(WorkCyclePhase.BreakInProgress, tracker.CurrentPhase);
+                Assert.Empty(recorded);
+            }
+            finally
+            {
+                window.StopActivityTracking();
+                window.Close();
+            }
+        });
+    }
+
     private static void StartTracking(MainWindow window) =>
         window.StartActivityTracking(
             new ActiveActivityMonitor(),

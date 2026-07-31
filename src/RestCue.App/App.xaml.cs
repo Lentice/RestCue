@@ -142,7 +142,59 @@ public partial class App : System.Windows.Application
     {
         DispatcherUnhandledException -= OnDispatcherUnhandledException;
 
-        eventWriter?.Write(UsageEventType.AppStopped, DateTimeOffset.UtcNow);
+        ExecuteShutdownSequence(
+            endInProgressBreak: () => statusWindow?.EndBreakForShutdown(),
+            writeAppStopped: () => eventWriter?.Write(UsageEventType.AppStopped, DateTimeOffset.UtcNow),
+            releaseRecordingAndResources: ReleaseShutdownResources,
+            logError: message => Trace.TraceError(message));
+
+        base.OnExit(e);
+    }
+
+    /// <summary>
+    /// Shutdown in the order the stored event log depends on: a break that is still
+    /// running gets an explicit outcome, then the application-stopped event, and only
+    /// then are the handlers that record them removed.
+    /// </summary>
+    /// <remarks>
+    /// Quitting mid-break used to leave a break-started event with no matching outcome,
+    /// because shutdown stopped the timers without ever leaving the break phase. Anything
+    /// pairing break events — completion rate, outcome counts, total rest time — was
+    /// skewed by every session that ended that way.
+    /// <para>
+    /// The order is the whole point, and it is why this is a separate testable method
+    /// rather than a straight-line body: cancelling after persistence is unwired writes
+    /// nothing, and cancelling after the application-stopped event puts the log out of
+    /// sequence. Neither failure is visible by reading <see cref="OnExit"/>.
+    /// </para>
+    /// </remarks>
+    internal static void ExecuteShutdownSequence(
+        Action endInProgressBreak,
+        Action writeAppStopped,
+        Action releaseRecordingAndResources,
+        Action<string> logError)
+    {
+        ArgumentNullException.ThrowIfNull(endInProgressBreak);
+        ArgumentNullException.ThrowIfNull(writeAppStopped);
+        ArgumentNullException.ThrowIfNull(releaseRecordingAndResources);
+        ArgumentNullException.ThrowIfNull(logError);
+
+        try
+        {
+            endInProgressBreak();
+        }
+        catch (Exception exception)
+        {
+            // Recording an outcome must never be the thing that stops the process exiting.
+            logError($"RestCue: failed to end the in-progress break on shutdown — {exception.Message}");
+        }
+
+        writeAppStopped();
+        releaseRecordingAndResources();
+    }
+
+    private void ReleaseShutdownResources()
+    {
         UnwireUsageEventEmitters();
 
         if (statusWindow != null)
@@ -153,7 +205,6 @@ public partial class App : System.Windows.Application
         UnwireUsageEventPersistence();
         audioPlayer?.Dispose();
         lifecycle?.Dispose();
-        base.OnExit(e);
     }
 
     internal void WireSettingsCommand(ITrayIcon trayIcon)

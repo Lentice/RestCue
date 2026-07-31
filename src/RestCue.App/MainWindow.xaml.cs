@@ -536,6 +536,30 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow, IWorkPha
         }
     }
 
+    /// <summary>
+    /// Gives a break that is still running an explicit outcome as the application exits,
+    /// through the same cancel seam every other early exit uses.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="StopActivityTracking"/> halts the timers and the audio guide but never
+    /// leaves the break phase, so quitting mid-break left a break with no outcome. The
+    /// cancel is unconditional because <see cref="WorkCycleTracker.CancelBreak"/> is
+    /// already a no-op outside a break, and calling the tracker rather than the window
+    /// records the outcome even if the guide window has already gone;
+    /// <see cref="CloseReminderIfOpen"/> then finds the phase already changed and does not
+    /// cancel a second time.
+    /// <para>
+    /// Deliberately does not republish the cycle status. The post-cancel phase counts as
+    /// continuous work, so announcing it here would open a work session at the moment the
+    /// application stops.
+    /// </para>
+    /// </remarks>
+    internal void EndBreakForShutdown()
+    {
+        workCycleTracker?.CancelBreak();
+        CloseReminderIfOpen();
+    }
+
     private void OnReminderWindowClosed(object? sender, EventArgs e)
     {
         EndAudioGuide();
