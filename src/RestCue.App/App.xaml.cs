@@ -40,6 +40,11 @@ public partial class App : System.Windows.Application
 
         statusWindow = new MainWindow();
         trayIcon = new WindowsTrayIcon();
+
+        // Before anything can make the icon visible — InitializeAsync does, as soon as
+        // settings have loaded, which is long before the tracker exists.
+        ApplyUninitializedToTray(trayIcon);
+
         lifecycle = new ApplicationLifecycle(
             trayIcon,
             statusWindow,
@@ -81,6 +86,10 @@ public partial class App : System.Windows.Application
             WireUsageEventPersistence();
             WireUsageEventEmitters();
             WireTrayCommands();
+
+            // Last, so that nothing above it can present a command that cannot act. A
+            // failure anywhere in this block skips it and the surfaces stay disabled.
+            CompleteInitialization();
         }
         catch (Exception exception)
         {
@@ -504,6 +513,28 @@ public partial class App : System.Windows.Application
         return true;
     }
 
+    /// <summary>
+    /// The point at which the interface becomes live: the tracker exists, its commands are
+    /// wired, and both surfaces are given the tracker's actual opening state.
+    /// </summary>
+    /// <remarks>
+    /// State is applied rather than awaited. The tracker publishes its opening phase at the
+    /// end of <see cref="MainWindow.StartActivityTracking"/>, before
+    /// <see cref="WireTrayCommands"/> subscribes to phase changes, so the tray never saw it
+    /// and kept its placeholder tooltip until some later phase or rest-debt change happened
+    /// to occur. Reading the tracker directly does not depend on having won that race.
+    /// </remarks>
+    private void CompleteInitialization()
+    {
+        WorkCycleTracker? currentTracker = statusWindow?.WorkCycleTracker;
+        if (currentTracker == null || trayIcon == null || statusWindow == null) return;
+
+        statusWindow.CompleteCommandInitialization();
+
+        lastPhase = currentTracker.CurrentPhase;
+        ApplyPhaseToTray(trayIcon, lastPhase, statusWindow.CurrentDebtLevel);
+    }
+
     private void WireTrayCommands()
     {
         if (trayIcon == null || statusWindow == null) return;
@@ -747,16 +778,8 @@ public partial class App : System.Windows.Application
     {
         ArgumentNullException.ThrowIfNull(tray);
 
-        CommandAvailability availability = CommandAvailabilityPolicy.ForPhase(phase);
-
         tray.SetSuppressedState(false);
-        tray.SetPauseText(availability.ShowResume);
-        tray.SetPauseEnabled(availability.PauseToggleEnabled);
-        tray.SetFocusModeText(availability.ShowEndFocusMode);
-        tray.SetFocusModeEnabled(availability.FocusToggleEnabled);
-        tray.SetDisableText(availability.ShowEnable);
-        tray.SetDisableEnabled(availability.DisableToggleEnabled);
-        tray.SetBreakNowEnabled(availability.CanBreakNow);
+        ApplyAvailabilityToTray(tray, CommandAvailabilityPolicy.ForPhase(phase));
         tray.SetDebtLevel(debtLevel);
 
         // During an active cycle the debt level is the more useful status; the mode
@@ -764,6 +787,41 @@ public partial class App : System.Windows.Application
         tray.SetStatusText(CommandAvailabilityPolicy.IsActiveCycle(phase)
             ? GetStatusTextForDebtLevel(debtLevel)
             : GetStatusTextForPhase(phase));
+    }
+
+    private static void ApplyAvailabilityToTray(ITrayIcon tray, CommandAvailability availability)
+    {
+        tray.SetPauseText(availability.ShowResume);
+        tray.SetPauseEnabled(availability.PauseToggleEnabled);
+        tray.SetFocusModeText(availability.ShowEndFocusMode);
+        tray.SetFocusModeEnabled(availability.FocusToggleEnabled);
+        tray.SetDisableText(availability.ShowEnable);
+        tray.SetDisableEnabled(availability.DisableToggleEnabled);
+        tray.SetBreakNowEnabled(availability.CanBreakNow);
+    }
+
+    internal const string StartingUpStatusText = "RestCue – 啟動中";
+
+    /// <summary>
+    /// The tray's opening state: visible, but offering nothing it cannot yet do.
+    /// </summary>
+    /// <remarks>
+    /// The icon is made visible as soon as settings have loaded, which is before the work
+    /// cycle exists and well before the tray commands are wired. A user who clicked a
+    /// command in that window got nothing — no break, no pause, no error — because the
+    /// command runner returned silently against a missing tracker. Applied before the
+    /// icon can appear, so the dead interface never exists.
+    /// <para>
+    /// The tooltip is replaced too: the constructor's generic product name said nothing
+    /// about what the application was doing.
+    /// </para>
+    /// </remarks>
+    internal static void ApplyUninitializedToTray(ITrayIcon tray)
+    {
+        ArgumentNullException.ThrowIfNull(tray);
+
+        ApplyAvailabilityToTray(tray, CommandAvailabilityPolicy.None);
+        tray.SetStatusText(StartingUpStatusText);
     }
 
     /// <summary>

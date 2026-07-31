@@ -53,6 +53,10 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow, IWorkPha
             Interval = TimeSpan.FromSeconds(1)
         };
         activityTimer.Tick += OnActivityTimerTick;
+
+        // The markup enables every command button. Nothing is actionable until startup
+        // has wired the commands, so the opening state comes from the policy instead.
+        ApplyCommandAvailability(CommandAvailabilityPolicy.None);
     }
 
     public event EventHandler<WorkCyclePhase>? PhaseChanged;
@@ -439,8 +443,31 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow, IWorkPha
     {
         if (workCycleTracker == null) return;
 
-        ApplyCommandAvailability(
-            CommandAvailabilityPolicy.ForPhase(workCycleTracker.CurrentPhase));
+        ApplyCommandAvailability(commandsInitialized
+            ? CommandAvailabilityPolicy.ForPhase(workCycleTracker.CurrentPhase)
+            : CommandAvailabilityPolicy.None);
+    }
+
+    private bool commandsInitialized;
+
+    /// <summary>
+    /// Marks the command surface live and applies the tracker's real phase to it.
+    /// </summary>
+    /// <remarks>
+    /// Until this is called the window offers nothing, because until startup has wired the
+    /// commands there is nothing behind them: the command runner's null-tracker guard
+    /// returned silently, so an early click produced no break, no pause, no error and no
+    /// acknowledgement. That guard stays as a floor; this is what stops it being reachable
+    /// through the interface.
+    /// <para>
+    /// The opening state is applied from the tracker rather than left to the markup
+    /// defaults, which had every button enabled.
+    /// </para>
+    /// </remarks>
+    internal void CompleteCommandInitialization()
+    {
+        commandsInitialized = true;
+        UpdateMenuAndButtonStates();
     }
 
     internal void ApplyCommandAvailability(CommandAvailability availability)

@@ -71,6 +71,38 @@ public readonly record struct CommandAvailability
 /// </remarks>
 public static class CommandAvailabilityPolicy
 {
+    /// <summary>
+    /// Nothing is available. For a surface that exists before there is a work cycle to
+    /// reason about — the window between the tray icon appearing and initialisation
+    /// finishing — where offering a command would present something that cannot act.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately a value here rather than a "starting up" phase in
+    /// <see cref="WorkCycleTracker"/>: not being initialised yet is an application-layer
+    /// fact about the surfaces, not a state the reminder engine can be in. Keeping it in
+    /// this class is what stops it becoming a second table of what is available.
+    /// <para>
+    /// Every toggle points at its default direction, so the controls read "pause",
+    /// "focus mode" and "disable reminders" rather than their reversed labels.
+    /// </para>
+    /// </remarks>
+    public static CommandAvailability None { get; } = new()
+    {
+        CanPause = false,
+        CanResume = false,
+        CanStartFocusMode = false,
+        CanEndFocusMode = false,
+        CanDisable = false,
+        CanEnable = false,
+        CanBreakNow = false,
+        CanStartBreakFromReminder = false,
+        CanSnooze = false,
+        CanIgnore = false,
+        ShowResume = false,
+        ShowEndFocusMode = false,
+        ShowEnable = false,
+    };
+
     public static CommandAvailability ForPhase(WorkCyclePhase phase)
     {
         bool isActiveCycle = IsActiveCycle(phase);
