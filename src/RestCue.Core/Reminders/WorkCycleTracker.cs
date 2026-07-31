@@ -18,15 +18,15 @@ public sealed class WorkCycleTracker
     private readonly TimeSpan retryCooldown;
     private readonly TimeSpan focusModeDuration;
 
-    private DateTimeOffset? pendingSinceUtc;
-    private DateTimeOffset? breakStartUtc;
-    private DateTimeOffset? lastTickUtc;
-    private DateTimeOffset? reminderVisibleSinceUtc;
-    private DateTimeOffset? snoozeUntilUtc;
-    private DateTimeOffset? cooldownUntil;
-    private DateTimeOffset? nextDebtDeadline;
-    private DateTimeOffset? focusModeUntilUtc;
-    private DateTimeOffset? pauseUntilUtc;
+    private TimeSpan? pendingSince;
+    private TimeSpan? breakStart;
+    private TimeSpan? lastTick;
+    private TimeSpan? reminderVisibleSince;
+    private TimeSpan? snoozeUntil;
+    private TimeSpan? cooldownUntil;
+    private TimeSpan? nextDebtDeadline;
+    private TimeSpan? focusModeUntil;
+    private TimeSpan? pauseUntil;
     private bool wasWorking;
     private bool isLocked;
     private bool isSleeping;
@@ -120,7 +120,7 @@ public sealed class WorkCycleTracker
 
     public TimeSpan RetryCooldown => retryCooldown;
 
-    public DateTimeOffset? CooldownUntil => cooldownUntil;
+    public TimeSpan? CooldownUntil => cooldownUntil;
 
     public RestDebtLevel RestDebtLevel => restDebtLevel;
 
@@ -128,7 +128,7 @@ public sealed class WorkCycleTracker
 
     public PresentationIntensity EffectiveIntensity { get; private set; } = PresentationIntensity.PopupAndSound;
 
-    public void SetNextDebtDeadline(DateTimeOffset? deadline)
+    public void SetNextDebtDeadline(TimeSpan? deadline)
     {
         nextDebtDeadline = cooldownUntil.HasValue ? deadline : null;
     }
@@ -172,7 +172,7 @@ public sealed class WorkCycleTracker
                 {
                     hasSuppressedReminder = false;
                     showTrayCue = false;
-                    EnterReminderVisible(clock.UtcNow);
+                    EnterReminderVisible(clock.Elapsed);
                 }
             }
             else if (newEffective != oldEffective)
@@ -240,7 +240,7 @@ public sealed class WorkCycleTracker
         if (idleDuration < TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(idleDuration), "Idle duration cannot be negative.");
 
-        var now = clock.UtcNow;
+        var now = clock.Elapsed;
         bool isWorking = idleDuration < idleThreshold;
 
         if (CurrentPhase != WorkCyclePhase.BreakInProgress &&
@@ -278,7 +278,7 @@ public sealed class WorkCycleTracker
                 break;
 
             case WorkCyclePhase.Paused:
-                if (pauseUntilUtc.HasValue && now >= pauseUntilUtc.Value)
+                if (pauseUntil.HasValue && now >= pauseUntil.Value)
                 {
                     Resume();
                 }
@@ -287,7 +287,7 @@ public sealed class WorkCycleTracker
                 break;
 
             case WorkCyclePhase.FocusMode:
-                if (focusModeUntilUtc.HasValue && now >= focusModeUntilUtc.Value)
+                if (focusModeUntil.HasValue && now >= focusModeUntil.Value)
                 {
                     EndFocusMode();
                 }
@@ -300,7 +300,7 @@ public sealed class WorkCycleTracker
         }
     }
 
-    private void TickIdle(DateTimeOffset now, bool isWorking)
+    private void TickIdle(TimeSpan now, bool isWorking)
     {
         if (isWorking)
         {
@@ -314,23 +314,23 @@ public sealed class WorkCycleTracker
         if (isLocked || isSleeping)
             return;
 
-        var now = clock.UtcNow;
+        var now = clock.Elapsed;
         wasWorking = false;
-        lastTickUtc = now;
+        lastTick = now;
 
         switch (CurrentPhase)
         {
             case WorkCyclePhase.Working:
                 break;
             case WorkCyclePhase.FocusMode:
-                if (focusModeUntilUtc.HasValue && now >= focusModeUntilUtc.Value)
+                if (focusModeUntil.HasValue && now >= focusModeUntil.Value)
                 {
                     EndFocusMode();
                 }
                 break;
 
             case WorkCyclePhase.PendingReminder:
-                if (now - pendingSinceUtc!.Value >= maximumReminderWait)
+                if (now - pendingSince!.Value >= maximumReminderWait)
                 {
                     EnterReminderVisible(now);
                 }
@@ -341,7 +341,7 @@ public sealed class WorkCycleTracker
                 break;
 
             case WorkCyclePhase.BreakInProgress:
-                if (now - breakStartUtc!.Value >= breakDuration)
+                if (now - breakStart!.Value >= breakDuration)
                 {
                     ResetCycle();
                     BreakCompleted?.Invoke(this, EventArgs.Empty);
@@ -349,11 +349,11 @@ public sealed class WorkCycleTracker
                 break;
 
             case WorkCyclePhase.Snoozed:
-                if (now >= snoozeUntilUtc!.Value)
+                if (now >= snoozeUntil!.Value)
                 {
                     CurrentPhase = WorkCyclePhase.PendingReminder;
-                    pendingSinceUtc = now;
-                    snoozeUntilUtc = null;
+                    pendingSince = now;
+                    snoozeUntil = null;
                 }
                 break;
 
@@ -362,7 +362,7 @@ public sealed class WorkCycleTracker
                 break;
 
             case WorkCyclePhase.Paused:
-                if (pauseUntilUtc.HasValue && now >= pauseUntilUtc.Value)
+                if (pauseUntil.HasValue && now >= pauseUntil.Value)
                 {
                     Resume();
                 }
@@ -377,8 +377,8 @@ public sealed class WorkCycleTracker
                 $"Cannot start break from phase {CurrentPhase}.");
 
         CurrentPhase = WorkCyclePhase.BreakInProgress;
-        breakStartUtc = clock.UtcNow;
-        reminderVisibleSinceUtc = null;
+        breakStart = clock.Elapsed;
+        reminderVisibleSince = null;
         ClearSuppressedReminderState();
         BreakStarted?.Invoke(this, EventArgs.Empty);
     }
@@ -394,10 +394,10 @@ public sealed class WorkCycleTracker
         ExitFocusMode();
 
         CurrentPhase = WorkCyclePhase.BreakInProgress;
-        breakStartUtc = clock.UtcNow;
-        pendingSinceUtc = null;
-        reminderVisibleSinceUtc = null;
-        snoozeUntilUtc = null;
+        breakStart = clock.Elapsed;
+        pendingSince = null;
+        reminderVisibleSince = null;
+        snoozeUntil = null;
         wasPassivePaused = false;
         ClearSuppressedReminderState();
         BreakStarted?.Invoke(this, EventArgs.Empty);
@@ -408,11 +408,11 @@ public sealed class WorkCycleTracker
         if (CurrentPhase != WorkCyclePhase.BreakInProgress)
             return;
 
-        lastTickUtc = null;
+        lastTick = null;
         wasWorking = false;
-        breakStartUtc = null;
+        breakStart = null;
 
-        if (!TryEnterPendingReminderFromWorking(clock.UtcNow))
+        if (!TryEnterPendingReminderFromWorking(clock.Elapsed))
             CurrentPhase = WorkCyclePhase.Working;
 
         BreakCancelled?.Invoke(this, EventArgs.Empty);
@@ -429,8 +429,8 @@ public sealed class WorkCycleTracker
                 $"Cannot snooze from phase {CurrentPhase}.");
 
         CurrentPhase = WorkCyclePhase.Snoozed;
-        snoozeUntilUtc = clock.UtcNow + snoozeDuration;
-        reminderVisibleSinceUtc = null;
+        snoozeUntil = clock.Elapsed + snoozeDuration;
+        reminderVisibleSince = null;
         ReminderDismissed?.Invoke(this, new ReminderDismissedEventArgs(ReminderResult.Snoozed));
     }
 
@@ -441,13 +441,13 @@ public sealed class WorkCycleTracker
                 $"Cannot ignore from phase {CurrentPhase}.");
 
         CurrentPhase = WorkCyclePhase.Working;
-        pendingSinceUtc = null;
-        breakStartUtc = null;
-        reminderVisibleSinceUtc = null;
-        snoozeUntilUtc = null;
-        lastTickUtc = null;
+        pendingSince = null;
+        breakStart = null;
+        reminderVisibleSince = null;
+        snoozeUntil = null;
+        lastTick = null;
         wasWorking = false;
-        var now = clock.UtcNow;
+        var now = clock.Elapsed;
         cooldownUntil = now + retryCooldown;
         ArmNextDebtDeadline(now);
         CooldownStarted?.Invoke(this, EventArgs.Empty);
@@ -462,7 +462,7 @@ public sealed class WorkCycleTracker
                 $"Cannot pause from phase {CurrentPhase}.");
 
         CurrentPhase = WorkCyclePhase.Paused;
-        pauseUntilUtc = pauseDuration.HasValue ? clock.UtcNow + pauseDuration.Value : null;
+        pauseUntil = pauseDuration.HasValue ? clock.Elapsed + pauseDuration.Value : null;
         ClearReminderState();
         Paused?.Invoke(this, EventArgs.Empty);
     }
@@ -473,9 +473,9 @@ public sealed class WorkCycleTracker
             throw new InvalidOperationException(
                 $"Cannot resume from phase {CurrentPhase}.");
 
-        lastTickUtc = null;
+        lastTick = null;
         wasWorking = false;
-        pauseUntilUtc = null;
+        pauseUntil = null;
         CurrentPhase = WorkCyclePhase.Working;
         Resumed?.Invoke(this, EventArgs.Empty);
     }
@@ -487,7 +487,7 @@ public sealed class WorkCycleTracker
                 $"Cannot start focus mode from phase {CurrentPhase}.");
 
         CurrentPhase = WorkCyclePhase.FocusMode;
-        focusModeUntilUtc = clock.UtcNow + focusModeDuration;
+        focusModeUntil = clock.Elapsed + focusModeDuration;
         ClearReminderState();
         FocusModeStarted?.Invoke(this, EventArgs.Empty);
     }
@@ -500,7 +500,7 @@ public sealed class WorkCycleTracker
 
         ExitFocusMode();
 
-        if (!TryEnterPendingReminderFromWorking(clock.UtcNow))
+        if (!TryEnterPendingReminderFromWorking(clock.Elapsed))
             CurrentPhase = WorkCyclePhase.Working;
     }
 
@@ -516,7 +516,7 @@ public sealed class WorkCycleTracker
         if (CurrentPhase != WorkCyclePhase.FocusMode)
             return;
 
-        focusModeUntilUtc = null;
+        focusModeUntil = null;
         FocusModeEnded?.Invoke(this, EventArgs.Empty);
     }
 
@@ -562,7 +562,7 @@ public sealed class WorkCycleTracker
 
         if (wasSuppressed && !isReminderSuppressed && hasSuppressedReminder && CurrentPhase == WorkCyclePhase.PendingReminder)
         {
-            var now = clock.UtcNow;
+            var now = clock.Elapsed;
             hasSuppressedReminder = false;
             EnterReminderVisible(now);
         }
@@ -635,19 +635,19 @@ public sealed class WorkCycleTracker
         }
     }
 
-    private void AccumulateIfWorking(DateTimeOffset now, bool isWorking)
+    private void AccumulateIfWorking(TimeSpan now, bool isWorking)
     {
-        if (isWorking && wasWorking && lastTickUtc.HasValue)
+        if (isWorking && wasWorking && lastTick.HasValue)
         {
-            var delta = now - lastTickUtc.Value;
+            var delta = now - lastTick.Value;
             AccumulatedWorkTime = RestNeedPolicy.Accumulate(AccumulatedWorkTime, delta);
         }
 
         wasWorking = isWorking;
-        lastTickUtc = now;
+        lastTick = now;
     }
 
-    private void TickWorking(DateTimeOffset now, bool isWorking)
+    private void TickWorking(TimeSpan now, bool isWorking)
     {
         if (!isWorking)
         {
@@ -658,11 +658,11 @@ public sealed class WorkCycleTracker
         TryEnterPendingReminderFromWorking(now);
     }
 
-    private bool TryEnterPendingReminderFromWorking(DateTimeOffset now)
+    private bool TryEnterPendingReminderFromWorking(TimeSpan now)
     {
         if (cooldownUntil.HasValue)
         {
-            DateTimeOffset effective = EarlierOf(cooldownUntil, nextDebtDeadline)!.Value;
+            TimeSpan effective = EarlierOf(cooldownUntil, nextDebtDeadline)!.Value;
             if (now < effective)
                 return false;
 
@@ -675,7 +675,7 @@ public sealed class WorkCycleTracker
             if (wasDebtDeadline)
             {
                 CurrentPhase = WorkCyclePhase.PendingReminder;
-                pendingSinceUtc = now;
+                pendingSince = now;
                 return true;
             }
 
@@ -683,7 +683,7 @@ public sealed class WorkCycleTracker
                 AccumulatedWorkTime >= effectiveWorkInterval)
             {
                 CurrentPhase = WorkCyclePhase.PendingReminder;
-                pendingSinceUtc = now;
+                pendingSince = now;
                 return true;
             }
 
@@ -694,14 +694,14 @@ public sealed class WorkCycleTracker
             AccumulatedWorkTime >= effectiveWorkInterval)
         {
             CurrentPhase = WorkCyclePhase.PendingReminder;
-            pendingSinceUtc = now;
+            pendingSince = now;
             return true;
         }
 
         return false;
     }
 
-    private void TickPending(DateTimeOffset now, bool isWorking, TimeSpan idleDuration)
+    private void TickPending(TimeSpan now, bool isWorking, TimeSpan idleDuration)
     {
         if (ReminderTimingPolicy.IsIdle(idleDuration, idleThreshold))
         {
@@ -711,7 +711,7 @@ public sealed class WorkCycleTracker
 
         if (wasPassivePaused && !ReminderTimingPolicy.IsPassivePause(idleDuration, passiveBreakThreshold))
         {
-            pendingSinceUtc = now;
+            pendingSince = now;
             wasPassivePaused = false;
         }
 
@@ -725,7 +725,7 @@ public sealed class WorkCycleTracker
             return;
         }
 
-        var elapsed = pendingSinceUtc.HasValue ? now - pendingSinceUtc.Value : TimeSpan.Zero;
+        var elapsed = pendingSince.HasValue ? now - pendingSince.Value : TimeSpan.Zero;
 
         var timingParams = new TimingParameters(
             IdleDuration: idleDuration,
@@ -745,9 +745,9 @@ public sealed class WorkCycleTracker
         }
     }
 
-    private void TickReminderVisible(DateTimeOffset now, TimeSpan idleDuration)
+    private void TickReminderVisible(TimeSpan now, TimeSpan idleDuration)
     {
-        var elapsed = reminderVisibleSinceUtc.HasValue ? now - reminderVisibleSinceUtc.Value : TimeSpan.Zero;
+        var elapsed = reminderVisibleSince.HasValue ? now - reminderVisibleSince.Value : TimeSpan.Zero;
 
         var timingParams = new TimingParameters(
             IdleDuration: idleDuration,
@@ -769,8 +769,8 @@ public sealed class WorkCycleTracker
 
             case TimingDecision.PassivePauseDetected:
                 CurrentPhase = WorkCyclePhase.PendingReminder;
-                pendingSinceUtc = now;
-                reminderVisibleSinceUtc = null;
+                pendingSince = now;
+                reminderVisibleSince = null;
                 wasPassivePaused = true;
                 PassivePauseDetected?.Invoke(this, EventArgs.Empty);
                 break;
@@ -781,7 +781,7 @@ public sealed class WorkCycleTracker
         }
     }
 
-    private void TickSnoozed(DateTimeOffset now, bool isWorking, TimeSpan idleDuration)
+    private void TickSnoozed(TimeSpan now, bool isWorking, TimeSpan idleDuration)
     {
         if (ReminderTimingPolicy.IsIdle(idleDuration, idleThreshold))
         {
@@ -789,17 +789,17 @@ public sealed class WorkCycleTracker
             return;
         }
 
-        if (now >= snoozeUntilUtc!.Value)
+        if (now >= snoozeUntil!.Value)
         {
             CurrentPhase = WorkCyclePhase.PendingReminder;
-            pendingSinceUtc = now;
-            snoozeUntilUtc = null;
+            pendingSince = now;
+            snoozeUntil = null;
         }
     }
 
-    private void TickBreak(DateTimeOffset now)
+    private void TickBreak(TimeSpan now)
     {
-        if (now - breakStartUtc!.Value >= breakDuration)
+        if (now - breakStart!.Value >= breakDuration)
         {
             ResetCycle();
             BreakCompleted?.Invoke(this, EventArgs.Empty);
@@ -814,17 +814,17 @@ public sealed class WorkCycleTracker
 
         CurrentPhase = WorkCyclePhase.Idle;
         AccumulatedWorkTime = TimeSpan.Zero;
-        pendingSinceUtc = null;
-        breakStartUtc = null;
-        lastTickUtc = null;
+        pendingSince = null;
+        breakStart = null;
+        lastTick = null;
         wasWorking = false;
-        reminderVisibleSinceUtc = null;
-        snoozeUntilUtc = null;
+        reminderVisibleSince = null;
+        snoozeUntil = null;
         wasPassivePaused = false;
         cooldownUntil = null;
         nextDebtDeadline = null;
-        focusModeUntilUtc = null;
-        pauseUntilUtc = null;
+        focusModeUntil = null;
+        pauseUntil = null;
         restDebtLevel = RestDebtLevel.Level0;
 
         if (wasInBreak)
@@ -837,7 +837,7 @@ public sealed class WorkCycleTracker
             RestDebtLevelChanged?.Invoke(this, new RestDebtLevelChangedEventArgs(previousLevel, RestDebtLevel.Level0));
     }
 
-    private void EnterReminderVisible(DateTimeOffset now)
+    private void EnterReminderVisible(TimeSpan now)
     {
         bool wasCooldownActive = cooldownUntil.HasValue;
         cooldownUntil = null;
@@ -884,22 +884,22 @@ public sealed class WorkCycleTracker
         }
 
         CurrentPhase = WorkCyclePhase.ReminderVisible;
-        reminderVisibleSinceUtc = now;
+        reminderVisibleSince = now;
         ReminderShown?.Invoke(this, EventArgs.Empty);
     }
 
-    private void TryAutoDismiss(DateTimeOffset now)
+    private void TryAutoDismiss(TimeSpan now)
     {
-        var visibleElapsed = now - reminderVisibleSinceUtc!.Value;
+        var visibleElapsed = now - reminderVisibleSince!.Value;
         if (visibleElapsed >= reminderDisplayDuration)
         {
             CurrentPhase = WorkCyclePhase.Working;
-            pendingSinceUtc = null;
-            breakStartUtc = null;
-            lastTickUtc = null;
+            pendingSince = null;
+            breakStart = null;
+            lastTick = null;
             wasWorking = false;
-            reminderVisibleSinceUtc = null;
-            snoozeUntilUtc = null;
+            reminderVisibleSince = null;
+            snoozeUntil = null;
             cooldownUntil = now + retryCooldown;
             ArmNextDebtDeadline(now);
             CooldownStarted?.Invoke(this, EventArgs.Empty);
@@ -913,20 +913,20 @@ public sealed class WorkCycleTracker
         bool wasCooldownActive = cooldownUntil.HasValue;
         CurrentPhase = WorkCyclePhase.Working;
         AccumulatedWorkTime = TimeSpan.Zero;
-        pendingSinceUtc = null;
-        breakStartUtc = null;
-        lastTickUtc = null;
+        pendingSince = null;
+        breakStart = null;
+        lastTick = null;
         wasWorking = false;
-        reminderVisibleSinceUtc = null;
-        snoozeUntilUtc = null;
+        reminderVisibleSince = null;
+        snoozeUntil = null;
         wasPassivePaused = false;
         isReminderSuppressed = false;
         hasSuppressedReminder = false;
         showTrayCue = false;
         cooldownUntil = null;
         nextDebtDeadline = null;
-        focusModeUntilUtc = null;
-        pauseUntilUtc = null;
+        focusModeUntil = null;
+        pauseUntil = null;
         restDebtLevel = RestDebtLevel.Level0;
 
         if (wasCooldownActive)
@@ -965,7 +965,7 @@ public sealed class WorkCycleTracker
         if (!cooldownUntil.HasValue)
             return;
 
-        var now = clock.UtcNow;
+        var now = clock.Elapsed;
         if (nextDebtDeadline.HasValue && nextDebtDeadline.Value <= now)
             return;
 
@@ -973,7 +973,7 @@ public sealed class WorkCycleTracker
     }
 
     /// <summary>
-    /// Arms the wall-clock time at which the next rest-debt threshold will be reached,
+    /// Arms the monotonic elapsed time at which the next rest-debt threshold will be reached,
     /// from the current accumulated work time. At the highest level there is no further
     /// threshold and the retry cooldown governs alone.
     /// </summary>
@@ -982,7 +982,7 @@ public sealed class WorkCycleTracker
     /// <see cref="cooldownUntil"/> must already be set when this runs. This ordering is
     /// a correctness requirement, not a style preference.
     /// </remarks>
-    private void ArmNextDebtDeadline(DateTimeOffset now)
+    private void ArmNextDebtDeadline(TimeSpan now)
     {
         var nextThreshold = DebtPolicy.GetNextThreshold(
             restDebtLevel,
@@ -1004,11 +1004,11 @@ public sealed class WorkCycleTracker
 
     private void ClearReminderState()
     {
-        pendingSinceUtc = null;
-        breakStartUtc = null;
-        reminderVisibleSinceUtc = null;
-        snoozeUntilUtc = null;
-        lastTickUtc = null;
+        pendingSince = null;
+        breakStart = null;
+        reminderVisibleSince = null;
+        snoozeUntil = null;
+        lastTick = null;
         wasWorking = false;
         wasPassivePaused = false;
         ClearSuppressedReminderState();
@@ -1024,7 +1024,7 @@ public sealed class WorkCycleTracker
         showTrayCue = false;
     }
 
-    private static DateTimeOffset? EarlierOf(DateTimeOffset? a, DateTimeOffset? b)
+    private static TimeSpan? EarlierOf(TimeSpan? a, TimeSpan? b)
     {
         if (a == null) return b;
         if (b == null) return a;

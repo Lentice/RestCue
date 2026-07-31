@@ -101,8 +101,15 @@ public sealed class BreakGuideAudioSeamTests
     private sealed class FakeClock : IClock
     {
         private DateTimeOffset utcNow = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        private TimeSpan elapsed;
         public DateTimeOffset UtcNow => utcNow;
-        public void Advance(TimeSpan duration) => utcNow += duration;
+
+        public TimeSpan Elapsed => elapsed;
+        public void Advance(TimeSpan duration)
+        {
+            utcNow += duration;
+            elapsed += duration;
+        }
     }
 
     private static WorkCycleTracker CreateTracker(FakeClock clock)

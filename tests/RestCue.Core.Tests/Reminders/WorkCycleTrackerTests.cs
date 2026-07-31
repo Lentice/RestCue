@@ -2922,7 +2922,7 @@ public sealed class WorkCycleTrackerTests
         ReachReminderVisible(tracker, clock);
 
         tracker.Ignore();
-        tracker.SetNextDebtDeadline(clock.UtcNow + TimeSpan.FromSeconds(15));
+        tracker.SetNextDebtDeadline(clock.Elapsed + TimeSpan.FromSeconds(15));
 
         tracker.Pause();
         tracker.Resume();
@@ -3297,14 +3297,14 @@ public sealed class WorkCycleTrackerTests
 
         ReachReminderVisible(tracker, clock);
         tracker.Ignore();
-        _ = clock.UtcNow;
+        _ = clock.Elapsed;
 
         clock.Advance(TimeSpan.FromSeconds(15));
         tracker.Tick(TimeSpan.Zero);
 
         Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
         Assert.True(tracker.CooldownUntil.HasValue);
-        Assert.True(tracker.CooldownUntil.Value > clock.UtcNow);
+        Assert.True(tracker.CooldownUntil.Value > clock.Elapsed);
     }
 
     [Fact]
@@ -3340,7 +3340,7 @@ public sealed class WorkCycleTrackerTests
         ReachReminderVisible(tracker, clock);
         tracker.Ignore();
 
-        tracker.SetNextDebtDeadline(clock.UtcNow + TimeSpan.FromSeconds(15));
+        tracker.SetNextDebtDeadline(clock.Elapsed + TimeSpan.FromSeconds(15));
 
         for (int i = 0; i < 14; i++)
         {
@@ -3367,7 +3367,7 @@ public sealed class WorkCycleTrackerTests
         ReachReminderVisible(tracker, clock);
         tracker.Ignore();
 
-        tracker.SetNextDebtDeadline(clock.UtcNow + TimeSpan.FromSeconds(30));
+        tracker.SetNextDebtDeadline(clock.Elapsed + TimeSpan.FromSeconds(30));
 
         for (int i = 0; i < 9; i++)
         {
@@ -3486,7 +3486,7 @@ public sealed class WorkCycleTrackerTests
         ReachReminderVisible(tracker, clock);
         tracker.Ignore();
 
-        tracker.SetNextDebtDeadline(clock.UtcNow + TimeSpan.FromSeconds(15));
+        tracker.SetNextDebtDeadline(clock.Elapsed + TimeSpan.FromSeconds(15));
         tracker.StartFocusMode();
 
         for (int i = 0; i < 20; i++)
@@ -3842,7 +3842,7 @@ public sealed class WorkCycleTrackerTests
         ReachReminderVisible(tracker, clock);
         tracker.Ignore();
 
-        var deadline = clock.UtcNow + TimeSpan.FromSeconds(10);
+        var deadline = clock.Elapsed + TimeSpan.FromSeconds(10);
         tracker.SetNextDebtDeadline(deadline);
 
         for (int i = 0; i < 9; i++)
@@ -3895,7 +3895,7 @@ public sealed class WorkCycleTrackerTests
         ReachReminderVisible(tracker, clock);
         tracker.Ignore();
 
-        tracker.SetNextDebtDeadline(clock.UtcNow + TimeSpan.FromSeconds(10));
+        tracker.SetNextDebtDeadline(clock.Elapsed + TimeSpan.FromSeconds(10));
 
         clock.Advance(TimeSpan.FromMinutes(5));
         tracker.Tick(DefaultIdleThreshold);
@@ -3914,7 +3914,7 @@ public sealed class WorkCycleTrackerTests
             workInterval: TimeSpan.FromSeconds(5),
             retryCooldown: TimeSpan.FromSeconds(30));
 
-        tracker.SetNextDebtDeadline(clock.UtcNow + TimeSpan.FromSeconds(10));
+        tracker.SetNextDebtDeadline(clock.Elapsed + TimeSpan.FromSeconds(10));
 
         ReachReminderVisible(tracker, clock);
         tracker.Ignore();
@@ -3940,7 +3940,7 @@ public sealed class WorkCycleTrackerTests
         tracker.Ignore();
         Assert.NotNull(tracker.CooldownUntil);
 
-        tracker.SetNextDebtDeadline(clock.UtcNow + TimeSpan.FromSeconds(15));
+        tracker.SetNextDebtDeadline(clock.Elapsed + TimeSpan.FromSeconds(15));
 
         for (int i = 0; i < 15; i++)
         {
@@ -3964,7 +3964,7 @@ public sealed class WorkCycleTrackerTests
         tracker.Ignore();
         Assert.NotNull(tracker.CooldownUntil);
 
-        tracker.SetNextDebtDeadline(clock.UtcNow + TimeSpan.FromSeconds(10));
+        tracker.SetNextDebtDeadline(clock.Elapsed + TimeSpan.FromSeconds(10));
         tracker.SetNextDebtDeadline(null);
 
         for (int i = 0; i < 20; i++)
@@ -4088,7 +4088,7 @@ public sealed class WorkCycleTrackerTests
         ReachReminderVisible(tracker, clock);
         tracker.Ignore();
 
-        tracker.SetNextDebtDeadline(clock.UtcNow + TimeSpan.FromSeconds(10));
+        tracker.SetNextDebtDeadline(clock.Elapsed + TimeSpan.FromSeconds(10));
 
         for (int i = 0; i < 9; i++)
         {
@@ -4382,7 +4382,7 @@ public sealed class WorkCycleTrackerTests
         tracker.Tick(TimeSpan.FromSeconds(6));
         Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
 
-        var cooldownBeforeIgnore = clock.UtcNow;
+        var cooldownBeforeIgnore = clock.Elapsed;
         tracker.Ignore();
         var cooldownUntil = cooldownBeforeIgnore + TimeSpan.FromSeconds(30);
 
@@ -4406,7 +4406,7 @@ public sealed class WorkCycleTrackerTests
 
         Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
         Assert.Null(tracker.CooldownUntil);
-        Assert.True(clock.UtcNow < cooldownUntil,
+        Assert.True(clock.Elapsed < cooldownUntil,
             "The threshold deadline, not the cooldown expiry, must have driven the re-evaluation.");
     }
 
@@ -4440,7 +4440,7 @@ public sealed class WorkCycleTrackerTests
         tracker.Tick(TimeSpan.FromSeconds(6));
         Assert.Equal(WorkCyclePhase.ReminderVisible, tracker.CurrentPhase);
 
-        var cooldownUntil = clock.UtcNow + TimeSpan.FromSeconds(30);
+        var cooldownUntil = clock.Elapsed + TimeSpan.FromSeconds(30);
         tracker.Ignore();
 
         // Activity is unavailable across the armed threshold deadline: nothing
@@ -4712,9 +4712,16 @@ public sealed class WorkCycleTrackerTests
     private sealed class FakeClock : IClock
     {
         private DateTimeOffset utcNow = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        private TimeSpan elapsed;
 
         public DateTimeOffset UtcNow => utcNow;
 
-        public void Advance(TimeSpan duration) => utcNow += duration;
+        public TimeSpan Elapsed => elapsed;
+
+        public void Advance(TimeSpan duration)
+        {
+            utcNow += duration;
+            elapsed += duration;
+        }
     }
 }

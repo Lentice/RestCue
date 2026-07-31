@@ -14,8 +14,9 @@ separate configurable setting (range 1–60 minutes).
 
 ## Decision
 
-WorkCycleTracker owns a single `DateTimeOffset? cooldownUntil` field expressed as an
-`IClock`-based deadline, not a UI timer. The field is set on Ignore and AutoDismissed,
+WorkCycleTracker owns a single `TimeSpan? cooldownUntil` field expressed as an
+`IClock`-based deadline, not a UI timer. It is a point on the monotonic elapsed-time
+timeline (ADR-0008); it was wall-clock until issue #40. The field is set on Ignore and AutoDismissed,
 cleared when a reminder is shown (EnterReminderVisible), idle is entered, or the
 cycle is reset.
 
@@ -30,7 +31,7 @@ caps). The retry gate is independent from the work-interval condition: a supplie
 `nextDebtDeadline` can trigger re-evaluation even if the ordinary work interval
 since the last visible attempt has not elapsed.
 
-A public `SetNextDebtDeadline(DateTimeOffset?)` method exposes the seam for issue #14
+A public `SetNextDebtDeadline(TimeSpan?)` method exposes the seam for issue #14
 (debt-level calculation). The supplied deadline is stored only while `cooldownUntil`
 is active; calling it without an active cooldown clears the stored deadline. #14
 calls this method to supply the time at which the next debt threshold will be
@@ -110,7 +111,7 @@ reason, the safety-net recomputation must not push a deadline that has already c
 out into the future; it would otherwise skip the very crossing the deadline was armed
 for, because debt evaluation runs before the retry gate within a single tick.
 
-Because the deadline is wall-clock while `AccumulatedWorkTime` is not, the two can
+Because the deadline advances with elapsed time while `AccumulatedWorkTime` does not, the two can
 drift apart by the work that a phase transition does not credit — `Ignore` and
 `TryAutoDismiss` both drop their accumulation bookkeeping, costing one tick. The
 deadline therefore lands at or slightly before the threshold. Arriving early is

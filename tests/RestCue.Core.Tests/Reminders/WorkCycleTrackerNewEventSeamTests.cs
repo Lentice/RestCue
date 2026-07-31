@@ -208,7 +208,7 @@ public sealed class WorkCycleTrackerNewEventSeamTests
         var clock = new FakeClock();
         var tracker = CreateTracker(clock);
         tracker.SetForceAllowPopup(true);
-        DateTimeOffset? capturedDuringCooldownEnded = null;
+        TimeSpan? capturedDuringCooldownEnded = null;
         int cooldownEndedCount = 0;
         tracker.CooldownEnded += (_, _) =>
         {
@@ -366,7 +366,14 @@ public sealed class WorkCycleTrackerNewEventSeamTests
     private sealed class FakeClock : IClock
     {
         private DateTimeOffset utcNow = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        private TimeSpan elapsed;
         public DateTimeOffset UtcNow => utcNow;
-        public void Advance(TimeSpan duration) => utcNow += duration;
+
+        public TimeSpan Elapsed => elapsed;
+        public void Advance(TimeSpan duration)
+        {
+            utcNow += duration;
+            elapsed += duration;
+        }
     }
 }

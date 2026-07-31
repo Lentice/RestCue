@@ -107,5 +107,7 @@ public sealed class ApplicationStartupEngineFallbackTests
     private sealed class FakeClock : IClock
     {
         public DateTimeOffset UtcNow => new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
+        public TimeSpan Elapsed => TimeSpan.Zero;
     }
 }

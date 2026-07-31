@@ -57,7 +57,7 @@ The tracker owns a `RestDebtLevel` property and a
   when coming from a non-zero level.
 - Repeated reset at the same level emits nothing.
 - The debt deadline is updated on level change: the next threshold's remaining
-  work time is expressed as a wall-clock deadline via the existing
+  work time is expressed as a monotonic elapsed-time deadline via the existing
   `SetNextDebtDeadline` seam (see ADR-0003). This ensures that during
   cooldown, crossing a debt threshold triggers a normal reminder re-evaluation
   even if the retry cooldown has not expired.
@@ -65,8 +65,8 @@ The tracker owns a `RestDebtLevel` property and a
 ### Debt deadline integration with cooldown
 
 When cooldown is active and the debt level changes, `UpdateDebtDeadline()`
-computes a new `nextDebtDeadline` wall-clock value:
-`clock.UtcNow + remainingEffectiveWorkToNextThreshold`. The existing
+computes a new `nextDebtDeadline` on the monotonic timeline:
+`clock.Elapsed + remainingEffectiveWorkToNextThreshold` (ADR-0008). The existing
 `EarlierOf(cooldownUntil, nextDebtDeadline)` logic in
 `TryEnterPendingReminderFromWorking` picks whichever expires first.
 

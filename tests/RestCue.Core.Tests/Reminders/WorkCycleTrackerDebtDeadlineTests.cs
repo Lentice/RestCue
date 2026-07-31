@@ -40,7 +40,7 @@ public sealed class WorkCycleTrackerDebtDeadlineTests
 
         Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
         Assert.Null(tracker.CooldownUntil);
-        Assert.True(clock.UtcNow < cooldownUntil!.Value,
+        Assert.True(clock.Elapsed < cooldownUntil!.Value,
             "The threshold crossing, not the cooldown expiry, must have driven the re-evaluation.");
 
         // Ignore() ends the current attempt and drops its accumulation bookkeeping, so
@@ -76,7 +76,7 @@ public sealed class WorkCycleTrackerDebtDeadlineTests
 
         Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
         Assert.Null(tracker.CooldownUntil);
-        Assert.True(clock.UtcNow < cooldownUntil!.Value,
+        Assert.True(clock.Elapsed < cooldownUntil!.Value,
             "The threshold crossing, not the cooldown expiry, must have driven the re-evaluation.");
     }
 
@@ -106,7 +106,7 @@ public sealed class WorkCycleTrackerDebtDeadlineTests
         var cooldownUntil = tracker.CooldownUntil!.Value;
 
         // There is no further threshold, so nothing may pre-empt the cooldown.
-        while (clock.UtcNow < cooldownUntil - TimeSpan.FromSeconds(1))
+        while (clock.Elapsed < cooldownUntil - TimeSpan.FromSeconds(1))
         {
             clock.Advance(TimeSpan.FromSeconds(1));
             tracker.Tick(TimeSpan.Zero);
@@ -284,9 +284,16 @@ public sealed class WorkCycleTrackerDebtDeadlineTests
     private sealed class FakeClock : IClock
     {
         private DateTimeOffset utcNow = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        private TimeSpan elapsed;
 
         public DateTimeOffset UtcNow => utcNow;
 
-        public void Advance(TimeSpan duration) => utcNow += duration;
+        public TimeSpan Elapsed => elapsed;
+
+        public void Advance(TimeSpan duration)
+        {
+            utcNow += duration;
+            elapsed += duration;
+        }
     }
 }

@@ -6,7 +6,7 @@ public sealed class BreakGuideSession : IBreakGuide
 {
     private readonly IClock clock;
     private TimeSpan duration;
-    private DateTimeOffset startedUtc;
+    private TimeSpan startedElapsed;
     private bool completedFired;
     private bool middleFired;
     private TaskCompletionSource<BreakResult>? tcs;
@@ -36,7 +36,7 @@ public sealed class BreakGuideSession : IBreakGuide
             return;
 
         Phase = BreakGuidePhase.Running;
-        startedUtc = clock.UtcNow;
+        startedElapsed = clock.Elapsed;
         CueChanged?.Invoke(this, BreakGuideCue.Start);
     }
 
@@ -59,7 +59,7 @@ public sealed class BreakGuideSession : IBreakGuide
         if (Phase != BreakGuidePhase.Running)
             return;
 
-        var elapsed = clock.UtcNow - startedUtc;
+        var elapsed = clock.Elapsed - startedElapsed;
 
         if (!middleFired && elapsed >= duration / 2)
         {
