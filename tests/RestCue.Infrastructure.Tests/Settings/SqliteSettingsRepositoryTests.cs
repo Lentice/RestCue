@@ -144,6 +144,49 @@ public sealed class SqliteSettingsRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task FocusModeDuration_round_trips_through_save_and_load()
+    {
+        string databasePath = Path.Combine(directory, "restcue.db");
+        var saved = AppSettings.Default with
+        {
+            FocusModeDuration = TimeSpan.FromMinutes(90),
+        };
+
+        var repository = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+        await repository.SaveAsync(saved);
+
+        SettingsLoadResult result = await repository.LoadAsync();
+
+        Assert.Equal(TimeSpan.FromMinutes(90), result.Settings.FocusModeDuration);
+    }
+
+    [Fact]
+    public async Task Stored_out_of_range_FocusModeDuration_degrades_to_defaults()
+    {
+        string databasePath = Path.Combine(directory, "restcue.db");
+        var repository = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());
+        await repository.SaveAsync(AppSettings.Default);
+
+        string jsonWithBadFocusModeDuration =
+            /* language=json */ """{"schemaVersion":2,"focusModeDuration":"-00:10:00"}""";
+        await using (var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            await using var updateCommand = connection.CreateCommand();
+            updateCommand.CommandText =
+                "UPDATE settings SET value = @value WHERE key = 'app_settings';";
+            updateCommand.Parameters.AddWithValue("@value", jsonWithBadFocusModeDuration);
+            await updateCommand.ExecuteNonQueryAsync();
+        }
+
+        SettingsLoadResult result = await repository.LoadAsync();
+
+        Assert.Equal(AppSettings.Default, result.Settings);
+        Assert.True(result.RecoveredFromCorruption);
+        Assert.Null(result.CorruptBackupPath);
+    }
+
+    [Fact]
     public async Task Older_settings_without_RetryCooldown_loads_default_20_minutes()
     {
         string databasePath = Path.Combine(directory, "restcue.db");

@@ -3810,6 +3810,27 @@ public sealed class WorkCycleTrackerTests
     }
 
     [Fact]
+    public void Constructor_throws_for_non_positive_FocusModeDuration()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new WorkCycleTracker(
+            new FakeClock(), DefaultWorkInterval, DefaultIdleThreshold,
+            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration, DefaultPassiveBreak,
+            DefaultSnoozeDuration, DefaultReminderDisplayDuration, DefaultRetryCooldown,
+            focusModeDuration: TimeSpan.FromSeconds(-1)));
+    }
+
+    [Fact]
+    public void Constructor_accepts_default_FocusModeDuration()
+    {
+        var tracker = new WorkCycleTracker(
+            new FakeClock(), DefaultWorkInterval, DefaultIdleThreshold,
+            DefaultNaturalPause, DefaultMaxWait, DefaultBreakDuration, DefaultPassiveBreak,
+            DefaultSnoozeDuration, DefaultReminderDisplayDuration, DefaultRetryCooldown);
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
     public void SetNextDebtDeadline_accepts_deadline_and_it_blocks_until_deadline()
     {
         var clock = new FakeClock();

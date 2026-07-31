@@ -35,10 +35,15 @@ public static class SettingsSaveMessage
         if (restartRequiringChanges.Count == 0)
             return AllActive;
 
-        var names = restartRequiringChanges.Select(Describe);
+        var names = restartRequiringChanges.Select(DisplayNameFor);
         return $"設定已儲存。下列設定將於下次啟動時生效：{string.Join("、", names)}。其餘設定已立即生效。";
     }
 
-    private static string Describe(string field) =>
+    /// <summary>
+    /// The user-facing label for a settings field, or the raw property name when the field
+    /// has no entry. Also used when a validation error has no dedicated inline error box and
+    /// has to be reported in the status area, so the user reads a label rather than a symbol.
+    /// </summary>
+    public static string DisplayNameFor(string field) =>
         DisplayNames.TryGetValue(field, out string? name) ? name : field;
 }

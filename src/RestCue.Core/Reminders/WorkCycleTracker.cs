@@ -79,6 +79,9 @@ public sealed class WorkCycleTracker
         ValidateThreshold(reminderDisplayDuration, nameof(reminderDisplayDuration));
         ValidateThreshold(retryCooldown, nameof(retryCooldown));
 
+        var effectiveFocusModeDuration = focusModeDuration == default ? TimeSpan.FromMinutes(60) : focusModeDuration;
+        ValidateThreshold(effectiveFocusModeDuration, nameof(focusModeDuration));
+
         if (passiveBreakThreshold >= idleThreshold)
             throw new ArgumentOutOfRangeException(
                 nameof(passiveBreakThreshold), passiveBreakThreshold,
@@ -104,7 +107,7 @@ public sealed class WorkCycleTracker
         this.snoozeDuration = snoozeDuration;
         this.reminderDisplayDuration = reminderDisplayDuration;
         this.retryCooldown = retryCooldown;
-        this.focusModeDuration = focusModeDuration == default ? TimeSpan.FromMinutes(60) : focusModeDuration;
+        this.focusModeDuration = effectiveFocusModeDuration;
     }
 
     public WorkCyclePhase CurrentPhase { get; private set; } = WorkCyclePhase.Working;

@@ -350,4 +350,71 @@ public sealed class AppSettingsValidatorTests
         Assert.Contains(errors, e => e.Field == "DebtLevel2Threshold");
         Assert.True(errors.Count >= 2);
     }
+
+    [Fact]
+    public void FocusModeDuration_below_minimum_is_invalid()
+    {
+        AppSettings settings = AppSettings.Default with
+        {
+            FocusModeDuration = TimeSpan.FromMinutes(9),
+        };
+        var validator = new AppSettingsValidator();
+
+        IReadOnlyList<SettingsValidationError> errors = validator.Validate(settings);
+
+        Assert.Contains(errors, e => e.Field == "FocusModeDuration");
+    }
+
+    [Fact]
+    public void FocusModeDuration_above_maximum_is_invalid()
+    {
+        AppSettings settings = AppSettings.Default with
+        {
+            FocusModeDuration = TimeSpan.FromMinutes(121),
+        };
+        var validator = new AppSettingsValidator();
+
+        IReadOnlyList<SettingsValidationError> errors = validator.Validate(settings);
+
+        Assert.Contains(errors, e => e.Field == "FocusModeDuration");
+    }
+
+    [Fact]
+    public void FocusModeDuration_at_minimum_is_valid()
+    {
+        AppSettings settings = AppSettings.Default with
+        {
+            FocusModeDuration = TimeSpan.FromMinutes(10),
+        };
+        var validator = new AppSettingsValidator();
+
+        IReadOnlyList<SettingsValidationError> errors = validator.Validate(settings);
+
+        Assert.DoesNotContain(errors, e => e.Field == "FocusModeDuration");
+    }
+
+    [Fact]
+    public void FocusModeDuration_at_maximum_is_valid()
+    {
+        AppSettings settings = AppSettings.Default with
+        {
+            FocusModeDuration = TimeSpan.FromMinutes(120),
+        };
+        var validator = new AppSettingsValidator();
+
+        IReadOnlyList<SettingsValidationError> errors = validator.Validate(settings);
+
+        Assert.DoesNotContain(errors, e => e.Field == "FocusModeDuration");
+    }
+
+    [Fact]
+    public void FocusModeDuration_default_is_valid()
+    {
+        AppSettings settings = AppSettings.Default;
+        var validator = new AppSettingsValidator();
+
+        IReadOnlyList<SettingsValidationError> errors = validator.Validate(settings);
+
+        Assert.DoesNotContain(errors, e => e.Field == "FocusModeDuration");
+    }
 }

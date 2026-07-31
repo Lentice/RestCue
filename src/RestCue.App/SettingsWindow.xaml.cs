@@ -541,8 +541,12 @@ public sealed partial class SettingsWindow : Window
             }
             else
             {
+                // No inline error box for this field, so it is reported in the status area.
+                // Lead with the user-facing label; the raw property name in error.Message
+                // means nothing to a user reading Chinese.
                 if (StatusMessage.Text.Length < 200)
-                    StatusMessage.Text += $"\n{error.Message}";
+                    StatusMessage.Text +=
+                        $"\n{SettingsSaveMessage.DisplayNameFor(error.Field)}：{error.Message}";
             }
         }
     }

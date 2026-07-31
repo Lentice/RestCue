@@ -44,6 +44,23 @@ public sealed class SettingsSaveMessageTests
     }
 
     [Fact]
+    public void FocusModeDuration_has_a_display_name_for_validation_errors()
+    {
+        // The field has no inline error box, so a validation failure is reported in the
+        // status area and must name the field in the user's language.
+        string label = SettingsSaveMessage.DisplayNameFor(nameof(AppSettings.FocusModeDuration));
+
+        Assert.Equal("專注模式長度", label);
+        Assert.NotEqual(nameof(AppSettings.FocusModeDuration), label);
+    }
+
+    [Fact]
+    public void An_unmapped_field_falls_back_to_its_property_name()
+    {
+        Assert.Equal("NotASetting", SettingsSaveMessage.DisplayNameFor("NotASetting"));
+    }
+
+    [Fact]
     public void A_named_change_still_confirms_that_the_rest_is_active()
     {
         string message = SettingsSaveMessage.Build([nameof(AppSettings.WorkInterval)]);
