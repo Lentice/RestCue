@@ -92,10 +92,10 @@ public sealed class WorkCycleTracker
 
         this.clock = clock;
         this.workInterval = workInterval;
-        this.effectiveWorkInterval = workInterval;
-        this.debtLevel2Threshold = l2;
-        this.debtLevel3Threshold = l3;
-        this.debtLevel4Threshold = l4;
+        effectiveWorkInterval = workInterval;
+        debtLevel2Threshold = l2;
+        debtLevel3Threshold = l3;
+        debtLevel4Threshold = l4;
         this.idleThreshold = idleThreshold;
         this.naturalPauseThreshold = naturalPauseThreshold;
         this.maximumReminderWait = maximumReminderWait;
@@ -355,8 +355,14 @@ public sealed class WorkCycleTracker
                 break;
 
             case WorkCyclePhase.Idle:
-            case WorkCyclePhase.Paused:
             case WorkCyclePhase.Disabled:
+                break;
+
+            case WorkCyclePhase.Paused:
+                if (pauseUntilUtc.HasValue && now >= pauseUntilUtc.Value)
+                {
+                    Resume();
+                }
                 break;
         }
     }

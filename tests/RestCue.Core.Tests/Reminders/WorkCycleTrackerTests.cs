@@ -2972,6 +2972,102 @@ public sealed class WorkCycleTrackerTests
     }
 
     [Fact]
+    public void TickActivityUnavailable_timed_pause_expires_after_deadline()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        var duration = TimeSpan.FromSeconds(10);
+        tracker.Pause(duration);
+
+        int resumed = 0;
+        tracker.Resumed += (_, _) => resumed++;
+
+        clock.Advance(TimeSpan.FromSeconds(11));
+        tracker.TickActivityUnavailable();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(1, resumed);
+    }
+
+    [Fact]
+    public void TickActivityUnavailable_timed_pause_stays_paused_before_deadline()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Pause(TimeSpan.FromSeconds(10));
+
+        clock.Advance(TimeSpan.FromSeconds(9));
+        tracker.TickActivityUnavailable();
+
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void TickActivityUnavailable_timed_pause_expires_at_exact_deadline()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Pause(TimeSpan.FromSeconds(10));
+
+        int resumed = 0;
+        tracker.Resumed += (_, _) => resumed++;
+
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.TickActivityUnavailable();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(1, resumed);
+    }
+
+    [Fact]
+    public void Tick_timed_pause_expires_after_deadline()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        var duration = TimeSpan.FromSeconds(10);
+        tracker.Pause(duration);
+
+        int resumed = 0;
+        tracker.Resumed += (_, _) => resumed++;
+
+        clock.Advance(TimeSpan.FromSeconds(11));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(1, resumed);
+    }
+
+    [Fact]
+    public void Tick_timed_pause_stays_paused_before_deadline()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Pause(TimeSpan.FromSeconds(10));
+
+        clock.Advance(TimeSpan.FromSeconds(9));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.Paused, tracker.CurrentPhase);
+    }
+
+    [Fact]
+    public void Tick_timed_pause_expires_at_exact_deadline()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock);
+        tracker.Pause(TimeSpan.FromSeconds(10));
+
+        int resumed = 0;
+        tracker.Resumed += (_, _) => resumed++;
+
+        clock.Advance(TimeSpan.FromSeconds(10));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(1, resumed);
+    }
+
+    [Fact]
     public void TickActivityUnavailable_in_FocusMode_preserves_phase()
     {
         var clock = new FakeClock();
@@ -3201,7 +3297,7 @@ public sealed class WorkCycleTrackerTests
 
         ReachReminderVisible(tracker, clock);
         tracker.Ignore();
-        var ignoreTime = clock.UtcNow;
+        _ = clock.UtcNow;
 
         clock.Advance(TimeSpan.FromSeconds(15));
         tracker.Tick(TimeSpan.Zero);
