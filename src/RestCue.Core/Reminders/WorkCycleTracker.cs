@@ -399,14 +399,13 @@ public sealed class WorkCycleTracker
         if (CurrentPhase != WorkCyclePhase.BreakInProgress)
             return;
 
-        CurrentPhase = AccumulatedWorkTime >= WorkCycleThreshold
-            ? WorkCyclePhase.PendingReminder
-            : WorkCyclePhase.Working;
-
-        if (CurrentPhase == WorkCyclePhase.PendingReminder)
-            pendingSinceUtc = clock.UtcNow;
-
+        lastTickUtc = null;
+        wasWorking = false;
         breakStartUtc = null;
+
+        if (!TryEnterPendingReminderFromWorking(clock.UtcNow))
+            CurrentPhase = WorkCyclePhase.Working;
+
         BreakCancelled?.Invoke(this, EventArgs.Empty);
     }
 

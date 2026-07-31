@@ -4444,6 +4444,114 @@ public sealed class WorkCycleTrackerTests
     }
 
     [Fact]
+    public void CancelBreak_does_not_credit_break_duration_as_work_time()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+        var savedAccum = tracker.AccumulatedWorkTime;
+        Assert.NotEqual(TimeSpan.Zero, savedAccum);
+
+        tracker.StartBreak();
+        Assert.Equal(WorkCyclePhase.BreakInProgress, tracker.CurrentPhase);
+
+        clock.Advance(TimeSpan.FromSeconds(15));
+        tracker.CancelBreak();
+
+        Assert.Equal(savedAccum, tracker.AccumulatedWorkTime);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(savedAccum, tracker.AccumulatedWorkTime);
+
+        clock.Advance(TimeSpan.FromSeconds(2));
+        tracker.Tick(TimeSpan.Zero);
+        Assert.Equal(savedAccum + TimeSpan.FromSeconds(2), tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
+    public void CancelBreak_with_active_cooldown_returns_to_Working()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(5),
+            retryCooldown: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+        tracker.Ignore();
+        Assert.NotNull(tracker.CooldownUntil);
+        var savedAccum = tracker.AccumulatedWorkTime;
+
+        tracker.ManualStartBreak();
+        Assert.Equal(WorkCyclePhase.BreakInProgress, tracker.CurrentPhase);
+
+        clock.Advance(TimeSpan.FromSeconds(3));
+        tracker.CancelBreak();
+
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+        Assert.Equal(savedAccum, tracker.AccumulatedWorkTime);
+        Assert.NotNull(tracker.CooldownUntil);
+    }
+
+    [Fact]
+    public void CancelBreak_with_active_cooldown_but_debt_deadline_passed_enters_PendingReminder()
+    {
+        var clock = new FakeClock();
+        var tracker = new WorkCycleTracker(
+            clock,
+            workInterval: TimeSpan.FromSeconds(10),
+            idleThreshold: TimeSpan.FromHours(1),
+            naturalPauseThreshold: TimeSpan.FromSeconds(5),
+            maximumReminderWait: TimeSpan.FromHours(1),
+            breakDuration: TimeSpan.FromMinutes(10),
+            passiveBreakThreshold: TimeSpan.FromSeconds(30),
+            snoozeDuration: TimeSpan.FromMinutes(5),
+            reminderDisplayDuration: TimeSpan.FromSeconds(30),
+            retryCooldown: TimeSpan.FromSeconds(30),
+            debtLevel2: TimeSpan.FromSeconds(15),
+            debtLevel3: TimeSpan.FromSeconds(20),
+            debtLevel4: TimeSpan.FromHours(4));
+        tracker.SetForceAllowPopup(true);
+
+        ReachReminderVisible(tracker, clock);
+        tracker.Ignore();
+        Assert.NotNull(tracker.CooldownUntil);
+
+        tracker.ManualStartBreak();
+        Assert.Equal(WorkCyclePhase.BreakInProgress, tracker.CurrentPhase);
+
+        clock.Advance(TimeSpan.FromSeconds(20));
+        tracker.CancelBreak();
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.Null(tracker.CooldownUntil);
+    }
+
+    [Fact]
+    public void CancelBreak_with_no_cooldown_enters_PendingReminder()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(30));
+
+        ReachReminderVisible(tracker, clock);
+        var savedAccum = tracker.AccumulatedWorkTime;
+
+        tracker.StartBreak();
+        Assert.Equal(WorkCyclePhase.BreakInProgress, tracker.CurrentPhase);
+
+        tracker.CancelBreak();
+
+        Assert.Equal(WorkCyclePhase.PendingReminder, tracker.CurrentPhase);
+        Assert.Equal(savedAccum, tracker.AccumulatedWorkTime);
+    }
+
+    [Fact]
     public void Break_completion_still_resets_need()
     {
         var clock = new FakeClock();
