@@ -3,12 +3,14 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using RestCue.Core.Settings;
+using RestCue.Infrastructure.Activity;
 
 namespace RestCue.App;
 
 public partial class ReminderWindow : Window
 {
     private readonly DispatcherTimer breakGuideTimer;
+    private readonly IFullscreenWin32Api win32 = new FullscreenWin32Api();
     private bool isBreakStarting;
 
     public event EventHandler? BreakRequested;
@@ -149,7 +151,7 @@ public partial class ReminderWindow : Window
     {
         base.OnSourceInitialized(e);
         var hwnd = new WindowInteropHelper(this).Handle;
-        int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+        int exStyle = win32.GetWindowLong(hwnd, GWL_EXSTYLE);
         SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
     }
 
@@ -160,14 +162,14 @@ public partial class ReminderWindow : Window
 
     private void PositionOnForegroundMonitorRightEdge()
     {
-        var hwnd = GetForegroundWindow();
+        var hwnd = win32.GetForegroundWindow();
         if (hwnd == IntPtr.Zero)
         {
             FallbackToPrimaryScreen();
             return;
         }
 
-        nint monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        nint monitor = win32.MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
         if (monitor == IntPtr.Zero)
         {
             FallbackToPrimaryScreen();
@@ -176,17 +178,23 @@ public partial class ReminderWindow : Window
 
         var monitorInfo = new MONITORINFO
         {
-            Size = Marshal.SizeOf<MONITORINFO>()
+            Size = System.Runtime.InteropServices.Marshal.SizeOf<MONITORINFO>()
         };
-        if (!GetMonitorInfo(monitor, ref monitorInfo))
+        if (!win32.GetMonitorInfo(monitor, ref monitorInfo))
         {
             FallbackToPrimaryScreen();
             return;
         }
 
         var workArea = monitorInfo.WorkRect;
-        var reminderHwnd = new WindowInteropHelper(this).EnsureHandle();
-        if (!GetWindowRect(reminderHwnd, out var windowRect))
+        var reminderHwnd = new WindowInteropHelper(this).Handle;
+        if (reminderHwnd == IntPtr.Zero)
+        {
+            FallbackToPrimaryScreen();
+            return;
+        }
+
+        if (!win32.GetWindowRect(reminderHwnd, out var windowRect))
         {
             FallbackToPrimaryScreen();
             return;
@@ -265,19 +273,7 @@ public partial class ReminderWindow : Window
     private const uint SWP_NOSIZE = 0x0001;
 
     [DllImport("user32.dll", SetLastError = false)]
-    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
-
-    [DllImport("user32.dll", SetLastError = false)]
     private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
-
-    [DllImport("user32.dll", SetLastError = false)]
-    private static extern IntPtr GetForegroundWindow();
-
-    [DllImport("user32.dll", SetLastError = false)]
-    private static extern nint MonitorFromWindow(IntPtr hwnd, uint dwFlags);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SetWindowPos(
@@ -289,23 +285,4 @@ public partial class ReminderWindow : Window
         int cy,
         uint flags);
 
-    [DllImport("user32.dll", SetLastError = false, CharSet = CharSet.Unicode)]
-    private static extern bool GetMonitorInfo(nint hMonitor, ref MONITORINFO lpmi);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MONITORINFO
-    {
-        public int Size;
-        public RECT MonitorRect;
-        public RECT WorkRect;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
 }
