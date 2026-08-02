@@ -301,7 +301,17 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        var window = new DataManagementWindow(usageEventRepository, settingsRepository);
+        var window = new DataManagementWindow(
+            usageEventRepository,
+            settingsRepository,
+            () =>
+            {
+                var maintenance = new SqliteUsageDataMaintenance(
+                    LocalSettingsPaths.DatabaseFile);
+                return eventWriter == null
+                    ? maintenance.ClearUsageHistoryAsync()
+                    : eventWriter.RunExclusiveAsync(() => maintenance.ClearUsageHistoryAsync());
+            });
         window.DataCleared += (_, _) =>
         {
             foreach (var statisticsWindow in Current.Windows.OfType<StatisticsWindow>())
@@ -356,16 +366,20 @@ public partial class App : System.Windows.Application
         if (ruleRepository == null || statusWindow == null)
             return;
 
+        int reload = ++applicationRulesReload;
         try
         {
             var loadedRules = await ruleRepository.LoadAllAsync();
-            statusWindow.UpdateApplicationRules(loadedRules);
+            if (reload == applicationRulesReload)
+                statusWindow.UpdateApplicationRules(loadedRules);
         }
         catch (Exception ex)
         {
             Trace.TraceError($"RestCue: failed to reload rules: {ex.Message}");
         }
     }
+
+    private int applicationRulesReload;
 
     private void OpenAboutWindow()
     {

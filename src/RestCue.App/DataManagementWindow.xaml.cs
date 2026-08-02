@@ -14,15 +14,18 @@ public sealed partial class DataManagementWindow : Window
 {
     private readonly IUsageEventRepository usageEventRepository;
     private readonly ISettingsRepository settingsRepository;
+    private readonly Func<Task<ClearResult>>? clearUsageHistory;
 
     public DataManagementWindow(
         IUsageEventRepository usageEventRepository,
-        ISettingsRepository settingsRepository)
+        ISettingsRepository settingsRepository,
+        Func<Task<ClearResult>>? clearUsageHistory = null)
     {
         ArgumentNullException.ThrowIfNull(usageEventRepository);
         ArgumentNullException.ThrowIfNull(settingsRepository);
         this.usageEventRepository = usageEventRepository;
         this.settingsRepository = settingsRepository;
+        this.clearUsageHistory = clearUsageHistory;
         InitializeComponent();
     }
 
@@ -96,9 +99,17 @@ public sealed partial class DataManagementWindow : Window
 
         try
         {
-            var maintenance = new SqliteUsageDataMaintenance(
-                Infrastructure.Settings.LocalSettingsPaths.DatabaseFile);
-            var result = await maintenance.ClearUsageHistoryAsync();
+            ClearResult result;
+            if (clearUsageHistory != null)
+            {
+                result = await clearUsageHistory();
+            }
+            else
+            {
+                var maintenance = new SqliteUsageDataMaintenance(
+                    Infrastructure.Settings.LocalSettingsPaths.DatabaseFile);
+                result = await maintenance.ClearUsageHistoryAsync();
+            }
 
             if (result.Succeeded)
             {

@@ -25,7 +25,7 @@ public sealed class BackgroundUsageEventWriter : IDisposable
         channel = Channel.CreateBounded<WriteRequest>(
             new BoundedChannelOptions(channelCapacity)
             {
-                FullMode = BoundedChannelFullMode.DropWrite
+                FullMode = BoundedChannelFullMode.Wait
             });
         cts = new CancellationTokenSource();
         consumerTask = ConsumeAsync(cts.Token);
@@ -33,8 +33,22 @@ public sealed class BackgroundUsageEventWriter : IDisposable
 
     public void Write(UsageEventType eventType, DateTimeOffset occurredUtc, UsageEventPayload? payload = null)
     {
-        if (!channel.Writer.TryWrite(new WriteRequest(eventType, occurredUtc, payload)))
+        if (!channel.Writer.TryWrite(WriteRequest.Event(eventType, occurredUtc, payload)))
             onError?.Invoke("RestCue: usage event channel full; event dropped.");
+    }
+
+    public async Task<T> RunExclusiveAsync<T>(Func<Task<T>> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        var completion = new TaskCompletionSource<object?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        await channel.Writer.WriteAsync(
+            WriteRequest.Exclusive(async () =>
+            {
+                completion.TrySetResult(await operation());
+            }, completion));
+        return (T)(await completion.Task.ConfigureAwait(false))!;
     }
 
     public void Dispose()
@@ -68,7 +82,21 @@ public sealed class BackgroundUsageEventWriter : IDisposable
         {
             try
             {
-                await repository.WriteAsync(request.EventType, request.OccurredUtc, request.Payload, CancellationToken.None);
+                if (request.Operation != null)
+                {
+                    try
+                    {
+                        await request.Operation();
+                    }
+                    catch (Exception exception)
+                    {
+                        request.Completion!.TrySetException(exception);
+                    }
+
+                    continue;
+                }
+
+                await repository.WriteAsync(request.EventType!.Value, request.OccurredUtc, request.Payload, ct);
             }
             catch
             {
@@ -77,5 +105,22 @@ public sealed class BackgroundUsageEventWriter : IDisposable
         }
     }
 
-    private sealed record WriteRequest(UsageEventType EventType, DateTimeOffset OccurredUtc, UsageEventPayload? Payload);
+    private sealed record WriteRequest(
+        UsageEventType? EventType,
+        DateTimeOffset OccurredUtc,
+        UsageEventPayload? Payload,
+        Func<Task>? Operation,
+        TaskCompletionSource<object?>? Completion)
+    {
+        public static WriteRequest Event(
+            UsageEventType eventType,
+            DateTimeOffset occurredUtc,
+            UsageEventPayload? payload) =>
+            new(eventType, occurredUtc, payload, null, null);
+
+        public static WriteRequest Exclusive(
+            Func<Task> operation,
+            TaskCompletionSource<object?> completion) =>
+            new(null, default, null, operation, completion);
+    }
 }

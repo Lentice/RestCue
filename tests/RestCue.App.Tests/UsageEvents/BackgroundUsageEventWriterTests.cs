@@ -153,6 +153,28 @@ public sealed class BackgroundUsageEventWriterTests : IDisposable
     }
 
     [Fact]
+    public async Task RunExclusiveAsync_runs_between_events_in_queue_order()
+    {
+        var order = new List<string>();
+        var fake = new FakeUsageEventRepository(onWrite: () => order.Add("event"));
+        using var writer = new BackgroundUsageEventWriter(fake);
+
+        writer.Write(UsageEventType.BreakStarted, DateTimeOffset.UtcNow);
+        int result = await writer.RunExclusiveAsync(async () =>
+        {
+            order.Add("clear");
+            await Task.Yield();
+            return 7;
+        });
+        writer.Write(UsageEventType.BreakCompleted, DateTimeOffset.UtcNow);
+
+        writer.Dispose();
+
+        Assert.Equal(7, result);
+        Assert.Equal(["event", "clear", "event"], order);
+    }
+
+    [Fact]
     public void Wire_unwire_re_wire_does_not_duplicate_writes()
     {
         var fake = new FakeUsageEventRepository();
