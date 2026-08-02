@@ -91,7 +91,8 @@ public partial class ReminderWindow : Window
         {
             GuideVisual.BeginAnimation(
                 System.Windows.UIElement.OpacityProperty, DiscretePulse);
-            PhaseText.Text = "休息中⋯ 已完成 0%";
+            PhaseText.Text = RestCue.Core.Reminders.BreakGuideText.ForCue(
+                RestCue.Core.Reminders.BreakGuideCue.Middle);
         }
         else
         {

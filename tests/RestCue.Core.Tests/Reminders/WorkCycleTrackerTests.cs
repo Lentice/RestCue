@@ -2972,6 +2972,15 @@ public sealed class WorkCycleTrackerTests
     }
 
     [Fact]
+    public void Pause_rejects_negative_duration()
+    {
+        var tracker = CreateTracker();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => tracker.Pause(TimeSpan.FromSeconds(-1)));
+        Assert.Equal(WorkCyclePhase.Working, tracker.CurrentPhase);
+    }
+
+    [Fact]
     public void TickActivityUnavailable_timed_pause_expires_after_deadline()
     {
         var clock = new FakeClock();

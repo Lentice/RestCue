@@ -461,6 +461,9 @@ public sealed class WorkCycleTracker
             throw new InvalidOperationException(
                 $"Cannot pause from phase {CurrentPhase}.");
 
+        if (pauseDuration < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(pauseDuration), "Pause duration cannot be negative.");
+
         CurrentPhase = WorkCyclePhase.Paused;
         pauseUntil = pauseDuration.HasValue ? clock.Elapsed + pauseDuration.Value : null;
         ClearReminderState();
