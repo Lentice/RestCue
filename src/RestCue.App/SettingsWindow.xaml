@@ -77,65 +77,92 @@
 
                                 <UniformGrid Columns="2">
                                     <StackPanel Style="{StaticResource SettingsFieldStyle}">
-                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="工作間隔（分鐘，10–60）" />
+                                        <TextBlock Style="{StaticResource FieldLabelStyle}"
+                                                   Text="工作間隔（分鐘，10–60）"
+                                                   ToolTip="累積有效工作時間達到此值後，提醒會在符合自然停頓或最長等待條件時顯示；數值越大，主動提醒間隔越長。" />
                                         <TextBox x:Name="WorkIntervalBox" Text="20" MaxLength="3"
                                                  Style="{StaticResource NumericFieldStyle}"
+                                                 ToolTip="累積有效工作時間達到此值後，提醒會在符合自然停頓或最長等待條件時顯示；數值越大，主動提醒間隔越長。"
                                                  AutomationProperties.Name="工作間隔，分鐘" />
                                         <TextBlock x:Name="WorkIntervalError" Style="{StaticResource ErrorTextStyle}" Visibility="Collapsed" />
                                     </StackPanel>
                                     <StackPanel Style="{StaticResource SettingsFieldStyle}">
-                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="自然停頓門檻（秒，2–30）" />
+                                        <TextBlock Style="{StaticResource FieldLabelStyle}"
+                                                   Text="自然停頓門檻（秒，2–30）"
+                                                   ToolTip="提醒待處理時，連續沒有輸入達到此時間後才會顯示提醒；數值越短，越容易在短暫停頓時收到提醒。" />
                                         <TextBox x:Name="NaturalPauseBox" Text="5" MaxLength="2"
                                                  Style="{StaticResource NumericFieldStyle}"
+                                                 ToolTip="提醒待處理時，連續沒有輸入達到此時間後才會顯示提醒；數值越短，越容易在短暫停頓時收到提醒。"
                                                  AutomationProperties.Name="自然停頓門檻，秒" />
                                         <TextBlock x:Name="NaturalPauseError" Style="{StaticResource ErrorTextStyle}" Visibility="Collapsed" />
                                     </StackPanel>
                                     <StackPanel Style="{StaticResource SettingsFieldStyle}">
-                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="最長提醒等待（分鐘，0–10）" />
+                                        <TextBlock Style="{StaticResource FieldLabelStyle}"
+                                                   Text="最長提醒等待（分鐘，0–10）"
+                                                   ToolTip="提醒已到期但尚未出現自然停頓時，最多等待此時間，避免提醒一直停在等待狀態。" />
                                         <TextBox x:Name="MaxReminderWaitBox" Text="3" MaxLength="2"
                                                  Style="{StaticResource NumericFieldStyle}"
+                                                 ToolTip="提醒已到期但尚未出現自然停頓時，最多等待此時間，避免提醒一直停在等待狀態。"
                                                  AutomationProperties.Name="最長提醒等待，分鐘" />
                                         <TextBlock x:Name="MaxReminderWaitError" Style="{StaticResource ErrorTextStyle}" Visibility="Collapsed" />
                                     </StackPanel>
                                     <StackPanel Style="{StaticResource SettingsFieldStyle}">
-                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="離開判斷時間（分鐘，1–10）" />
+                                        <TextBlock Style="{StaticResource FieldLabelStyle}"
+                                                   Text="離開判斷時間（分鐘，1–10）"
+                                                   ToolTip="連續沒有輸入達到此時間會判定為閒置，並重設本輪休息需求；必須大於被動休息門檻。" />
                                         <TextBox x:Name="IdleThresholdBox" Text="2" MaxLength="2"
                                                  Style="{StaticResource NumericFieldStyle}"
+                                                 ToolTip="連續沒有輸入達到此時間會判定為閒置，並重設本輪休息需求；必須大於被動休息門檻。"
                                                  AutomationProperties.Name="離開判斷時間，分鐘" />
                                         <TextBlock x:Name="IdleThresholdError" Style="{StaticResource ErrorTextStyle}" Visibility="Collapsed" />
                                     </StackPanel>
                                     <StackPanel Style="{StaticResource SettingsFieldStyle}">
-                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="被動休息門檻（秒，10–120）" />
+                                        <TextBlock Style="{StaticResource FieldLabelStyle}"
+                                                   Text="被動休息門檻（秒，10–120）"
+                                                   ToolTip="短暫沒有輸入達到此時間會暫停或隱藏提醒呈現，但不算完成休息，也不會重設休息需求；必須小於離開判斷時間。" />
                                         <TextBox x:Name="PassiveBreakBox" Text="20" MaxLength="3"
                                                  Style="{StaticResource NumericFieldStyle}"
+                                                 ToolTip="短暫沒有輸入達到此時間會暫停或隱藏提醒呈現，但不算完成休息，也不會重設休息需求；必須小於離開判斷時間。"
                                                  AutomationProperties.Name="被動休息門檻，秒" />
                                         <TextBlock x:Name="PassiveBreakError" Style="{StaticResource ErrorTextStyle}" Visibility="Collapsed" />
                                     </StackPanel>
                                     <StackPanel Style="{StaticResource SettingsFieldStyle}">
-                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="休息長度（秒，10–60）" />
+                                        <TextBlock Style="{StaticResource FieldLabelStyle}"
+                                                   Text="休息長度（秒，10–60）"
+                                                   ToolTip="每次開始休息引導時，這是預計持續的休息時間；完成休息後才會重設本輪休息需求。" />
                                         <TextBox x:Name="BreakDurationBox" Text="20" MaxLength="2"
                                                  Style="{StaticResource NumericFieldStyle}"
+                                                 ToolTip="每次開始休息引導時，這是預計持續的休息時間；完成休息後才會重設本輪休息需求。"
                                                  AutomationProperties.Name="休息長度，秒" />
                                         <TextBlock x:Name="BreakDurationError" Style="{StaticResource ErrorTextStyle}" Visibility="Collapsed" />
                                     </StackPanel>
                                     <StackPanel Style="{StaticResource SettingsFieldStyle}">
-                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="延後長度（分鐘，1–30）" />
+                                        <TextBlock Style="{StaticResource FieldLabelStyle}"
+                                                   Text="延後長度（分鐘，1–30）"
+                                                   ToolTip="將這次提醒延後此時間，只影響目前提醒，不會重設累積的休息需求；它與提醒重試冷卻不同。" />
                                         <TextBox x:Name="SnoozeDurationBox" Text="5" MaxLength="2"
                                                  Style="{StaticResource NumericFieldStyle}"
+                                                 ToolTip="將這次提醒延後此時間，只影響目前提醒，不會重設累積的休息需求；它與提醒重試冷卻不同。"
                                                  AutomationProperties.Name="延後長度，分鐘" />
                                         <TextBlock x:Name="SnoozeDurationError" Style="{StaticResource ErrorTextStyle}" Visibility="Collapsed" />
                                     </StackPanel>
                                     <StackPanel Style="{StaticResource SettingsFieldStyle}">
-                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="提醒顯示時間（秒，5–120）" />
+                                        <TextBlock Style="{StaticResource FieldLabelStyle}"
+                                                   Text="提醒顯示時間（秒，5–120）"
+                                                   ToolTip="提醒視窗顯示後，若沒有其他操作，最多維持此時間，之後會自動結束這次提醒嘗試。" />
                                         <TextBox x:Name="ReminderDisplayBox" Text="30" MaxLength="3"
                                                  Style="{StaticResource NumericFieldStyle}"
+                                                 ToolTip="提醒視窗顯示後，若沒有其他操作，最多維持此時間，之後會自動結束這次提醒嘗試。"
                                                  AutomationProperties.Name="提醒顯示時間，秒" />
                                         <TextBlock x:Name="ReminderDisplayError" Style="{StaticResource ErrorTextStyle}" Visibility="Collapsed" />
                                     </StackPanel>
                                     <StackPanel Style="{StaticResource SettingsFieldStyle}">
-                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="提醒重試冷卻（分鐘，1–60）" />
+                                        <TextBlock Style="{StaticResource FieldLabelStyle}"
+                                                   Text="提醒重試冷卻（分鐘，1–60）"
+                                                   ToolTip="通常等待此時間再重新評估主動提醒；休息需求仍會累積，較早的債務門檻可能提前觸發評估，且它與延後長度不同。" />
                                         <TextBox x:Name="RetryCooldownBox" Text="20" MaxLength="2"
                                                  Style="{StaticResource NumericFieldStyle}"
+                                                 ToolTip="通常等待此時間再重新評估主動提醒；休息需求仍會累積，較早的債務門檻可能提前觸發評估，且它與延後長度不同。"
                                                  AutomationProperties.Name="提醒重試冷卻，分鐘" />
                                         <TextBlock x:Name="RetryCooldownError" Style="{StaticResource ErrorTextStyle}" Visibility="Collapsed" />
                                     </StackPanel>
@@ -156,23 +183,29 @@
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <StackPanel Grid.Column="0" Style="{StaticResource SettingsFieldStyle}">
-                                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="Level 2（分鐘）" />
+                                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="Level 2（分鐘）"
+                                                   ToolTip="累積有效工作時間達到此門檻後，休息債務進入 Level 2，系統列圖示會顯示更明顯的休息提醒；門檻必須高於工作間隔（Level 1）。" />
                                         <TextBox x:Name="DebtLevel2Box" Style="{StaticResource NumericFieldStyle}"
                                                  Text="35" MaxLength="3" Margin="0,5,0,0"
+                                                 ToolTip="累積有效工作時間達到此門檻後，休息債務進入 Level 2，系統列圖示會顯示更明顯的休息提醒；門檻必須高於工作間隔（Level 1）。"
                                                  AutomationProperties.Name="債務門檻 Level 2，分鐘" />
                                         <TextBlock x:Name="DebtLevel2Error" Style="{StaticResource ErrorTextStyle}" Visibility="Collapsed" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Style="{StaticResource SettingsFieldStyle}">
-                                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="Level 3（分鐘）" />
+                                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="Level 3（分鐘）"
+                                                   ToolTip="累積有效工作時間達到此門檻後，休息債務進入 Level 3，符合條件時可顯示邊緣浮窗；門檻必須高於 Level 2。" />
                                         <TextBox x:Name="DebtLevel3Box" Style="{StaticResource NumericFieldStyle}"
                                                  Text="45" MaxLength="3" Margin="0,5,0,0"
+                                                 ToolTip="累積有效工作時間達到此門檻後，休息債務進入 Level 3，符合條件時可顯示邊緣浮窗；門檻必須高於 Level 2。"
                                                  AutomationProperties.Name="債務門檻 Level 3，分鐘" />
                                         <TextBlock x:Name="DebtLevel3Error" Style="{StaticResource ErrorTextStyle}" Visibility="Collapsed" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="2">
-                                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="Level 4（分鐘）" />
+                                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="Level 4（分鐘）"
+                                                   ToolTip="累積有效工作時間達到此門檻後，休息債務進入 Level 4，符合使用者與情境設定時可加入輕提示音；門檻必須高於 Level 3。" />
                                         <TextBox x:Name="DebtLevel4Box" Style="{StaticResource NumericFieldStyle}"
                                                  Text="60" MaxLength="3" Margin="0,5,0,0"
+                                                 ToolTip="累積有效工作時間達到此門檻後，休息債務進入 Level 4，符合使用者與情境設定時可加入輕提示音；門檻必須高於 Level 3。"
                                                  AutomationProperties.Name="債務門檻 Level 4，分鐘" />
                                         <TextBlock x:Name="DebtLevel4Error" Style="{StaticResource ErrorTextStyle}" Visibility="Collapsed" />
                                     </StackPanel>
@@ -294,6 +327,12 @@
                                           Content="減少動畫效果" />
                                 <TextBlock Style="{StaticResource FieldHintStyle}"
                                            Text="啟用後，休息時的視覺引導僅顯示階段文字，不包含連續動畫。" />
+                                <CheckBox x:Name="DebtLevelTrayNotificationCheck"
+                                          Margin="0,12,0,0"
+                                          Content="顯示休息債務系統列提示"
+                                          ToolTip="進入 Level 1–4 時顯示一次 Windows 系統列氣泡提示；關閉後仍保留系統列圖示與 tooltip。" />
+                                <TextBlock Style="{StaticResource FieldHintStyle}"
+                                           Text="控制休息債務達到 Level 1–4 時的氣泡提示，不影響系統列圖示或其他提醒呈現。" />
                                 <CheckBox x:Name="LightTouchSoundCheck"
                                           Margin="0,12,0,0"
                                           Content="輕量提醒時播放提示音" />

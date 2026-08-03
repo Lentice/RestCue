@@ -25,6 +25,7 @@ public sealed class SqliteSettingsRepositoryTests : IDisposable
             DebtLevel3Threshold = TimeSpan.FromMinutes(50),
             DebtLevel4Threshold = TimeSpan.FromMinutes(60),
             CollectForegroundProcessNames = true,
+            DebtLevelTrayNotificationEnabled = false,
         };
 
         var firstRun = new SqliteSettingsRepository(databasePath, new AppSettingsValidator());

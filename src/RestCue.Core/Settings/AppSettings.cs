@@ -42,4 +42,6 @@ public sealed record AppSettings
 
     public bool LightTouchSoundEnabled { get; init; } = true;
 
+    public bool DebtLevelTrayNotificationEnabled { get; init; } = true;
+
 }

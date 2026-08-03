@@ -17,6 +17,7 @@ public sealed class RestartRequiredSettingsTests
     [InlineData(nameof(AppSettings.ReduceMotion))]
     [InlineData(nameof(AppSettings.BreakGuideMode))]
     [InlineData(nameof(AppSettings.LightTouchSoundEnabled))]
+    [InlineData(nameof(AppSettings.DebtLevelTrayNotificationEnabled))]
     [InlineData(nameof(AppSettings.SnoozeDuration))]
     public void Live_appliable_settings_are_not_restart_requiring(string field)
     {
@@ -33,6 +34,7 @@ public sealed class RestartRequiredSettingsTests
             ReduceMotion = true,
             BreakGuideMode = BreakGuideMode.Voice,
             LightTouchSoundEnabled = false,
+            DebtLevelTrayNotificationEnabled = false,
             SnoozeDuration = TimeSpan.FromMinutes(10),
         };
 

@@ -61,6 +61,33 @@ public sealed class TrayCueSuppressionTests
         Assert.Equal(0, sounds);
     }
 
+    [Theory]
+    [InlineData(RestDebtLevel.Level1)]
+    [InlineData(RestDebtLevel.Level2)]
+    [InlineData(RestDebtLevel.Level3)]
+    [InlineData(RestDebtLevel.Level4)]
+    public void Debt_level_notification_shows_a_tray_balloon_for_each_level(RestDebtLevel level)
+    {
+        var tray = new TrackingFakeTrayIcon();
+
+        App.ApplyDebtLevelNotificationToTray(tray, level, showNotification: true);
+
+        Assert.Equal(App.GetStatusTextForDebtLevel(level), tray.NotifiedTitle);
+        Assert.Contains("休息需求", tray.NotifiedText);
+    }
+
+    [Fact]
+    public void Debt_level_notification_can_be_disabled()
+    {
+        var tray = new TrackingFakeTrayIcon();
+
+        App.ApplyDebtLevelNotificationToTray(
+            tray, RestDebtLevel.Level2, showNotification: false);
+
+        Assert.Null(tray.NotifiedTitle);
+        Assert.Null(tray.NotifiedText);
+    }
+
     /// <summary>
     /// Calls the shipping handler. This test used to reimplement it, which meant the
     /// behaviour was untested while appearing covered.

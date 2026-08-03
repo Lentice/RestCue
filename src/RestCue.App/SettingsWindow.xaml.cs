@@ -63,6 +63,7 @@ public sealed partial class SettingsWindow : Window
 
         CollectProcessNamesCheck.IsChecked = currentSettings.CollectForegroundProcessNames;
         ReduceMotionCheck.IsChecked = currentSettings.ReduceMotion;
+        DebtLevelTrayNotificationCheck.IsChecked = currentSettings.DebtLevelTrayNotificationEnabled;
         LightTouchSoundCheck.IsChecked = currentSettings.LightTouchSoundEnabled;
 
         switch (currentSettings.BreakGuideMode)
@@ -457,6 +458,7 @@ public sealed partial class SettingsWindow : Window
         return currentSettings with
         {
             ReduceMotion = ReduceMotionCheck.IsChecked == true,
+            DebtLevelTrayNotificationEnabled = DebtLevelTrayNotificationCheck.IsChecked == true,
             LightTouchSoundEnabled = LightTouchSoundCheck.IsChecked == true,
             WorkInterval = TimeSpan.FromMinutes(workInterval),
             NaturalPauseThreshold = TimeSpan.FromSeconds(naturalPause),

@@ -920,6 +920,23 @@ public partial class App : System.Windows.Application
         if (CommandAvailabilityPolicy.IsActiveCycle(lastPhase))
         {
             trayIcon.SetStatusText(GetStatusTextForDebtLevel(e.Current));
+            ApplyDebtLevelNotificationToTray(
+                trayIcon,
+                e.Current,
+                startup?.CurrentSettings.DebtLevelTrayNotificationEnabled == true);
         }
+    }
+
+    internal static void ApplyDebtLevelNotificationToTray(
+        ITrayIcon tray, RestDebtLevel level, bool showNotification)
+    {
+        ArgumentNullException.ThrowIfNull(tray);
+
+        if (!showNotification || level == RestDebtLevel.Level0)
+            return;
+
+        tray.ShowLightTouchNotification(
+            GetStatusTextForDebtLevel(level),
+            "休息需求已提升，建議安排短暫休息。點擊系統列圖示查看詳情。");
     }
 }
