@@ -76,26 +76,38 @@
                     <Button x:Name="BreakNowButton"
                             Style="{StaticResource PrimaryButtonStyle}"
                             MinWidth="88"
-                            Content="立即休息" Click="OnBreakNowClick" />
+                            Content="立即休息"
+                            ToolTip="立即開始一段休息引導。"
+                            Click="OnBreakNowClick" />
                     <Button x:Name="PauseResumeButton"
                             Style="{StaticResource SecondaryButtonStyle}"
                             MinWidth="88"
-                            Content="暫停" Click="OnTogglePauseClick" Margin="8,0,0,0" />
+                            Content="暫停"
+                            ToolTip="暫停提醒與工作時間累積；再次點擊可繼續。"
+                            Click="OnTogglePauseClick" Margin="8,0,0,0" />
                     <Button x:Name="FocusButton"
                             Style="{StaticResource SecondaryButtonStyle}"
                             MinWidth="88"
-                            Content="專注模式" Click="OnToggleFocusClick" Margin="8,0,0,0" />
+                            Content="專注模式"
+                            ToolTip="暫時停止主動提醒，但仍持續累積工作時間與休息需求；結束後恢復提醒。"
+                            Click="OnToggleFocusClick" Margin="8,0,0,0" />
                     <Button x:Name="DisableButton"
                             Style="{StaticResource SecondaryButtonStyle}"
                             MinWidth="88"
-                            Content="停用提醒" Click="OnToggleDisableClick" Margin="8,0,0,0" />
+                            Content="停用提醒"
+                            ToolTip="停用提醒功能；再次點擊可重新啟用。"
+                            Click="OnToggleDisableClick" Margin="8,0,0,0" />
                 </WrapPanel>
 
                 <WrapPanel Margin="0,12,0,0" HorizontalAlignment="Center">
                     <Button Style="{StaticResource SecondaryButtonStyle}"
-                            Content="設定" Click="OnSettingsClick" MinWidth="88" />
+                            Content="設定"
+                            ToolTip="調整提醒節奏、休息引導、隱私與啟動選項。"
+                            Click="OnSettingsClick" MinWidth="88" />
                     <Button Style="{StaticResource SecondaryButtonStyle}"
-                            Content="今日統計" Click="OnStatisticsClick" Margin="8,0,0,0"
+                            Content="今日統計"
+                            ToolTip="查看今天的工作、休息與提醒統計。"
+                            Click="OnStatisticsClick" Margin="8,0,0,0"
                             MinWidth="88" />
                 </WrapPanel>
 

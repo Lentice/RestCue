@@ -175,6 +175,28 @@ public sealed class BackgroundUsageEventWriterTests : IDisposable
     }
 
     [Fact]
+    public async Task Dispose_returns_after_timeout_when_exclusive_operation_is_stuck()
+    {
+        var started = new ManualResetEventSlim();
+        var release = new ManualResetEventSlim();
+        using var writer = new BackgroundUsageEventWriter(new FakeUsageEventRepository());
+        var exclusive = writer.RunExclusiveAsync(async () =>
+        {
+            started.Set();
+            release.Wait();
+            return 7;
+        });
+
+        Assert.True(started.Wait(TimeSpan.FromSeconds(1)));
+        var dispose = Task.Run(writer.Dispose);
+
+        Assert.True(await Task.WhenAny(dispose, Task.Delay(TimeSpan.FromSeconds(3))) == dispose);
+
+        release.Set();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await exclusive);
+    }
+
+    [Fact]
     public void Wire_unwire_re_wire_does_not_duplicate_writes()
     {
         var fake = new FakeUsageEventRepository();

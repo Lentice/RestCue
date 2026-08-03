@@ -480,18 +480,32 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow, IWorkPha
         string pauseLabel = availability.ShowResume ? "繼續" : "暫停";
         string focusLabel = availability.ShowEndFocusMode ? "結束專注模式" : "專注模式";
         string disableLabel = availability.ShowEnable ? "啟用提醒" : "停用提醒";
+        string pauseToolTip = availability.ShowResume
+            ? "繼續提醒。"
+            : "暫停提醒與工作時間累積；再次點擊可繼續。";
+        string focusToolTip = availability.ShowEndFocusMode
+            ? "結束專注模式並恢復正常提醒流程。"
+            : "暫時停止主動提醒，但仍持續累積工作時間與休息需求；結束後恢復提醒。";
+        string disableToolTip = availability.ShowEnable
+            ? "重新啟用提醒功能。"
+            : "停用提醒功能；再次點擊可重新啟用。";
 
         FocusMenuItem.Header = focusLabel;
+        FocusMenuItem.ToolTip = focusToolTip;
         FocusMenuItem.IsEnabled = availability.FocusToggleEnabled;
         DisableMenuItem.Header = disableLabel;
+        DisableMenuItem.ToolTip = disableToolTip;
         DisableMenuItem.IsEnabled = availability.DisableToggleEnabled;
         BreakNowMenuItem.IsEnabled = availability.CanBreakNow;
 
         PauseResumeButton.Content = pauseLabel;
+        PauseResumeButton.ToolTip = pauseToolTip;
         PauseResumeButton.IsEnabled = availability.PauseToggleEnabled;
         FocusButton.Content = focusLabel;
+        FocusButton.ToolTip = focusToolTip;
         FocusButton.IsEnabled = availability.FocusToggleEnabled;
         DisableButton.Content = disableLabel;
+        DisableButton.ToolTip = disableToolTip;
         DisableButton.IsEnabled = availability.DisableToggleEnabled;
         BreakNowButton.IsEnabled = availability.CanBreakNow;
     }
@@ -549,12 +563,13 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow, IWorkPha
 
     private void CloseReminderIfOpen()
     {
+        if (workCycleTracker?.CurrentPhase == WorkCyclePhase.BreakInProgress)
+        {
+            workCycleTracker.CancelBreak();
+        }
+
         if (reminderWindow != null)
         {
-            if (workCycleTracker?.CurrentPhase == WorkCyclePhase.BreakInProgress)
-            {
-                workCycleTracker.CancelBreak();
-            }
             EndAudioGuide();
             audioCoordinator = null;
             reminderWindow.StopBreakGuide();
@@ -680,7 +695,13 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow, IWorkPha
     {
         // A reminder dismissed at the same moment as the click leaves nothing to start.
         if (!RunCommand("StartBreak", App.ExecuteStartBreak) || reminderWindow == null)
+        {
+            // Close a stale surface as well: its primary-action guard is intentionally
+            // held until the command succeeds, so leaving it open would make the visible
+            // reminder permanently unclickable after a phase race.
+            CloseReminderIfOpen();
             return;
+        }
 
         SetupBreakGuideSession(clock ?? new SystemClock(), workCycleTracker!.BreakDuration);
     }

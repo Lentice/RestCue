@@ -29,6 +29,7 @@
                                    Margin="0,4,0,10"
                                    Text="匯出 usage_events 到 JSON 檔，僅含允許的欄位。" />
                         <Button x:Name="ExportButton" Content="選擇目的地並匯出…"
+                                ToolTip="將本機使用資料匯出為 JSON 檔案。"
                                 Style="{StaticResource PrimaryButtonStyle}"
                                 HorizontalAlignment="Left"
                                 Click="ExportButton_Click" />
@@ -47,6 +48,7 @@
                                    Foreground="{StaticResource DangerTextBrush}"
                                    Text="刪除所有 usage_events。設定不受影響。此操作不可復原。" />
                         <Button x:Name="ClearHistoryButton" Content="清除使用記錄…"
+                                ToolTip="永久清除使用事件記錄；操作前會再次確認。"
                                 Style="{StaticResource DangerButtonStyle}"
                                 HorizontalAlignment="Left"
                                 Click="ClearHistoryButton_Click" />
@@ -65,6 +67,7 @@
                                    Foreground="{StaticResource DangerTextBrush}"
                                    Text="恢復所有設定為預設值（前景程式名稱蒐集將關閉）。使用記錄不受影響。此操作不可復原。" />
                         <Button x:Name="ResetSettingsButton" Content="重設設定…"
+                                ToolTip="將設定還原為預設值；操作前會再次確認。"
                                 Style="{StaticResource DangerButtonStyle}"
                                 HorizontalAlignment="Left"
                                 Click="ResetSettingsButton_Click" />
@@ -80,6 +83,7 @@
                 BorderThickness="0,1,0,0"
                 BorderBrush="{StaticResource DividerBrush}">
             <Button Content="關閉"
+                    ToolTip="關閉資料管理視窗。"
                     Style="{StaticResource SecondaryButtonStyle}"
                     HorizontalAlignment="Right"
                     MinWidth="88"

@@ -207,6 +207,7 @@
         <Setter Property="Padding" Value="14,7" />
         <Setter Property="MinHeight" Value="30" />
         <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
         <Setter Property="FocusVisualStyle" Value="{StaticResource AppFocusVisual}" />
         <Setter Property="Template">

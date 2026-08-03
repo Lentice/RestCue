@@ -53,6 +53,7 @@
             <StackPanel Grid.Row="2" HorizontalAlignment="Stretch">
                 <Button x:Name="CancelButton"
                         Content="結束休息"
+                        ToolTip="結束目前的休息引導。"
                         FontSize="14"
                         Height="38"
                         Click="OnCancelButtonClick"
@@ -62,6 +63,7 @@
                         Margin="0,0,0,8"
                         Visibility="Collapsed" />
                 <Button x:Name="ActionButton"
+                        ToolTip="開始休息並進入休息引導。"
                         FontSize="14"
                         FontWeight="SemiBold"
                         Height="38"
@@ -71,6 +73,7 @@
                         BorderThickness="0"
                         Margin="0,0,0,8" />
                 <Button x:Name="SnoozeButton"
+                        ToolTip="延後這次提醒，稍後再提醒。"
                         FontSize="13"
                         Height="34"
                         Click="OnSnoozeButtonClick"
@@ -80,6 +83,7 @@
                         Margin="0,0,0,6" />
                 <Button x:Name="IgnoreButton"
                         Content="忽略"
+                        ToolTip="忽略這次提醒，不開始休息。"
                         FontSize="13"
                         Height="34"
                         Click="OnIgnoreButtonClick"

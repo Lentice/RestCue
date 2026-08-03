@@ -178,6 +178,7 @@
                 BorderThickness="0,1,0,0"
                 BorderBrush="{StaticResource DividerBrush}">
             <Button Content="關閉"
+                    ToolTip="關閉今日統計視窗。"
                     Style="{StaticResource SecondaryButtonStyle}"
                     HorizontalAlignment="Right"
                     MinWidth="88"

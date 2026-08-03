@@ -239,11 +239,13 @@
                                         <StackPanel Orientation="Horizontal">
                                             <Button x:Name="AddRuleButton"
                                                     Content="新增"
+                                                    ToolTip="新增或更新目前的應用程式提醒規則。"
                                                     Style="{StaticResource PrimaryButtonStyle}"
                                                     MinWidth="80"
                                                     Click="OnAddRuleClick" />
                                             <Button x:Name="CancelEditButton"
                                                     Content="取消編輯"
+                                                    ToolTip="取消目前的規則編輯。"
                                                     Style="{StaticResource SecondaryButtonStyle}"
                                                     MinWidth="80"
                                                     Margin="8,0,0,0"
@@ -338,12 +340,14 @@
                            Text="部分變更會在下次啟動時生效" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="取消"
+                            ToolTip="放棄未儲存的設定並關閉視窗。"
                             Style="{StaticResource SecondaryButtonStyle}"
                             MinWidth="88" Margin="0,0,8,0"
                             IsCancel="True"
                             Click="OnCloseClick" />
                     <Button x:Name="SaveButton"
                             Content="儲存設定"
+                            ToolTip="儲存設定變更並關閉視窗。"
                             Style="{StaticResource PrimaryButtonStyle}"
                             MinWidth="110"
                             IsDefault="True"

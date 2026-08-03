@@ -43,11 +43,14 @@ public sealed class BackgroundUsageEventWriter : IDisposable
 
         var completion = new TaskCompletionSource<object?>(
             TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cancellationRegistration = cts.Token.Register(
+            () => completion.TrySetCanceled(cts.Token));
         await channel.Writer.WriteAsync(
             WriteRequest.Exclusive(async () =>
             {
                 completion.TrySetResult(await operation());
-            }, completion));
+            }, completion),
+            cts.Token);
         return (T)(await completion.Task.ConfigureAwait(false))!;
     }
 
@@ -66,13 +69,6 @@ public sealed class BackgroundUsageEventWriter : IDisposable
         if (!consumerTask.IsCompleted)
         {
             cts.Cancel();
-            try
-            {
-                consumerTask.GetAwaiter().GetResult();
-            }
-            catch (OperationCanceledException)
-            {
-            }
         }
     }
 

@@ -175,6 +175,9 @@ public sealed partial class SettingsWindow : Window
         return new System.Windows.Controls.Button
         {
             Content = text,
+            ToolTip = text == "編輯"
+                ? $"編輯 {processName} 的提醒規則。"
+                : $"刪除 {processName} 的提醒規則。",
             Style = (Style)resourceSource.FindResource(styleKey),
             MinWidth = 50,
             MinHeight = 26,

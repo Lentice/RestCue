@@ -45,6 +45,7 @@
                                 Margin="0,14,0,0"
                                 HorizontalAlignment="Left"
                                 Content="查看目前蒐集的資料"
+                                ToolTip="查看目前儲存的資料類型與狀態。"
                                 Click="OnViewDataClick" />
                     </StackPanel>
                 </Border>
@@ -65,6 +66,7 @@
                 BorderThickness="0,1,0,0"
                 BorderBrush="{StaticResource DividerBrush}">
             <Button Content="關閉"
+                    ToolTip="關閉關於與隱私視窗。"
                     Style="{StaticResource SecondaryButtonStyle}"
                     HorizontalAlignment="Right"
                     MinWidth="88"
