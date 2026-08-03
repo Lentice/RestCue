@@ -41,6 +41,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow, IWorkPha
     private TimeSpan snoozeDuration;
     private Core.Settings.BreakGuideMode userBreakGuideMode;
     private double reminderOpacity = 1.0;
+    private string currentTrayStatusText = "RestCue – 啟動中";
 
     public MainWindow()
     {
@@ -64,8 +65,11 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow, IWorkPha
     public event EventHandler? LightTouchReminderRequested;
     public event EventHandler<RestDebtLevelChangedEventArgs>? DebtLevelChanged;
     public event EventHandler<SuggestionEventArgs>? SuggestionRequested;
+    public event EventHandler? TrayStatusChanged;
 
     public RestDebtLevel CurrentDebtLevel { get; private set; }
+
+    public string CurrentTrayStatusText => currentTrayStatusText;
 
     public WorkCycleTracker? WorkCycleTracker => workCycleTracker;
 
@@ -876,17 +880,118 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow, IWorkPha
         if (workCycleTracker == null) return;
 
         var phase = workCycleTracker.CurrentPhase;
+        bool phaseChanged = phase != lastReportedPhase;
+        string previousTrayStatusText = currentTrayStatusText;
+        currentTrayStatusText = GetTrayStatusText(phase);
 
-        if (phase != lastReportedPhase)
+        Dispatcher.Invoke(() =>
         {
-            lastReportedPhase = phase;
-            PhaseChanged?.Invoke(this, phase);
-            Dispatcher.Invoke(() =>
+            if (phaseChanged)
             {
                 UpdateCyclePhaseText(phase);
                 UpdateMenuAndButtonStates();
-            });
+            }
+
+            UpdateTimingMetrics(phase);
+        });
+
+        if (phaseChanged)
+        {
+            lastReportedPhase = phase;
+            PhaseChanged?.Invoke(this, phase);
         }
+        else if (!string.Equals(previousTrayStatusText, currentTrayStatusText, StringComparison.Ordinal))
+        {
+            TrayStatusChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    private void UpdateTimingMetrics(WorkCyclePhase phase)
+    {
+        if (workCycleTracker == null) return;
+
+        EffectiveWorkTimeText.Text = FormatElapsedDuration(workCycleTracker.AccumulatedWorkTime);
+        NextRestTimeText.Text = phase switch
+        {
+            WorkCyclePhase.Working => FormatNextRestNeed(workCycleTracker.TimeUntilNextRestNeed),
+            WorkCyclePhase.FocusMode => "專注模式中",
+            WorkCyclePhase.PendingReminder => "提醒待處理",
+            WorkCyclePhase.ReminderVisible => "提醒顯示中",
+            WorkCyclePhase.BreakInProgress => "休息中",
+            WorkCyclePhase.Snoozed => "已延後",
+            WorkCyclePhase.Idle => "離席中",
+            WorkCyclePhase.Paused => "已暫停",
+            WorkCyclePhase.Disabled => "已停用",
+            _ => "—"
+        };
+    }
+
+    private string GetTrayStatusText(WorkCyclePhase phase)
+    {
+        if (phase == WorkCyclePhase.Working && workCycleTracker != null)
+        {
+            return $"RestCue｜有效工作 {FormatCompactDuration(workCycleTracker.AccumulatedWorkTime)}"
+                + $"｜距休息需求 {FormatCompactRemaining(workCycleTracker.TimeUntilNextRestNeed)}"
+                + $"｜L{(int)CurrentDebtLevel}";
+        }
+
+        return CommandAvailabilityPolicy.IsActiveCycle(phase)
+            ? App.GetStatusTextForDebtLevel(CurrentDebtLevel)
+            : App.GetStatusTextForPhase(phase);
+    }
+
+    private static string FormatElapsedDuration(TimeSpan duration)
+    {
+        if (duration <= TimeSpan.Zero) return "0 分鐘";
+
+        int totalMinutes = (int)Math.Floor(duration.TotalMinutes);
+        if (totalMinutes < 1) return "不到 1 分鐘";
+        if (totalMinutes < 60) return $"{totalMinutes} 分鐘";
+
+        int hours = totalMinutes / 60;
+        int minutes = totalMinutes % 60;
+        return minutes == 0 ? $"{hours} 小時" : $"{hours} 小時 {minutes} 分鐘";
+    }
+
+    private static string FormatNextRestNeed(TimeSpan? remaining)
+    {
+        if (!remaining.HasValue) return "—";
+        if (remaining.Value <= TimeSpan.Zero) return "已達門檻";
+
+        int totalMinutes = Math.Max(1, (int)Math.Ceiling(remaining.Value.TotalMinutes));
+        if (totalMinutes < 60) return $"約 {totalMinutes} 分鐘";
+
+        int hours = totalMinutes / 60;
+        int minutes = totalMinutes % 60;
+        return minutes == 0
+            ? $"約 {hours} 小時"
+            : $"約 {hours} 小時 {minutes} 分鐘";
+    }
+
+    private static string FormatCompactDuration(TimeSpan duration)
+    {
+        if (duration <= TimeSpan.Zero) return "0分";
+
+        int totalMinutes = (int)Math.Floor(duration.TotalMinutes);
+        if (totalMinutes < 1) return "不到1分";
+        if (totalMinutes < 60) return $"{totalMinutes}分";
+
+        int hours = totalMinutes / 60;
+        int minutes = totalMinutes % 60;
+        return minutes == 0 ? $"{hours}小時" : $"{hours}小時{minutes}分";
+    }
+
+    private static string FormatCompactRemaining(TimeSpan? remaining)
+    {
+        if (!remaining.HasValue) return "—";
+        if (remaining.Value <= TimeSpan.Zero) return "已達";
+
+        int totalMinutes = Math.Max(1, (int)Math.Ceiling(remaining.Value.TotalMinutes));
+        if (totalMinutes < 60) return $"約{totalMinutes}分";
+
+        int hours = totalMinutes / 60;
+        int minutes = totalMinutes % 60;
+        return minutes == 0 ? $"約{hours}小時" : $"約{hours}小時{minutes}分";
     }
 
     private void UpdateCyclePhaseText(WorkCyclePhase phase)

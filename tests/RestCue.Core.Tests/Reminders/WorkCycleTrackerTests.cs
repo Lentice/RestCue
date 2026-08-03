@@ -53,6 +53,57 @@ public sealed class WorkCycleTrackerTests
     }
 
     [Fact]
+    public void Reports_time_until_next_rest_need_from_accumulated_work()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock, workInterval: TimeSpan.FromMinutes(20));
+
+        tracker.Tick(TimeSpan.Zero);
+        clock.Advance(TimeSpan.FromMinutes(7));
+        tracker.Tick(TimeSpan.Zero);
+
+        Assert.Equal(TimeSpan.FromMinutes(13), tracker.TimeUntilNextRestNeed);
+    }
+
+    [Fact]
+    public void Reports_the_earlier_debt_deadline_during_retry_cooldown()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(
+            clock: clock,
+            workInterval: TimeSpan.FromSeconds(10),
+            retryCooldown: TimeSpan.FromSeconds(30),
+            debtLevel2: TimeSpan.FromSeconds(20),
+            debtLevel3: TimeSpan.FromSeconds(30),
+            debtLevel4: TimeSpan.FromMinutes(1));
+
+        ReachReminderVisible(tracker, clock);
+        tracker.Ignore();
+
+        Assert.Equal(TimeSpan.FromSeconds(4), tracker.TimeUntilNextRestNeed);
+
+        clock.Advance(TimeSpan.FromSeconds(4));
+
+        Assert.Equal(TimeSpan.Zero, tracker.TimeUntilNextRestNeed);
+    }
+
+    [Fact]
+    public void Has_no_next_rest_need_while_idle_or_resting()
+    {
+        var clock = new FakeClock();
+        var tracker = CreateTracker(clock: clock, workInterval: TimeSpan.FromSeconds(10));
+
+        tracker.Tick(TimeSpan.FromMinutes(2));
+        Assert.Null(tracker.TimeUntilNextRestNeed);
+
+        tracker = CreateTracker(clock: clock, workInterval: TimeSpan.FromSeconds(10));
+        ReachReminderVisible(tracker, clock);
+        tracker.StartBreak();
+
+        Assert.Null(tracker.TimeUntilNextRestNeed);
+    }
+
+    [Fact]
     public void Tick_throws_for_negative_idle_duration()
     {
         var clock = new FakeClock();
@@ -1510,7 +1561,10 @@ public sealed class WorkCycleTrackerTests
         TimeSpan? passiveBreak = null,
         TimeSpan? snoozeDuration = null,
         TimeSpan? reminderDisplayDuration = null,
-        TimeSpan? retryCooldown = null)
+        TimeSpan? retryCooldown = null,
+        TimeSpan? debtLevel2 = null,
+        TimeSpan? debtLevel3 = null,
+        TimeSpan? debtLevel4 = null)
     {
         var tracker = new WorkCycleTracker(
             clock ?? new FakeClock(),
@@ -1522,7 +1576,10 @@ public sealed class WorkCycleTrackerTests
             passiveBreak ?? DefaultPassiveBreak,
             snoozeDuration ?? DefaultSnoozeDuration,
             reminderDisplayDuration ?? DefaultReminderDisplayDuration,
-            retryCooldown ?? DefaultRetryCooldown);
+            retryCooldown ?? DefaultRetryCooldown,
+            debtLevel2 ?? default,
+            debtLevel3 ?? default,
+            debtLevel4 ?? default);
         tracker.SetForceAllowPopup(true);
         return tracker;
     }

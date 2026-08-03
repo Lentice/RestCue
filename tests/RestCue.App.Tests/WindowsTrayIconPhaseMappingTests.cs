@@ -95,6 +95,20 @@ public sealed class WindowsTrayIconPhaseMappingTests
     }
 
     [Fact]
+    public void Live_status_summary_replaces_the_default_active_tooltip()
+    {
+        var tray = new FakeTrayIcon();
+
+        App.ApplyPhaseToTray(
+            tray,
+            WorkCyclePhase.Working,
+            RestDebtLevel.Level0,
+            "RestCue｜有效工作 7分｜距休息需求 約13分｜L0");
+
+        Assert.Equal("RestCue｜有效工作 7分｜距休息需求 約13分｜L0", tray.StatusText);
+    }
+
+    [Fact]
     public void WindowsTrayIcon_SetPauseEnabledFalse_DisablesMenuItem()
     {
         using var tray = new WindowsTrayIcon();

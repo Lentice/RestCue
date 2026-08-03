@@ -208,6 +208,7 @@ public partial class App : System.Windows.Application
 
         if (statusWindow != null)
         {
+            statusWindow.TrayStatusChanged -= OnTrayStatusChanged;
             statusWindow.UnwireLifecycleEvents();
             statusWindow.StopActivityTracking();
         }
@@ -546,7 +547,11 @@ public partial class App : System.Windows.Application
         statusWindow.CompleteCommandInitialization();
 
         lastPhase = currentTracker.CurrentPhase;
-        ApplyPhaseToTray(trayIcon, lastPhase, statusWindow.CurrentDebtLevel);
+        ApplyPhaseToTray(
+            trayIcon,
+            lastPhase,
+            statusWindow.CurrentDebtLevel,
+            statusWindow.CurrentTrayStatusText);
     }
 
     private void WireTrayCommands()
@@ -565,6 +570,7 @@ public partial class App : System.Windows.Application
 
         statusWindow.PhaseChanged += OnPhaseChanged;
         statusWindow.DebtLevelChanged += OnDebtLevelChanged;
+        statusWindow.TrayStatusChanged += OnTrayStatusChanged;
         statusWindow.LowInterruptionReminderRequested += (_, e) =>
         {
             if (trayIcon != null)
@@ -788,7 +794,11 @@ public partial class App : System.Windows.Application
     /// the policy is the only place that reasons about phases, so this surface cannot
     /// drift away from the main window's.
     /// </summary>
-    internal static void ApplyPhaseToTray(ITrayIcon tray, WorkCyclePhase phase, RestDebtLevel debtLevel)
+    internal static void ApplyPhaseToTray(
+        ITrayIcon tray,
+        WorkCyclePhase phase,
+        RestDebtLevel debtLevel,
+        string? statusText = null)
     {
         ArgumentNullException.ThrowIfNull(tray);
 
@@ -798,9 +808,9 @@ public partial class App : System.Windows.Application
 
         // During an active cycle the debt level is the more useful status; the mode
         // phases name themselves.
-        tray.SetStatusText(CommandAvailabilityPolicy.IsActiveCycle(phase)
+        tray.SetStatusText(statusText ?? (CommandAvailabilityPolicy.IsActiveCycle(phase)
             ? GetStatusTextForDebtLevel(debtLevel)
-            : GetStatusTextForPhase(phase));
+            : GetStatusTextForPhase(phase)));
     }
 
     private static void ApplyAvailabilityToTray(ITrayIcon tray, CommandAvailability availability)
@@ -884,7 +894,21 @@ public partial class App : System.Windows.Application
         if (trayIcon == null || statusWindow == null) return;
 
         lastPhase = phase;
-        ApplyPhaseToTray(trayIcon, phase, statusWindow.CurrentDebtLevel);
+        ApplyPhaseToTray(
+            trayIcon,
+            phase,
+            statusWindow.CurrentDebtLevel,
+            statusWindow.CurrentTrayStatusText);
+    }
+
+    private void OnTrayStatusChanged(object? sender, EventArgs e)
+    {
+        if (trayIcon == null || statusWindow == null) return;
+
+        if (lastPhase == WorkCyclePhase.Working)
+        {
+            trayIcon.SetStatusText(statusWindow.CurrentTrayStatusText);
+        }
     }
 
     private void OnDebtLevelChanged(object? sender, RestDebtLevelChangedEventArgs e)

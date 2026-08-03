@@ -114,6 +114,30 @@ public sealed class WorkCycleTracker
 
     public TimeSpan AccumulatedWorkTime { get; private set; }
 
+    /// <summary>
+    /// Time until the engine next needs a rest, or <c>null</c> when the current phase has
+    /// no active work clock. This is the time until a reminder becomes pending; the
+    /// reminder may still wait for a natural pause before it is shown.
+    /// </summary>
+    public TimeSpan? TimeUntilNextRestNeed
+    {
+        get
+        {
+            if (CurrentPhase is not (WorkCyclePhase.Working or WorkCyclePhase.FocusMode))
+                return null;
+
+            var deadline = EarlierOf(cooldownUntil, nextDebtDeadline);
+            if (deadline.HasValue)
+            {
+                var remaining = deadline.Value - clock.Elapsed;
+                return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
+            }
+
+            var thresholdRemaining = effectiveWorkInterval - AccumulatedWorkTime;
+            return thresholdRemaining > TimeSpan.Zero ? thresholdRemaining : TimeSpan.Zero;
+        }
+    }
+
     public TimeSpan BreakDuration => breakDuration;
 
     public TimeSpan SnoozeDuration => snoozeDuration;
