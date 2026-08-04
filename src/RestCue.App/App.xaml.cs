@@ -920,11 +920,14 @@ public partial class App : System.Windows.Application
         if (CommandAvailabilityPolicy.IsActiveCycle(lastPhase))
         {
             trayIcon.SetStatusText(GetStatusTextForDebtLevel(e.Current));
-            ApplyDebtLevelNotificationToTray(
-                trayIcon,
-                e.Current,
-                startup?.CurrentSettings.DebtLevelTrayNotificationEnabled == true);
         }
+
+        // Debt level rising matters regardless of idle/paused state, so this is
+        // deliberately outside the active-cycle check.
+        ApplyDebtLevelNotificationToTray(
+            trayIcon,
+            e.Current,
+            startup?.CurrentSettings.DebtLevelTrayNotificationEnabled == true);
     }
 
     internal static void ApplyDebtLevelNotificationToTray(
