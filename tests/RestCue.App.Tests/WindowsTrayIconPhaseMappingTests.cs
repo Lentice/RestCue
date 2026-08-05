@@ -213,6 +213,43 @@ public sealed class WindowsTrayIconPhaseMappingTests
         Assert.False(invoked);
     }
 
+    [Theory]
+    [InlineData(RestDebtLevel.Level0, "SuppressedIcon")]
+    [InlineData(RestDebtLevel.Level1, "Level1Icon")]
+    [InlineData(RestDebtLevel.Level4, "Level4Icon")]
+    public void WindowsTrayIcon_PendingReminder_KeepsDebtColourAboveLevel0(
+        RestDebtLevel level, string expectedIconField)
+    {
+        using var tray = new WindowsTrayIcon();
+        tray.SetDebtLevel(level);
+        tray.SetSuppressedState(true);
+
+        Assert.Same(GetStaticIcon(expectedIconField), GetCurrentIcon(tray));
+    }
+
+    [Fact]
+    public void WindowsTrayIcon_DebtRisingWhileReminderPending_UpdatesIcon()
+    {
+        using var tray = new WindowsTrayIcon();
+        tray.SetSuppressedState(true);
+        tray.SetDebtLevel(RestDebtLevel.Level2);
+
+        Assert.Same(GetStaticIcon("Level2Icon"), GetCurrentIcon(tray));
+    }
+
+    private static object? GetStaticIcon(string fieldName) =>
+        typeof(WindowsTrayIcon)
+            .GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static)!
+            .GetValue(null);
+
+    private static object? GetCurrentIcon(WindowsTrayIcon tray)
+    {
+        var notifyIcon = typeof(WindowsTrayIcon)
+            .GetField("notifyIcon", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(tray);
+        return notifyIcon!.GetType().GetProperty("Icon")!.GetValue(notifyIcon);
+    }
+
     private static bool GetMenuItemEnabled(WindowsTrayIcon tray, string fieldName)
     {
         var field = typeof(WindowsTrayIcon)

@@ -215,10 +215,7 @@ public sealed class WindowsTrayIcon : ITrayIcon
     public void SetDebtLevel(RestDebtLevel level)
     {
         currentDebtLevel = level;
-        if (!isSuppressed)
-        {
-            notifyIcon.Icon = GetIconForDebtLevel(level);
-        }
+        notifyIcon.Icon = GetIconForCurrentState();
     }
 
     private Icon GetIconForDebtLevel(RestDebtLevel level)
@@ -247,7 +244,10 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
     private Icon GetIconForCurrentState()
     {
-        if (isSuppressed)
+        // A pending reminder only takes over the icon while there is no debt to show.
+        // Above Level 0 the debt colour is the more useful signal, and greying it out
+        // would hide the severity exactly when it matters.
+        if (isSuppressed && currentDebtLevel == RestDebtLevel.Level0)
             return SuppressedIcon;
         return GetIconForDebtLevel(currentDebtLevel);
     }

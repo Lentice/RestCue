@@ -575,7 +575,8 @@ public partial class App : System.Windows.Application
         statusWindow.LowInterruptionReminderRequested += (_, e) =>
         {
             if (trayIcon != null)
-                ApplySuppressedReminderToTray(trayIcon, e.ShowTrayCue);
+                ApplySuppressedReminderToTray(
+                    trayIcon, e.ShowTrayCue, statusWindow?.CurrentDebtLevel ?? RestDebtLevel.Level0);
         };
 
         statusWindow.LightTouchReminderRequested += (_, _) =>
@@ -585,7 +586,8 @@ public partial class App : System.Windows.Application
                     trayIcon,
                     startup?.CurrentSettings.LightTouchSoundEnabled == true,
                     System.Media.SystemSounds.Asterisk.Play,
-                    startup?.CurrentSettings.NotificationDuration ?? NotificationDuration.Default);
+                    startup?.CurrentSettings.NotificationDuration ?? NotificationDuration.Default,
+                    statusWindow?.CurrentDebtLevel ?? RestDebtLevel.Level0);
         };
     }
 
@@ -857,13 +859,14 @@ public partial class App : System.Windows.Application
     /// A named function rather than an inline closure, so the tray-cue behaviour can be
     /// tested by calling it instead of by a test reimplementing it.
     /// </remarks>
-    internal static void ApplySuppressedReminderToTray(ITrayIcon tray, bool showTrayCue)
+    internal static void ApplySuppressedReminderToTray(
+        ITrayIcon tray, bool showTrayCue, RestDebtLevel level = RestDebtLevel.Level0)
     {
         ArgumentNullException.ThrowIfNull(tray);
 
         tray.SetSuppressedState(showTrayCue);
         tray.SetStatusText(showTrayCue
-            ? PendingReminderStatusText
+            ? GetPendingReminderStatusText(level)
             : "RestCue – Eye Break Reminder");
     }
 
@@ -873,13 +876,14 @@ public partial class App : System.Windows.Application
     /// </summary>
     internal static void ApplyLightTouchReminderToTray(
         ITrayIcon tray, bool soundEnabled, Action playSound,
-        NotificationDuration duration = NotificationDuration.Default)
+        NotificationDuration duration = NotificationDuration.Default,
+        RestDebtLevel level = RestDebtLevel.Level0)
     {
         ArgumentNullException.ThrowIfNull(tray);
         ArgumentNullException.ThrowIfNull(playSound);
 
         tray.SetSuppressedState(true);
-        tray.SetStatusText(PendingReminderStatusText);
+        tray.SetStatusText(GetPendingReminderStatusText(level));
         tray.ShowLightTouchNotification(
             "RestCue – 休息提醒",
             "該休息了！點擊系統列圖示查看詳情。",
@@ -892,6 +896,15 @@ public partial class App : System.Windows.Application
     }
 
     internal const string PendingReminderStatusText = "RestCue – 休息提醒待處理";
+
+    /// <summary>
+    /// Keeps the debt level visible in the tooltip while a reminder is pending, so the
+    /// pending cue does not erase the only textual read-out of the level.
+    /// </summary>
+    internal static string GetPendingReminderStatusText(RestDebtLevel level) =>
+        level == RestDebtLevel.Level0
+            ? PendingReminderStatusText
+            : $"{GetStatusTextForDebtLevel(level)} · 休息提醒待處理";
 
     private void OnPhaseChanged(object? sender, WorkCyclePhase phase)
     {

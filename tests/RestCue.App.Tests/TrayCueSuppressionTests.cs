@@ -22,6 +22,19 @@ public sealed class TrayCueSuppressionTests
     }
 
     [Fact]
+    public void Pending_reminder_tooltip_keeps_the_debt_level_readable()
+    {
+        var tray = new TrackingFakeTrayIcon();
+
+        App.ApplyLightTouchReminderToTray(
+            tray, soundEnabled: false, () => { },
+            RestCue.Core.Settings.NotificationDuration.Default, RestDebtLevel.Level2);
+
+        Assert.Contains("Level 2", tray.StatusText);
+        Assert.Contains("待處理", tray.StatusText);
+    }
+
+    [Fact]
     public void Fullscreen_sets_tray_cue()
     {
         var tray = new TrackingFakeTrayIcon();
