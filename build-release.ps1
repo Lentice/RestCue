@@ -34,7 +34,6 @@ param(
 $RepoRoot = $PSScriptRoot
 $SlnPath = "$RepoRoot\RestCue.sln"
 $Rid = "win-x64"
-$Tfm = "net10.0-windows"
 
 if (-not $PublishDir) {
     $PublishDir = "$RepoRoot\artifacts\publish\$Rid"
@@ -62,8 +61,9 @@ if (-not $SkipTests) {
 Write-Host "`n[3/3] Publishing..." -ForegroundColor Yellow
 $publishArgs = @(
     "$RepoRoot\src\RestCue.App\RestCue.App.csproj"
+    # No --framework: the project has a single TFM, and pinning it here drifts
+    # whenever the required Windows SDK version changes.
     "--configuration", $Configuration
-    "--framework", $Tfm
     "--runtime", $Rid
     "--output", $PublishDir
 )
