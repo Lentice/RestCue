@@ -47,6 +47,24 @@ public sealed class TrayCueSuppressionTests
         Assert.Equal(1, sounds);
     }
 
+    [Theory]
+    [InlineData(RestCue.Core.Settings.NotificationDuration.Default)]
+    [InlineData(RestCue.Core.Settings.NotificationDuration.Long)]
+    [InlineData(RestCue.Core.Settings.NotificationDuration.UntilDismissed)]
+    public void The_configured_notification_duration_reaches_the_tray(
+        RestCue.Core.Settings.NotificationDuration duration)
+    {
+        var lightTouch = new TrackingFakeTrayIcon();
+        var debt = new TrackingFakeTrayIcon();
+
+        App.ApplyLightTouchReminderToTray(lightTouch, soundEnabled: false, () => { }, duration);
+        App.ApplyDebtLevelNotificationToTray(
+            debt, RestCue.Core.Domain.RestDebtLevel.Level2, showNotification: true, duration);
+
+        Assert.Equal(duration, lightTouch.NotifiedDuration);
+        Assert.Equal(duration, debt.NotifiedDuration);
+    }
+
     [Fact]
     public void Light_touch_stays_silent_when_the_user_disabled_the_sound()
     {
@@ -142,10 +160,13 @@ public sealed class TrayCueSuppressionTests
         public void SetPauseText(bool isPaused) { }
         public void SetFocusModeText(bool isFocusMode) { }
         public void SetDisableText(bool isDisabled) { }
-        public void ShowLightTouchNotification(string title, string text)
+        public void ShowLightTouchNotification(string title, string text, RestCue.Core.Settings.NotificationDuration duration)
         {
             NotifiedTitle = title;
             NotifiedText = text;
+            NotifiedDuration = duration;
         }
+
+        public RestCue.Core.Settings.NotificationDuration? NotifiedDuration { get; private set; }
     }
 }

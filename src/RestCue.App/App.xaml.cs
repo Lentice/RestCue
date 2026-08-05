@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Threading;
 using RestCue.App.Lifecycle;
 using RestCue.App.UsageEvents;
 using RestCue.Core.Domain;
@@ -583,7 +584,8 @@ public partial class App : System.Windows.Application
                 ApplyLightTouchReminderToTray(
                     trayIcon,
                     startup?.CurrentSettings.LightTouchSoundEnabled == true,
-                    System.Media.SystemSounds.Asterisk.Play);
+                    System.Media.SystemSounds.Asterisk.Play,
+                    startup?.CurrentSettings.NotificationDuration ?? NotificationDuration.Default);
         };
     }
 
@@ -870,7 +872,8 @@ public partial class App : System.Windows.Application
     /// sound only when the user has left it enabled.
     /// </summary>
     internal static void ApplyLightTouchReminderToTray(
-        ITrayIcon tray, bool soundEnabled, Action playSound)
+        ITrayIcon tray, bool soundEnabled, Action playSound,
+        NotificationDuration duration = NotificationDuration.Default)
     {
         ArgumentNullException.ThrowIfNull(tray);
         ArgumentNullException.ThrowIfNull(playSound);
@@ -879,7 +882,8 @@ public partial class App : System.Windows.Application
         tray.SetStatusText(PendingReminderStatusText);
         tray.ShowLightTouchNotification(
             "RestCue – 休息提醒",
-            "該休息了！點擊系統列圖示查看詳情。");
+            "該休息了！點擊系統列圖示查看詳情。",
+            duration);
 
         if (soundEnabled)
         {
@@ -924,14 +928,24 @@ public partial class App : System.Windows.Application
 
         // Debt level rising matters regardless of idle/paused state, so this is
         // deliberately outside the active-cycle check.
-        ApplyDebtLevelNotificationToTray(
-            trayIcon,
-            e.Current,
-            startup?.CurrentSettings.DebtLevelTrayNotificationEnabled == true);
+        //
+        // Deferred to background priority on purpose: Level 1 is crossed in the very
+        // tick that ends the work interval, and the phase change that follows still
+        // reassigns the tray icon. Reassigning NotifyIcon.Icon cancels a balloon that
+        // has not been presented yet, so the balloon must be the last tray write of
+        // the tick.
+        ITrayIcon tray = trayIcon;
+        bool enabled = startup?.CurrentSettings.DebtLevelTrayNotificationEnabled == true;
+        NotificationDuration duration =
+            startup?.CurrentSettings.NotificationDuration ?? NotificationDuration.Default;
+        Dispatcher.BeginInvoke(
+            DispatcherPriority.Background,
+            () => ApplyDebtLevelNotificationToTray(tray, e.Current, enabled, duration));
     }
 
     internal static void ApplyDebtLevelNotificationToTray(
-        ITrayIcon tray, RestDebtLevel level, bool showNotification)
+        ITrayIcon tray, RestDebtLevel level, bool showNotification,
+        NotificationDuration duration = NotificationDuration.Default)
     {
         ArgumentNullException.ThrowIfNull(tray);
 
@@ -940,6 +954,7 @@ public partial class App : System.Windows.Application
 
         tray.ShowLightTouchNotification(
             GetStatusTextForDebtLevel(level),
-            "休息需求已提升，建議安排短暫休息。點擊系統列圖示查看詳情。");
+            "休息需求已提升，建議安排短暫休息。點擊系統列圖示查看詳情。",
+            duration);
     }
 }

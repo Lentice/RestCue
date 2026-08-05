@@ -13,6 +13,25 @@ internal static class TrayIconFactory
         graphics.SmoothingMode = SmoothingMode.AntiAlias;
         graphics.Clear(Color.Transparent);
 
+        DrawEye(graphics, color);
+
+        var handle = bitmap.GetHicon();
+        try
+        {
+            using var icon = Icon.FromHandle(handle);
+            return (Icon)icon.Clone();
+        }
+        finally
+        {
+            DestroyIcon(handle);
+        }
+    }
+
+    /// <summary>
+    /// Draws the RestCue eye glyph in <paramref name="color"/> onto a 32x32 surface.
+    /// </summary>
+    public static void DrawEye(Graphics graphics, Color color)
+    {
         using var stroke = new Pen(color, 3.2f)
         {
             StartCap = LineCap.Round,
@@ -30,17 +49,6 @@ internal static class TrayIconFactory
         graphics.DrawPath(stroke, eye);
         using var pupil = new SolidBrush(color);
         graphics.FillEllipse(pupil, 12f, 12f, 8f, 8f);
-
-        var handle = bitmap.GetHicon();
-        try
-        {
-            using var icon = Icon.FromHandle(handle);
-            return (Icon)icon.Clone();
-        }
-        finally
-        {
-            DestroyIcon(handle);
-        }
     }
 
     [DllImport("user32.dll")]

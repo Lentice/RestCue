@@ -330,9 +330,19 @@
                                 <CheckBox x:Name="DebtLevelTrayNotificationCheck"
                                           Margin="0,12,0,0"
                                           Content="顯示休息債務系統列提示"
-                                          ToolTip="進入 Level 1–4 時顯示一次 Windows 系統列氣泡提示；關閉後仍保留系統列圖示與 tooltip。" />
+                                          ToolTip="進入 Level 1–4 時顯示一次 Windows 通知；關閉後仍保留系統列圖示與 tooltip。" />
                                 <TextBlock Style="{StaticResource FieldHintStyle}"
-                                           Text="控制休息債務達到 Level 1–4 時的氣泡提示，不影響系統列圖示或其他提醒呈現。" />
+                                           Text="控制休息債務達到 Level 1–4 時的通知，不影響系統列圖示或其他提醒呈現。" />
+                                <TextBlock Style="{StaticResource FieldLabelStyle}" Margin="0,16,0,6" Text="通知停留時間" />
+                                <ComboBox x:Name="NotificationDurationBox"
+                                          SelectedIndex="0"
+                                          AutomationProperties.Name="通知停留時間">
+                                    <ComboBoxItem Content="系統預設（約 7 秒）" />
+                                    <ComboBoxItem Content="較久（約 25 秒）" />
+                                    <ComboBoxItem Content="直到手動關閉" />
+                                </ComboBox>
+                                <TextBlock Style="{StaticResource FieldHintStyle}"
+                                           Text="Windows 只提供這三種長度，無法指定任意秒數。" />
                                 <CheckBox x:Name="LightTouchSoundCheck"
                                           Margin="0,12,0,0"
                                           Content="輕量提醒時播放提示音" />

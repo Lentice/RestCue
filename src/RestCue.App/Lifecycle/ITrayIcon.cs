@@ -1,4 +1,5 @@
 using RestCue.Core.Domain;
+using RestCue.Core.Settings;
 
 namespace RestCue.App.Lifecycle;
 
@@ -56,5 +57,5 @@ public interface ITrayIcon : IDisposable
 
     void SetDebtLevel(RestDebtLevel level);
 
-    void ShowLightTouchNotification(string title, string text);
+    void ShowLightTouchNotification(string title, string text, NotificationDuration duration);
 }

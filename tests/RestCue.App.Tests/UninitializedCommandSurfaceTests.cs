@@ -148,7 +148,7 @@ public sealed class UninitializedCommandSurfaceTests
         public void SetDisableText(bool isDisabled) { }
         public void SetSuppressedState(bool isSuppressed) { }
         public void SetDebtLevel(RestDebtLevel level) { }
-        public void ShowLightTouchNotification(string title, string text) { }
+        public void ShowLightTouchNotification(string title, string text, RestCue.Core.Settings.NotificationDuration duration) { }
         public void Dispose() { }
     }
 

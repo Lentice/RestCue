@@ -44,4 +44,6 @@ public sealed record AppSettings
 
     public bool DebtLevelTrayNotificationEnabled { get; init; } = true;
 
+    public NotificationDuration NotificationDuration { get; init; } = NotificationDuration.Default;
+
 }

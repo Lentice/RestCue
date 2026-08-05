@@ -1,9 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- Matches the app project, so System.Drawing.Common resolves from the shared
+         framework instead of the vulnerable 4.7.0 package. -->
+    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- WinForms' implicit import collides with the WPF types these tests assert on. -->
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.10.0" />
     <PackageReference Include="xunit" Version="2.8.1" />

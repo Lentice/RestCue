@@ -71,6 +71,11 @@ public sealed class AppSettingsValidator : ISettingsValidator
             errors.Add(new(nameof(settings.BreakGuideMode), "Break guide mode is not a defined value."));
         }
 
+        if (!Enum.IsDefined(typeof(NotificationDuration), settings.NotificationDuration))
+        {
+            errors.Add(new(nameof(settings.NotificationDuration), "Notification duration is not a defined value."));
+        }
+
         return errors;
     }
 

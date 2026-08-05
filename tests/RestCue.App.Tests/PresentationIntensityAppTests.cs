@@ -92,7 +92,7 @@ public sealed class FakeRecordingTrayIcon : ITrayIcon
     public void SetBreakNowEnabled(bool enabled) { }
     public void SetSuppressedState(bool isSuppressed) => LastSuppressed = isSuppressed;
     public void SetDebtLevel(RestDebtLevel level) => LastDebtLevel = level;
-    public void ShowLightTouchNotification(string title, string text) { }
+    public void ShowLightTouchNotification(string title, string text, RestCue.Core.Settings.NotificationDuration duration) { }
 
     public void Dispose() { }
 }

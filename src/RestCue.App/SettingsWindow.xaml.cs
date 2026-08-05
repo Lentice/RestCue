@@ -65,6 +65,7 @@ public sealed partial class SettingsWindow : Window
         ReduceMotionCheck.IsChecked = currentSettings.ReduceMotion;
         DebtLevelTrayNotificationCheck.IsChecked = currentSettings.DebtLevelTrayNotificationEnabled;
         LightTouchSoundCheck.IsChecked = currentSettings.LightTouchSoundEnabled;
+        NotificationDurationBox.SelectedIndex = (int)currentSettings.NotificationDuration;
 
         switch (currentSettings.BreakGuideMode)
         {
@@ -460,6 +461,8 @@ public sealed partial class SettingsWindow : Window
             ReduceMotion = ReduceMotionCheck.IsChecked == true,
             DebtLevelTrayNotificationEnabled = DebtLevelTrayNotificationCheck.IsChecked == true,
             LightTouchSoundEnabled = LightTouchSoundCheck.IsChecked == true,
+            NotificationDuration =
+                (RestCue.Core.Settings.NotificationDuration)Math.Max(0, NotificationDurationBox.SelectedIndex),
             WorkInterval = TimeSpan.FromMinutes(workInterval),
             NaturalPauseThreshold = TimeSpan.FromSeconds(naturalPause),
             MaximumReminderWait = TimeSpan.FromMinutes(maxWait),
