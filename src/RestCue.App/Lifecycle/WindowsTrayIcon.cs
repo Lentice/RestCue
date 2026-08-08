@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using Microsoft.Toolkit.Uwp.Notifications;
 using RestCue.Core.Domain;
+using RestCue.Core.Reminders;
 using RestCue.Core.Settings;
 using Windows.UI.Notifications;
 
@@ -24,8 +25,7 @@ public sealed class WindowsTrayIcon : ITrayIcon
     private bool isPaused;
     private bool isFocusMode;
     private bool isDisabled;
-    private RestDebtLevel currentDebtLevel;
-    private bool isSuppressed;
+    private TrayViewState currentState;
     private ContextMenuStrip menu;
     private int pauseMenuIndex;
     private static readonly Color NormalColor = Color.FromArgb(47, 111, 235);
@@ -33,12 +33,15 @@ public sealed class WindowsTrayIcon : ITrayIcon
     private static readonly Color Level2Color = Color.FromArgb(196, 128, 20);
     private static readonly Color Level3Color = Color.FromArgb(211, 95, 24);
     private static readonly Color Level4Color = Color.FromArgb(192, 57, 43);
-    private static readonly Icon NormalIcon = TrayIconFactory.Create(NormalColor);
-    private static readonly Icon Level1Icon = TrayIconFactory.Create(Level1Color);
-    private static readonly Icon Level2Icon = TrayIconFactory.Create(Level2Color);
-    private static readonly Icon Level3Icon = TrayIconFactory.Create(Level3Color);
-    private static readonly Icon Level4Icon = TrayIconFactory.Create(Level4Color);
-    private static readonly Icon SuppressedIcon = TrayIconFactory.Create(Color.FromArgb(92, 101, 112));
+    private static readonly Color SuppressedColor = Color.FromArgb(92, 101, 112);
+    private static readonly Color RemindersOffColor = Color.FromArgb(94, 126, 108);
+    private static readonly Icon NormalIcon = TrayIconFactory.Create(TrayIconKind.Normal, NormalColor);
+    private static readonly Icon Level1Icon = TrayIconFactory.Create(TrayIconKind.Level1, Level1Color);
+    private static readonly Icon Level2Icon = TrayIconFactory.Create(TrayIconKind.Level2, Level2Color);
+    private static readonly Icon Level3Icon = TrayIconFactory.Create(TrayIconKind.Level3, Level3Color);
+    private static readonly Icon Level4Icon = TrayIconFactory.Create(TrayIconKind.Level4, Level4Color);
+    private static readonly Icon SuppressedIcon = TrayIconFactory.Create(TrayIconKind.Suppressed, SuppressedColor);
+    private static readonly Icon RemindersOffIcon = TrayIconFactory.Create(TrayIconKind.RemindersOff, RemindersOffColor);
 
     internal const string BreakNowToastArgument = "restcue-break-now";
     private readonly SynchronizationContext? uiContext;
@@ -206,16 +209,11 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
     public void SetBreakNowEnabled(bool enabled) => breakNowItem.Enabled = enabled;
 
-    public void SetSuppressedState(bool isSuppressed)
+    public void ApplyViewState(TrayViewState state)
     {
-        this.isSuppressed = isSuppressed;
-        notifyIcon.Icon = GetIconForCurrentState();
-    }
-
-    public void SetDebtLevel(RestDebtLevel level)
-    {
-        currentDebtLevel = level;
-        notifyIcon.Icon = GetIconForCurrentState();
+        currentState = state;
+        notifyIcon.Icon = GetIconForState(state);
+        notifyIcon.Text = App.GetTrayTooltip(state);
     }
 
     private Icon GetIconForDebtLevel(RestDebtLevel level)
@@ -242,14 +240,19 @@ public sealed class WindowsTrayIcon : ITrayIcon
         };
     }
 
-    private Icon GetIconForCurrentState()
+    private Icon GetIconForState(TrayViewState state)
     {
+        // Pause and Disable mean the user has asked for calm: reminders are off, and no
+        // rest-debt urgency may override that, no matter how high the level has climbed.
+        if (state.Mode is WorkCyclePhase.Paused or WorkCyclePhase.Disabled)
+            return RemindersOffIcon;
+
         // A pending reminder only takes over the icon while there is no debt to show.
-        // Above Level 0 the debt colour is the more useful signal, and greying it out
+        // Above Level 0 the debt signal is the more useful one, and greying it out
         // would hide the severity exactly when it matters.
-        if (isSuppressed && currentDebtLevel == RestDebtLevel.Level0)
+        if (state.IsSuppressed && state.DebtLevel == RestDebtLevel.Level0)
             return SuppressedIcon;
-        return GetIconForDebtLevel(currentDebtLevel);
+        return GetIconForDebtLevel(state.DebtLevel);
     }
 
     private void TogglePause(object? sender, EventArgs e)
@@ -320,7 +323,7 @@ public sealed class WindowsTrayIcon : ITrayIcon
                 .AddText(title)
                 .AddText(text);
 
-            string? accent = ToastAccentImage.TryGetPath(GetColorForDebtLevel(currentDebtLevel));
+            string? accent = ToastAccentImage.TryGetPath(GetColorForDebtLevel(currentState.DebtLevel));
             if (accent != null)
             {
                 builder.AddAppLogoOverride(new Uri(accent), ToastGenericAppLogoCrop.Circle);

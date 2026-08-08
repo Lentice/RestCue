@@ -1,4 +1,3 @@
-using RestCue.Core.Domain;
 using RestCue.Core.Settings;
 
 namespace RestCue.App.Lifecycle;
@@ -53,9 +52,11 @@ public interface ITrayIcon : IDisposable
 
     void SetBreakNowEnabled(bool enabled);
 
-    void SetSuppressedState(bool isSuppressed);
-
-    void SetDebtLevel(RestDebtLevel level);
+    /// <summary>
+    /// Applies the tray's presentation state. The icon and tooltip are derived from the
+    /// state together, so mode, rest debt and suppression cannot be shown inconsistently.
+    /// </summary>
+    void ApplyViewState(TrayViewState state);
 
     void ShowLightTouchNotification(string title, string text, NotificationDuration duration);
 }

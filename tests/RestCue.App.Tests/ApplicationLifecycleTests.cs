@@ -191,11 +191,10 @@ public sealed class ApplicationLifecycleTests
         {
         }
 
-        public void SetSuppressedState(bool isSuppressed)
+        public void ApplyViewState(TrayViewState state)
         {
         }
 
-        public void SetDebtLevel(RestDebtLevel level) { }
         public void ShowLightTouchNotification(string title, string text, RestCue.Core.Settings.NotificationDuration duration) { }
     }
 

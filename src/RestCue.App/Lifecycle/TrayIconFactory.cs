@@ -4,9 +4,20 @@ using System.Runtime.InteropServices;
 
 namespace RestCue.App.Lifecycle;
 
+internal enum TrayIconKind
+{
+    Normal,
+    Level1,
+    Level2,
+    Level3,
+    Level4,
+    Suppressed,
+    RemindersOff
+}
+
 internal static class TrayIconFactory
 {
-    public static Icon Create(Color color)
+    public static Icon Create(TrayIconKind kind, Color color)
     {
         using var bitmap = new Bitmap(32, 32);
         using var graphics = Graphics.FromImage(bitmap);
@@ -14,6 +25,28 @@ internal static class TrayIconFactory
         graphics.Clear(Color.Transparent);
 
         DrawEye(graphics, color);
+
+        switch (kind)
+        {
+            case TrayIconKind.Level1:
+                DrawLevelBadge(graphics, color, ring: true, size: 8f);
+                break;
+            case TrayIconKind.Level2:
+                DrawLevelBadge(graphics, color, ring: false, size: 8f);
+                break;
+            case TrayIconKind.Level3:
+                DrawLevelBadge(graphics, color, ring: false, size: 11f);
+                break;
+            case TrayIconKind.Level4:
+                DrawLevelBadge(graphics, color, ring: false, size: 14f);
+                break;
+            case TrayIconKind.Suppressed:
+                DrawPendingDot(graphics, color);
+                break;
+            case TrayIconKind.RemindersOff:
+                DrawRemindersOffMark(graphics, color);
+                break;
+        }
 
         var handle = bitmap.GetHicon();
         try
@@ -49,6 +82,55 @@ internal static class TrayIconFactory
         graphics.DrawPath(stroke, eye);
         using var pupil = new SolidBrush(color);
         graphics.FillEllipse(pupil, 12f, 12f, 8f, 8f);
+    }
+
+    /// <summary>
+    /// A badge in the bottom-right corner that grows with severity, so the level reads in
+    /// greyscale. Level 1 is a hollow ring; the higher levels are filled discs of growing
+    /// size. The colour is reinforcement, not the message.
+    /// </summary>
+    private static void DrawLevelBadge(Graphics graphics, Color color, bool ring, float size)
+    {
+        float left = 32f - size - 2.5f;
+        float top = 32f - size - 2.5f;
+
+        if (ring)
+        {
+            using var pen = new Pen(color, 3f)
+            {
+                StartCap = LineCap.Round,
+                EndCap = LineCap.Round
+            };
+            graphics.DrawEllipse(pen, left, top, size, size);
+        }
+        else
+        {
+            using var brush = new SolidBrush(color);
+            graphics.FillEllipse(brush, left, top, size, size);
+        }
+    }
+
+    /// <summary>
+    /// A dot under the eye marks a reminder held back to a tray cue, so "muted" is not
+    /// just a grey eye.
+    /// </summary>
+    private static void DrawPendingDot(Graphics graphics, Color color)
+    {
+        using var brush = new SolidBrush(color);
+        graphics.FillEllipse(brush, 12.5f, 24.5f, 7f, 7f);
+    }
+
+    /// <summary>
+    /// A strike-through across the eye reads as "reminders off" in greyscale and colour.
+    /// </summary>
+    private static void DrawRemindersOffMark(Graphics graphics, Color color)
+    {
+        using var pen = new Pen(color, 3.2f)
+        {
+            StartCap = LineCap.Round,
+            EndCap = LineCap.Round
+        };
+        graphics.DrawLine(pen, 6f, 6f, 26f, 26f);
     }
 
     [DllImport("user32.dll")]

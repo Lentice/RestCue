@@ -49,10 +49,10 @@ public sealed class PresentationIntensityAppTests
     }
 
     [Fact]
-    public void FakeTrayIcon_SetDebtLevel_does_not_throw()
+    public void FakeTrayIcon_ApplyViewState_does_not_throw()
     {
         var tray = new FakeRecordingTrayIcon();
-        tray.SetDebtLevel(RestDebtLevel.Level4);
+        tray.ApplyViewState(new TrayViewState(WorkCyclePhase.Working, RestDebtLevel.Level4, IsSuppressed: false));
     }
 }
 
@@ -79,8 +79,7 @@ public sealed class FakeRecordingTrayIcon : ITrayIcon
 
     public bool Visible { get; set; }
     public string? LastStatusText { get; private set; }
-    public RestDebtLevel? LastDebtLevel { get; private set; }
-    public bool? LastSuppressed { get; private set; }
+    public TrayViewState? LastViewState { get; private set; }
 
     public void SetPauseText(bool isPaused) { }
     public void SetFocusModeText(bool isFocusMode) { }
@@ -90,8 +89,7 @@ public sealed class FakeRecordingTrayIcon : ITrayIcon
     public void SetFocusModeEnabled(bool enabled) { }
     public void SetDisableEnabled(bool enabled) { }
     public void SetBreakNowEnabled(bool enabled) { }
-    public void SetSuppressedState(bool isSuppressed) => LastSuppressed = isSuppressed;
-    public void SetDebtLevel(RestDebtLevel level) => LastDebtLevel = level;
+    public void ApplyViewState(TrayViewState state) => LastViewState = state;
     public void ShowLightTouchNotification(string title, string text, RestCue.Core.Settings.NotificationDuration duration) { }
 
     public void Dispose() { }

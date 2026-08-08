@@ -935,9 +935,10 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow, IWorkPha
                 + $"｜L{(int)CurrentDebtLevel}";
         }
 
-        return CommandAvailabilityPolicy.IsActiveCycle(phase)
-            ? App.GetStatusTextForDebtLevel(CurrentDebtLevel)
-            : App.GetStatusTextForPhase(phase);
+        // Non-working phases share the tray's own derivation, so the status window cannot
+        // drift away from what the tray actually shows.
+        return App.GetTrayTooltip(
+            new TrayViewState(phase, CurrentDebtLevel, IsSuppressed: false));
     }
 
     private static string FormatElapsedDuration(TimeSpan duration)

@@ -21,7 +21,8 @@ public sealed class TrayUpdateCountTests
     public void Different_phase_clears_suppressed_state()
     {
         var tray = new CountingTrayIcon();
-        tray.SetSuppressedState(true);
+        tray.ApplyViewState(
+            new TrayViewState(WorkCyclePhase.PendingReminder, RestDebtLevel.Level0, IsSuppressed: true));
 
         App.ApplyPhaseToTray(tray, WorkCyclePhase.Paused, RestDebtLevel.Level0);
 
@@ -36,7 +37,7 @@ public sealed class TrayUpdateCountTests
         App.ApplyPhaseToTray(tray, WorkCyclePhase.Working, RestDebtLevel.Level0);
         App.ApplyPhaseToTray(tray, WorkCyclePhase.Working, RestDebtLevel.Level2);
 
-        Assert.Equal(2, tray.SetDebtLevelCalls);
+        Assert.Equal(2, tray.ApplyViewStateCalls);
     }
 
     private sealed class CountingTrayIcon : ITrayIcon
@@ -61,11 +62,16 @@ public sealed class TrayUpdateCountTests
 
         public bool Visible { get; set; }
 
-        public int SetDebtLevelCalls { get; private set; }
-        public bool IsSuppressed { get; private set; }
+        public int ApplyViewStateCalls { get; private set; }
+        public bool IsSuppressed => LastViewState?.IsSuppressed ?? false;
+        public TrayViewState? LastViewState { get; private set; }
 
-        public void SetDebtLevel(RestDebtLevel level) => SetDebtLevelCalls++;
-        public void SetSuppressedState(bool isSuppressed) => IsSuppressed = isSuppressed;
+        public void ApplyViewState(TrayViewState state)
+        {
+            ApplyViewStateCalls++;
+            LastViewState = state;
+        }
+
         public void SetStatusText(string text) { }
         public void SetPauseText(bool isPaused) { }
         public void SetFocusModeText(bool isFocusMode) { }

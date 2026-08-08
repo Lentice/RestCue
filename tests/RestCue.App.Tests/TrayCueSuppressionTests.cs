@@ -18,7 +18,7 @@ public sealed class TrayCueSuppressionTests
 
         Apply(tray, new ReminderSuppressedEventArgs(showTrayCue: false));
         Assert.False(tray.IsSuppressed);
-        Assert.Equal("RestCue – Eye Break Reminder", tray.StatusText);
+        Assert.Equal("RestCue – 監視中 (Level 0)", tray.StatusText);
     }
 
     [Fact]
@@ -152,16 +152,16 @@ public sealed class TrayCueSuppressionTests
 #pragma warning restore CS0067
 
         public bool Visible { get; set; }
-        public bool IsSuppressed { get; private set; }
-        public string? StatusText { get; private set; }
+        public bool IsSuppressed => LastViewState?.IsSuppressed ?? false;
+        public string? StatusText =>
+            LastViewState is null ? null : App.GetTrayTooltip(LastViewState.Value);
         public string? NotifiedTitle { get; private set; }
         public string? NotifiedText { get; private set; }
+        public TrayViewState? LastViewState { get; private set; }
 
-        public void SetSuppressedState(bool isSuppressed) => IsSuppressed = isSuppressed;
+        public void ApplyViewState(TrayViewState state) => LastViewState = state;
 
-        public void SetStatusText(string text) => StatusText = text;
-
-        public void SetDebtLevel(RestDebtLevel level) { }
+        public void SetStatusText(string text) { }
 
         public void Dispose() { }
         public void RequestOpen() => OpenRequested?.Invoke(this, EventArgs.Empty);

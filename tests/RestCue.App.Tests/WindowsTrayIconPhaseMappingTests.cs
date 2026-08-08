@@ -68,7 +68,8 @@ public sealed class WindowsTrayIconPhaseMappingTests
     public void Paused_clears_suppressed_state()
     {
         var tray = new FakeTrayIcon();
-        tray.SetSuppressedState(true);
+        tray.ApplyViewState(
+            new TrayViewState(WorkCyclePhase.PendingReminder, RestDebtLevel.Level0, IsSuppressed: true));
 
         App.ApplyPhaseToTray(tray, WorkCyclePhase.Paused, RestDebtLevel.Level0);
 
@@ -83,7 +84,8 @@ public sealed class WindowsTrayIconPhaseMappingTests
     public void FocusMode_clears_suppressed_state()
     {
         var tray = new FakeTrayIcon();
-        tray.SetSuppressedState(true);
+        tray.ApplyViewState(
+            new TrayViewState(WorkCyclePhase.PendingReminder, RestDebtLevel.Level0, IsSuppressed: true));
 
         App.ApplyPhaseToTray(tray, WorkCyclePhase.FocusMode, RestDebtLevel.Level0);
 
@@ -106,6 +108,63 @@ public sealed class WindowsTrayIconPhaseMappingTests
             "RestCue｜有效工作 7分｜距休息需求 約13分｜L0");
 
         Assert.Equal("RestCue｜有效工作 7分｜距休息需求 約13分｜L0", tray.StatusText);
+    }
+
+    [Theory]
+    [InlineData(WorkCyclePhase.FocusMode, RestDebtLevel.Level2, "RestCue – 專注模式 · 明顯疲勞 (Level 2)")]
+    [InlineData(WorkCyclePhase.Paused, RestDebtLevel.Level4, "RestCue – 已暫停 · 急需休息 (Level 4)")]
+    [InlineData(WorkCyclePhase.Disabled, RestDebtLevel.Level4, "RestCue – 已停用 · 急需休息 (Level 4)")]
+    [InlineData(WorkCyclePhase.Working, RestDebtLevel.Level2, "RestCue – 明顯疲勞 (Level 2)")]
+    public void ApplyPhaseToTray_tooltip_names_mode_and_debt_together(
+        WorkCyclePhase phase, RestDebtLevel level, string expected)
+    {
+        var tray = new FakeTrayIcon();
+
+        App.ApplyPhaseToTray(tray, phase, level);
+
+        Assert.Equal(expected, tray.StatusText);
+    }
+
+    [Theory]
+    [MemberData(nameof(AllPhases))]
+    public void Debt_change_refreshes_tooltip_in_every_phase(WorkCyclePhase phase)
+    {
+        var tray = new FakeTrayIcon();
+        App.ApplyPhaseToTray(tray, phase, RestDebtLevel.Level1);
+        string before = tray.StatusText!;
+
+        App.ApplyDebtLevelChangeToTray(tray, phase, RestDebtLevel.Level3, isSuppressed: false);
+
+        Assert.NotEqual(before, tray.StatusText);
+        Assert.Contains("Level 3", tray.StatusText);
+    }
+
+    [Fact]
+    public void Debt_change_while_a_reminder_is_pending_keeps_the_cue_text_with_the_new_level()
+    {
+        var tray = new FakeTrayIcon();
+        App.ApplySuppressedReminderToTray(
+            tray,
+            showTrayCue: true,
+            level: RestDebtLevel.Level1,
+            phase: WorkCyclePhase.PendingReminder);
+
+        App.ApplyDebtLevelChangeToTray(
+            tray, WorkCyclePhase.PendingReminder, RestDebtLevel.Level4, isSuppressed: true);
+
+        Assert.Equal("RestCue – 急需休息 (Level 4) · 休息提醒待處理", tray.StatusText);
+    }
+
+    [Fact]
+    public void ApplyPhaseToTray_PauseAtLevel4_DoesNotLeaveTheUrgentIcon()
+    {
+        using var tray = new WindowsTrayIcon();
+
+        App.ApplyPhaseToTray(tray, WorkCyclePhase.Paused, RestDebtLevel.Level4);
+
+        Assert.Same(GetStaticIcon("RemindersOffIcon"), GetCurrentIcon(tray));
+        Assert.NotSame(GetStaticIcon("Level4Icon"), GetCurrentIcon(tray));
+        Assert.Equal("RestCue – 已暫停 · 急需休息 (Level 4)", GetCurrentText(tray));
     }
 
     [Fact]
@@ -221,8 +280,8 @@ public sealed class WindowsTrayIconPhaseMappingTests
         RestDebtLevel level, string expectedIconField)
     {
         using var tray = new WindowsTrayIcon();
-        tray.SetDebtLevel(level);
-        tray.SetSuppressedState(true);
+        tray.ApplyViewState(
+            new TrayViewState(WorkCyclePhase.PendingReminder, level, IsSuppressed: true));
 
         Assert.Same(GetStaticIcon(expectedIconField), GetCurrentIcon(tray));
     }
@@ -231,10 +290,89 @@ public sealed class WindowsTrayIconPhaseMappingTests
     public void WindowsTrayIcon_DebtRisingWhileReminderPending_UpdatesIcon()
     {
         using var tray = new WindowsTrayIcon();
-        tray.SetSuppressedState(true);
-        tray.SetDebtLevel(RestDebtLevel.Level2);
+        tray.ApplyViewState(
+            new TrayViewState(WorkCyclePhase.PendingReminder, RestDebtLevel.Level2, IsSuppressed: true));
 
         Assert.Same(GetStaticIcon("Level2Icon"), GetCurrentIcon(tray));
+    }
+
+    [Fact]
+    public void WindowsTrayIcon_FocusMode_KeepsTheDebtIcon()
+    {
+        using var tray = new WindowsTrayIcon();
+        tray.ApplyViewState(
+            new TrayViewState(WorkCyclePhase.FocusMode, RestDebtLevel.Level2, IsSuppressed: false));
+
+        Assert.Same(GetStaticIcon("Level2Icon"), GetCurrentIcon(tray));
+    }
+
+    [Theory]
+    [InlineData(WorkCyclePhase.Paused)]
+    [InlineData(WorkCyclePhase.Disabled)]
+    public void WindowsTrayIcon_ModeAtLevel4_ShowsRemindersOffNotUrgentDebtIcon(WorkCyclePhase mode)
+    {
+        using var tray = new WindowsTrayIcon();
+        tray.ApplyViewState(new TrayViewState(mode, RestDebtLevel.Level4, IsSuppressed: false));
+
+        Assert.Same(GetStaticIcon("RemindersOffIcon"), GetCurrentIcon(tray));
+        Assert.NotSame(GetStaticIcon("Level4Icon"), GetCurrentIcon(tray));
+    }
+
+    [Theory]
+    [InlineData(WorkCyclePhase.Paused)]
+    [InlineData(WorkCyclePhase.FocusMode)]
+    [InlineData(WorkCyclePhase.Disabled)]
+    public void WindowsTrayIcon_LeavingAMode_RestoresTheDebtIconAndTooltip(WorkCyclePhase mode)
+    {
+        using var tray = new WindowsTrayIcon();
+        tray.ApplyViewState(new TrayViewState(mode, RestDebtLevel.Level3, IsSuppressed: false));
+
+        tray.ApplyViewState(
+            new TrayViewState(WorkCyclePhase.Working, RestDebtLevel.Level3, IsSuppressed: false));
+
+        Assert.Same(GetStaticIcon("Level3Icon"), GetCurrentIcon(tray));
+        Assert.Contains("Level 3", GetCurrentText(tray));
+    }
+
+    [Fact]
+    public void WindowsTrayIcon_DebtLevelIcons_DifferInGreyscale()
+    {
+        string[] levelFields = ["NormalIcon", "Level1Icon", "Level2Icon", "Level3Icon", "Level4Icon"];
+        byte[][] greys = levelFields
+            .Select(field => GreyscalePixels((Icon)GetStaticIcon(field)!))
+            .ToArray();
+
+        for (int i = 0; i < greys.Length; i++)
+        {
+            for (int j = i + 1; j < greys.Length; j++)
+            {
+                Assert.False(
+                    greys[i].AsSpan().SequenceEqual(greys[j]),
+                    $"Level icons {levelFields[i]} and {levelFields[j]} are indistinguishable in greyscale.");
+            }
+        }
+    }
+
+    private static byte[] GreyscalePixels(Icon icon)
+    {
+        using var bitmap = new Bitmap(32, 32);
+        using (var graphics = Graphics.FromImage(bitmap))
+        {
+            graphics.Clear(Color.Transparent);
+            graphics.DrawIcon(icon, new Rectangle(0, 0, 32, 32));
+        }
+
+        var pixels = new byte[32 * 32];
+        for (int y = 0; y < 32; y++)
+        {
+            for (int x = 0; x < 32; x++)
+            {
+                Color c = bitmap.GetPixel(x, y);
+                pixels[(y * 32) + x] = (byte)((0.299 * c.R) + (0.587 * c.G) + (0.114 * c.B));
+            }
+        }
+
+        return pixels;
     }
 
     private static object? GetStaticIcon(string fieldName) =>
@@ -248,6 +386,14 @@ public sealed class WindowsTrayIconPhaseMappingTests
             .GetField("notifyIcon", BindingFlags.NonPublic | BindingFlags.Instance)!
             .GetValue(tray);
         return notifyIcon!.GetType().GetProperty("Icon")!.GetValue(notifyIcon);
+    }
+
+    private static string? GetCurrentText(WindowsTrayIcon tray)
+    {
+        var notifyIcon = typeof(WindowsTrayIcon)
+            .GetField("notifyIcon", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(tray);
+        return (string?)notifyIcon!.GetType().GetProperty("Text")!.GetValue(notifyIcon);
     }
 
     private static bool GetMenuItemEnabled(WindowsTrayIcon tray, string fieldName)
@@ -315,9 +461,11 @@ public sealed class WindowsTrayIconPhaseMappingTests
 
         public bool BreakNowEnabled { get; private set; } = true;
 
-        public bool IsSuppressed { get; private set; }
+        public bool IsSuppressed => LastViewState?.IsSuppressed ?? false;
 
         public string? StatusText { get; private set; }
+
+        public TrayViewState? LastViewState { get; private set; }
 
         public bool Visible
         {
@@ -362,9 +510,12 @@ public sealed class WindowsTrayIconPhaseMappingTests
 
         public void SetStatusText(string text) => StatusText = text;
 
-        public void SetSuppressedState(bool isSuppressed) => IsSuppressed = isSuppressed;
+        public void ApplyViewState(TrayViewState state)
+        {
+            LastViewState = state;
+            StatusText = App.GetTrayTooltip(state);
+        }
 
-        public void SetDebtLevel(RestDebtLevel level) { }
         public void ShowLightTouchNotification(string title, string text, RestCue.Core.Settings.NotificationDuration duration) { }
     }
 }

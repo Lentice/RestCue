@@ -32,6 +32,7 @@ public partial class App : System.Windows.Application
     private WorkCycleTracker? tracker;
     private WindowsBreakGuideAudioPlayer? audioPlayer;
     private WorkCyclePhase lastPhase;
+    private bool traySuppressed;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -552,7 +553,7 @@ public partial class App : System.Windows.Application
             trayIcon,
             lastPhase,
             statusWindow.CurrentDebtLevel,
-            statusWindow.CurrentTrayStatusText);
+            lastPhase == WorkCyclePhase.Working ? statusWindow.CurrentTrayStatusText : null);
     }
 
     private void WireTrayCommands()
@@ -574,20 +575,26 @@ public partial class App : System.Windows.Application
         statusWindow.TrayStatusChanged += OnTrayStatusChanged;
         statusWindow.LowInterruptionReminderRequested += (_, e) =>
         {
-            if (trayIcon != null)
-                ApplySuppressedReminderToTray(
-                    trayIcon, e.ShowTrayCue, statusWindow?.CurrentDebtLevel ?? RestDebtLevel.Level0);
+            if (trayIcon == null) return;
+            traySuppressed = e.ShowTrayCue;
+            ApplySuppressedReminderToTray(
+                trayIcon,
+                e.ShowTrayCue,
+                statusWindow?.CurrentDebtLevel ?? RestDebtLevel.Level0,
+                lastPhase);
         };
 
         statusWindow.LightTouchReminderRequested += (_, _) =>
         {
-            if (trayIcon != null)
-                ApplyLightTouchReminderToTray(
-                    trayIcon,
-                    startup?.CurrentSettings.LightTouchSoundEnabled == true,
-                    System.Media.SystemSounds.Asterisk.Play,
-                    startup?.CurrentSettings.NotificationDuration ?? NotificationDuration.Default,
-                    statusWindow?.CurrentDebtLevel ?? RestDebtLevel.Level0);
+            if (trayIcon == null) return;
+            traySuppressed = true;
+            ApplyLightTouchReminderToTray(
+                trayIcon,
+                startup?.CurrentSettings.LightTouchSoundEnabled == true,
+                System.Media.SystemSounds.Asterisk.Play,
+                startup?.CurrentSettings.NotificationDuration ?? NotificationDuration.Default,
+                statusWindow?.CurrentDebtLevel ?? RestDebtLevel.Level0,
+                lastPhase);
         };
     }
 
@@ -781,16 +788,38 @@ public partial class App : System.Windows.Application
         };
     }
 
-    internal static string GetStatusTextForDebtLevel(RestDebtLevel level)
+    internal static string GetStatusTextForDebtLevel(RestDebtLevel level) =>
+        $"RestCue – {GetDebtLevelLabel(level)}";
+
+    internal static string GetDebtLevelLabel(RestDebtLevel level)
     {
         return level switch
         {
-            RestDebtLevel.Level1 => "RestCue – 輕微疲勞 (Level 1)",
-            RestDebtLevel.Level2 => "RestCue – 明顯疲勞 (Level 2)",
-            RestDebtLevel.Level3 => "RestCue – 需要休息 (Level 3)",
-            RestDebtLevel.Level4 => "RestCue – 急需休息 (Level 4)",
-            _ => "RestCue – 監視中 (Level 0)"
+            RestDebtLevel.Level1 => "輕微疲勞 (Level 1)",
+            RestDebtLevel.Level2 => "明顯疲勞 (Level 2)",
+            RestDebtLevel.Level3 => "需要休息 (Level 3)",
+            RestDebtLevel.Level4 => "急需休息 (Level 4)",
+            _ => "監視中 (Level 0)"
         };
+    }
+
+    /// <summary>
+    /// The single derivation of the tray tooltip from the tray's view state, so the real
+    /// tray icon, the appliers and the tests cannot disagree. Names the mode and the
+    /// rest-debt level together when both are meaningful.
+    /// </summary>
+    internal static string GetTrayTooltip(TrayViewState state)
+    {
+        if (state.IsSuppressed)
+            return GetPendingReminderStatusText(state.DebtLevel);
+
+        if (CommandAvailabilityPolicy.IsActiveCycle(state.Mode))
+            return GetStatusTextForDebtLevel(state.DebtLevel);
+
+        string modeText = GetStatusTextForPhase(state.Mode);
+        return state.DebtLevel == RestDebtLevel.Level0
+            ? modeText
+            : $"{modeText} · {GetDebtLevelLabel(state.DebtLevel)}";
     }
 
     /// <summary>
@@ -806,15 +835,15 @@ public partial class App : System.Windows.Application
     {
         ArgumentNullException.ThrowIfNull(tray);
 
-        tray.SetSuppressedState(false);
+        tray.ApplyViewState(new TrayViewState(phase, debtLevel, IsSuppressed: false));
         ApplyAvailabilityToTray(tray, CommandAvailabilityPolicy.ForPhase(phase));
-        tray.SetDebtLevel(debtLevel);
 
-        // During an active cycle the debt level is the more useful status; the mode
-        // phases name themselves.
-        tray.SetStatusText(statusText ?? (CommandAvailabilityPolicy.IsActiveCycle(phase)
-            ? GetStatusTextForDebtLevel(debtLevel)
-            : GetStatusTextForPhase(phase)));
+        // The only override is the live status summary shown while working; everywhere
+        // else the tooltip comes from the view state, so mode and debt stay together.
+        if (statusText != null)
+        {
+            tray.SetStatusText(statusText);
+        }
     }
 
     private static void ApplyAvailabilityToTray(ITrayIcon tray, CommandAvailability availability)
@@ -860,14 +889,14 @@ public partial class App : System.Windows.Application
     /// tested by calling it instead of by a test reimplementing it.
     /// </remarks>
     internal static void ApplySuppressedReminderToTray(
-        ITrayIcon tray, bool showTrayCue, RestDebtLevel level = RestDebtLevel.Level0)
+        ITrayIcon tray,
+        bool showTrayCue,
+        RestDebtLevel level = RestDebtLevel.Level0,
+        WorkCyclePhase phase = WorkCyclePhase.PendingReminder)
     {
         ArgumentNullException.ThrowIfNull(tray);
 
-        tray.SetSuppressedState(showTrayCue);
-        tray.SetStatusText(showTrayCue
-            ? GetPendingReminderStatusText(level)
-            : "RestCue – Eye Break Reminder");
+        tray.ApplyViewState(new TrayViewState(phase, level, showTrayCue));
     }
 
     /// <summary>
@@ -877,13 +906,13 @@ public partial class App : System.Windows.Application
     internal static void ApplyLightTouchReminderToTray(
         ITrayIcon tray, bool soundEnabled, Action playSound,
         NotificationDuration duration = NotificationDuration.Default,
-        RestDebtLevel level = RestDebtLevel.Level0)
+        RestDebtLevel level = RestDebtLevel.Level0,
+        WorkCyclePhase phase = WorkCyclePhase.PendingReminder)
     {
         ArgumentNullException.ThrowIfNull(tray);
         ArgumentNullException.ThrowIfNull(playSound);
 
-        tray.SetSuppressedState(true);
-        tray.SetStatusText(GetPendingReminderStatusText(level));
+        tray.ApplyViewState(new TrayViewState(phase, level, IsSuppressed: true));
         tray.ShowLightTouchNotification(
             "RestCue – 休息提醒",
             "該休息了！點擊系統列圖示查看詳情。",
@@ -893,6 +922,19 @@ public partial class App : System.Windows.Application
         {
             playSound();
         }
+    }
+
+    /// <summary>
+    /// Re-applies the tray view state for a rest-debt change. Deliberately not gated on
+    /// the phase: debt climbing must refresh the tooltip in every phase, including Focus
+    /// Mode, Pause and Disabled, not just while an active cycle is running.
+    /// </summary>
+    internal static void ApplyDebtLevelChangeToTray(
+        ITrayIcon tray, WorkCyclePhase phase, RestDebtLevel level, bool isSuppressed)
+    {
+        ArgumentNullException.ThrowIfNull(tray);
+
+        tray.ApplyViewState(new TrayViewState(phase, level, isSuppressed));
     }
 
     internal const string PendingReminderStatusText = "RestCue – 休息提醒待處理";
@@ -911,11 +953,12 @@ public partial class App : System.Windows.Application
         if (trayIcon == null || statusWindow == null) return;
 
         lastPhase = phase;
+        traySuppressed = false;
         ApplyPhaseToTray(
             trayIcon,
             phase,
             statusWindow.CurrentDebtLevel,
-            statusWindow.CurrentTrayStatusText);
+            phase == WorkCyclePhase.Working ? statusWindow.CurrentTrayStatusText : null);
     }
 
     private void OnTrayStatusChanged(object? sender, EventArgs e)
@@ -932,12 +975,7 @@ public partial class App : System.Windows.Application
     {
         if (trayIcon == null || statusWindow == null) return;
 
-        trayIcon.SetDebtLevel(e.Current);
-
-        if (CommandAvailabilityPolicy.IsActiveCycle(lastPhase))
-        {
-            trayIcon.SetStatusText(GetStatusTextForDebtLevel(e.Current));
-        }
+        ApplyDebtLevelChangeToTray(trayIcon, lastPhase, e.Current, traySuppressed);
 
         // Debt level rising matters regardless of idle/paused state, so this is
         // deliberately outside the active-cycle check.
