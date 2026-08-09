@@ -42,7 +42,8 @@ public sealed partial class TransparencyWindow : Window
             .Select(c => new
             {
                 Label = c.Label,
-                State = FormatCollectionState(c.State)
+                State = FormatCollectionState(c.State),
+                Detail = string.IsNullOrWhiteSpace(c.Detail) ? null : c.Detail
             })
             .ToList();
 

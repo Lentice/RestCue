@@ -41,12 +41,20 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
                                         <TextBlock Grid.Column="0"
                                                    Style="{StaticResource KeyValueKeyStyle}"
                                                    Text="{Binding Label}" />
                                         <TextBlock Grid.Column="1"
                                                    Style="{StaticResource KeyValueValueStyle}"
                                                    Text="{Binding State}" />
+                                        <TextBlock Grid.Row="1" Grid.ColumnSpan="2"
+                                                   Margin="0,0,0,4"
+                                                   Style="{StaticResource MetricLabelStyle}"
+                                                   Text="{Binding Detail}" />
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>

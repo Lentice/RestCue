@@ -50,7 +50,7 @@ public sealed class DataTransparencyServiceTests
     }
 
     [Fact]
-    public async Task Opt_in_off_reports_disabled_not_zero()
+    public async Task Opt_in_off_with_no_data_reports_disabled()
     {
         var (service, _) = CreateService(collectForegroundProcessNames: false);
         var snapshot = await service.GetSnapshotAsync();
@@ -58,6 +58,25 @@ public sealed class DataTransparencyServiceTests
         var fgCategory = snapshot.Categories
             .First(c => c.Label == "Foreground process name collection");
         Assert.Equal(CollectionState.DisabledByUser, fgCategory.State);
+        Assert.Equal("Opt-in is disabled by default", fgCategory.Detail);
+    }
+
+    [Fact]
+    public async Task Opt_in_off_with_historical_data_reports_stored_data()
+    {
+        var (service, reader) = CreateService(collectForegroundProcessNames: false);
+        reader.AddEvent(UsageEventType.ForegroundProcessChanged,
+            new DateTimeOffset(2026, 6, 15, 10, 0, 0, TimeSpan.Zero));
+        reader.AddEvent(UsageEventType.ForegroundProcessChanged,
+            new DateTimeOffset(2026, 6, 15, 11, 0, 0, TimeSpan.Zero));
+        var snapshot = await service.GetSnapshotAsync();
+
+        var fgCategory = snapshot.Categories
+            .First(c => c.Label == "Foreground process name collection");
+        Assert.Equal(CollectionState.EnabledWithData, fgCategory.State);
+        Assert.NotNull(fgCategory.Detail);
+        Assert.Contains("2", fgCategory.Detail);
+        Assert.Contains("SQLite", fgCategory.Detail);
     }
 
     [Fact]
@@ -70,6 +89,28 @@ public sealed class DataTransparencyServiceTests
             .First(c => c.Label == "Foreground process name collection");
         Assert.NotEqual(CollectionState.DisabledByUser, fgCategory.State);
         Assert.Equal(CollectionState.EnabledEmpty, fgCategory.State);
+        Assert.NotNull(fgCategory.Detail);
+        Assert.Contains("SQLite", fgCategory.Detail);
+    }
+
+    [Fact]
+    public async Task Opt_in_on_with_data_reflects_metadata_count()
+    {
+        var (service, reader) = CreateService(collectForegroundProcessNames: true);
+        reader.AddEvent(UsageEventType.ForegroundProcessChanged,
+            new DateTimeOffset(2026, 6, 15, 10, 0, 0, TimeSpan.Zero));
+        reader.AddEvent(UsageEventType.ForegroundProcessChanged,
+            new DateTimeOffset(2026, 6, 15, 11, 0, 0, TimeSpan.Zero));
+        reader.AddEvent(UsageEventType.ForegroundProcessChanged,
+            new DateTimeOffset(2026, 6, 15, 12, 0, 0, TimeSpan.Zero));
+        var snapshot = await service.GetSnapshotAsync();
+
+        var fgCategory = snapshot.Categories
+            .First(c => c.Label == "Foreground process name collection");
+        Assert.Equal(CollectionState.EnabledWithData, fgCategory.State);
+        Assert.NotNull(fgCategory.Detail);
+        Assert.Contains("3", fgCategory.Detail);
+        Assert.Contains("SQLite", fgCategory.Detail);
     }
 
     [Fact]

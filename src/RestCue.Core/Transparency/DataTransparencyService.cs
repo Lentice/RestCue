@@ -78,6 +78,28 @@ public sealed class DataTransparencyService : IDataTransparencyService
         {
         }
 
+        var foregroundProcessCount = metadata.PerTypeCounts.TryGetValue(
+            UsageEventType.ForegroundProcessChanged, out var fgCount)
+                ? fgCount
+                : 0;
+
+        var (foregroundState, foregroundDetail) =
+            (settings.CollectForegroundProcessNames, foregroundProcessCount) switch
+            {
+                (true, > 0) => (
+                    CollectionState.EnabledWithData,
+                    $"{foregroundProcessCount} 筆前景程式名稱事件，已儲存於本機 SQLite 資料庫"),
+                (true, _) => (
+                    CollectionState.EnabledEmpty,
+                    "已啟用，收集到的前景程式名稱會儲存於本機 SQLite 資料庫，目前尚無資料"),
+                (false, > 0) => (
+                    CollectionState.EnabledWithData,
+                    $"已停用收集，但本機 SQLite 資料庫仍保留先前的 {foregroundProcessCount} 筆前景程式名稱事件"),
+                (false, _) => (
+                    CollectionState.DisabledByUser,
+                    "Opt-in is disabled by default"),
+            };
+
         var categories = new List<DataCategoryStatus>
         {
             new(
@@ -86,12 +108,8 @@ public sealed class DataTransparencyService : IDataTransparencyService
                 "Used to determine activity state; no content is recorded"),
             new(
                 "Foreground process name collection",
-                settings.CollectForegroundProcessNames
-                    ? CollectionState.EnabledEmpty
-                    : CollectionState.DisabledByUser,
-                settings.CollectForegroundProcessNames
-                    ? "Opt-in enabled but data is only in memory, never persisted"
-                    : "Opt-in is disabled by default"),
+                foregroundState,
+                foregroundDetail),
         };
 
         foreach (var label in NeverCollectedLabels)
