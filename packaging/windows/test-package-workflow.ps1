@@ -31,6 +31,10 @@ if ($builder -match 'dotnet\s+restore[^\r\n]*--configuration') {
     $failures.Add("build-package.ps1 passes unsupported --configuration to dotnet restore.")
 }
 
+if ($builder -match '--framework\s+') {
+    $failures.Add("build-package.ps1 pins a publish --framework that can drift from the project-declared TFM.")
+}
+
 if ($builder -match '(?s)param\s*\([^)]*\$Version') {
     $failures.Add("build-package.ps1 must not expose an installer-only version override.")
 }

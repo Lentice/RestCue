@@ -37,12 +37,17 @@ if ($LASTEXITCODE -ne 0) { throw "Tests failed." }
 
 # Step 2: Publish
 Write-Host "`n[4/5] Publishing..." -ForegroundColor Yellow
-dotnet publish "$RepoRoot\src\RestCue.App\RestCue.App.csproj" `
-    --configuration $Configuration `
-    --framework net10.0-windows `
-    --runtime win-x64 `
-    --self-contained false `
-    --output $PublishDir
+$publishArgs = @(
+    "$RepoRoot\src\RestCue.App\RestCue.App.csproj"
+    # No --framework: the project has a single TFM, and pinning it here drifts
+    # whenever the required Windows SDK version changes.
+    "--configuration", $Configuration
+    "--runtime", "win-x64"
+    "--self-contained", "false"
+    "--output", $PublishDir
+)
+
+dotnet publish @publishArgs
 if ($LASTEXITCODE -ne 0) { throw "Publish failed." }
 
 # Read the installer version from the binary so package metadata cannot drift.
