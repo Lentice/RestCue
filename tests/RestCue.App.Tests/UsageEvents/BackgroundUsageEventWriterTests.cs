@@ -175,6 +175,29 @@ public sealed class BackgroundUsageEventWriterTests : IDisposable
     }
 
     [Fact]
+    public async Task RunExclusiveAsync_serializes_metadata_write_with_event_writes()
+    {
+        var order = new List<string>();
+        var fake = new FakeUsageEventRepository(onWrite: () => order.Add("event"));
+        using var writer = new BackgroundUsageEventWriter(fake);
+
+        writer.Write(UsageEventType.BreakStarted, DateTimeOffset.UtcNow);
+        bool recorded = await writer.RunExclusiveAsync(async () =>
+        {
+            order.Add("clear");
+            await Task.Yield();
+            order.Add("metadata");
+            return true;
+        });
+        writer.Write(UsageEventType.BreakCompleted, DateTimeOffset.UtcNow);
+
+        writer.Dispose();
+
+        Assert.True(recorded);
+        Assert.Equal(["event", "clear", "metadata", "event"], order);
+    }
+
+    [Fact]
     public async Task Dispose_returns_after_timeout_when_exclusive_operation_is_stuck()
     {
         var started = new ManualResetEventSlim();

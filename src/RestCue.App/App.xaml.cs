@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Threading;
 using RestCue.App.Lifecycle;
 using RestCue.App.UsageEvents;
+using RestCue.Core.DataManagement;
 using RestCue.Core.Domain;
 using RestCue.Core.Events;
 using RestCue.Core.Policies;
@@ -307,17 +308,18 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        var maintenance = new SqliteUsageDataMaintenance(
+            LocalSettingsPaths.DatabaseFile);
+        Func<Task<ClearResult>> clearAndRecord = () => ClearAndRecordAsync(
+            () => maintenance.ClearUsageHistoryAsync(),
+            () => DataManagementWindow.WriteTimestampAsync("last_data_clear_utc"));
         var window = new DataManagementWindow(
             usageEventRepository,
             settingsRepository,
-            () =>
-            {
-                var maintenance = new SqliteUsageDataMaintenance(
-                    LocalSettingsPaths.DatabaseFile);
-                return eventWriter == null
-                    ? maintenance.ClearUsageHistoryAsync()
-                    : eventWriter.RunExclusiveAsync(() => maintenance.ClearUsageHistoryAsync());
-            });
+            () => eventWriter == null
+                ? clearAndRecord()
+                : eventWriter.RunExclusiveAsync(clearAndRecord),
+            () => WriteSerializedTimestampAsync("last_data_export_utc"));
         window.DataCleared += (_, _) =>
         {
             foreach (var statisticsWindow in Current.Windows.OfType<StatisticsWindow>())
@@ -337,6 +339,36 @@ public partial class App : System.Windows.Application
                 loadResult.Settings.CollectForegroundProcessNames);
         };
         window.Show();
+    }
+
+    /// <summary>
+    /// Clears the usage history and, only when the clear succeeded, records the
+    /// timestamp. Composed inside the event writer's exclusive channel so the metadata
+    /// write cannot race a background event write and fail after the clear succeeded.
+    /// </summary>
+    internal static async Task<ClearResult> ClearAndRecordAsync(
+        Func<Task<ClearResult>> clear,
+        Func<Task> recordTimestamp)
+    {
+        ArgumentNullException.ThrowIfNull(clear);
+        ArgumentNullException.ThrowIfNull(recordTimestamp);
+
+        ClearResult result = await clear();
+        if (result.Succeeded)
+            await recordTimestamp();
+        return result;
+    }
+
+    private Task WriteSerializedTimestampAsync(string key)
+    {
+        Func<Task> record = () => DataManagementWindow.WriteTimestampAsync(key);
+        return eventWriter == null
+            ? record()
+            : eventWriter.RunExclusiveAsync(async () =>
+            {
+                await record();
+                return true;
+            });
     }
 
     private void OpenSettingsWindow()

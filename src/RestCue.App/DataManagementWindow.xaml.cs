@@ -15,17 +15,20 @@ public sealed partial class DataManagementWindow : Window
     private readonly IUsageEventRepository usageEventRepository;
     private readonly ISettingsRepository settingsRepository;
     private readonly Func<Task<ClearResult>>? clearUsageHistory;
+    private readonly Func<Task>? recordExportTimestamp;
 
     public DataManagementWindow(
         IUsageEventRepository usageEventRepository,
         ISettingsRepository settingsRepository,
-        Func<Task<ClearResult>>? clearUsageHistory = null)
+        Func<Task<ClearResult>>? clearUsageHistory = null,
+        Func<Task>? recordExportTimestamp = null)
     {
         ArgumentNullException.ThrowIfNull(usageEventRepository);
         ArgumentNullException.ThrowIfNull(settingsRepository);
         this.usageEventRepository = usageEventRepository;
         this.settingsRepository = settingsRepository;
         this.clearUsageHistory = clearUsageHistory;
+        this.recordExportTimestamp = recordExportTimestamp;
         InitializeComponent();
     }
 
@@ -62,7 +65,15 @@ public sealed partial class DataManagementWindow : Window
 
             if (result.Succeeded)
             {
-                await WriteTimestampAsync("last_data_export_utc");
+                if (recordExportTimestamp != null)
+                {
+                    await recordExportTimestamp();
+                }
+                else
+                {
+                    await WriteTimestampAsync("last_data_export_utc");
+                }
+
                 ExportStatusText.Text = $"已匯出至: {result.WrittenPath}";
             }
             else
@@ -113,7 +124,13 @@ public sealed partial class DataManagementWindow : Window
 
             if (result.Succeeded)
             {
-                await WriteTimestampAsync("last_data_clear_utc");
+                // The exclusive clear delegate records the timestamp itself inside the
+                // writer's channel; only the no-writer fallback writes it here.
+                if (clearUsageHistory == null)
+                {
+                    await WriteTimestampAsync("last_data_clear_utc");
+                }
+
                 ClearHistoryStatusText.Text = $"已清除 {result.AffectedRowCount} 筆記錄。";
                 OnDataCleared();
             }
@@ -132,7 +149,7 @@ public sealed partial class DataManagementWindow : Window
         }
     }
 
-    private static async Task WriteTimestampAsync(string key)
+    internal static async Task WriteTimestampAsync(string key)
     {
         var dbPath = Infrastructure.Settings.LocalSettingsPaths.DatabaseFile;
         var cs = new SqliteConnectionStringBuilder
