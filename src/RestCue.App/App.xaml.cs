@@ -69,10 +69,13 @@ public partial class App : System.Windows.Application
             statusWindow.AudioPlayer = audioPlayer;
             ruleRepository = new SqliteApplicationRuleRepository(LocalSettingsPaths.DatabaseFile);
             var loadedRules = await ruleRepository.LoadAllAsync();
+            suggestionStore = new SqliteSuggestionStore(LocalSettingsPaths.DatabaseFile);
+            var dismissedProcessNames = await suggestionStore.GetDismissedProcessNamesAsync();
 
-            var defaultSuggestionNames = DefaultApplicationRules.All
-                .Select(r => r.ProcessName)
-                .Except(loadedRules.Select(r => r.ProcessName), StringComparer.OrdinalIgnoreCase);
+            var defaultSuggestionNames = GetDefaultSuggestionProcessNames(
+                DefaultApplicationRules.All.Select(r => r.ProcessName),
+                loadedRules.Select(r => r.ProcessName),
+                dismissedProcessNames);
 
             statusWindow.StartActivityTracking(
                 new WindowsUserActivityMonitor(),
@@ -627,9 +630,31 @@ public partial class App : System.Windows.Application
     {
         if (ruleRepository == null || statusWindow == null) return;
 
-        suggestionStore = new SqliteSuggestionStore(LocalSettingsPaths.DatabaseFile);
+        suggestionStore ??= new SqliteSuggestionStore(LocalSettingsPaths.DatabaseFile);
 
         statusWindow.SuggestionRequested += OnSuggestionRequested;
+    }
+
+    /// <summary>
+    /// The default application-rule suggestions to offer at startup: the defaults that are
+    /// neither already a persisted rule nor a suggestion the user has dismissed. Matching
+    /// is case-insensitive because process names are compared that way everywhere else.
+    /// </summary>
+    internal static IReadOnlySet<string> GetDefaultSuggestionProcessNames(
+        IEnumerable<string> defaultProcessNames,
+        IEnumerable<string> loadedRuleProcessNames,
+        IEnumerable<string> dismissedProcessNames)
+    {
+        ArgumentNullException.ThrowIfNull(defaultProcessNames);
+        ArgumentNullException.ThrowIfNull(loadedRuleProcessNames);
+        ArgumentNullException.ThrowIfNull(dismissedProcessNames);
+
+        var excluded = new HashSet<string>(loadedRuleProcessNames, StringComparer.OrdinalIgnoreCase);
+        excluded.UnionWith(dismissedProcessNames);
+
+        return defaultProcessNames
+            .Where(name => !excluded.Contains(name))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     private async void OnSuggestionRequested(object? sender, SuggestionEventArgs e)
