@@ -8,7 +8,7 @@
 
 - C# / .NET 10 LTS
 - WPF
-- 本機 SQLite（由後續 persistence ticket 導入）
+- 本機 SQLite（設定與使用記錄持久化）
 - xUnit
 - GitHub Actions（Windows runner）
 
