@@ -10,6 +10,8 @@ namespace RestCue.Infrastructure.Tests.UsageEvents;
 
 public sealed class SqliteUsageEventRepositoryTests : IDisposable
 {
+    private sealed record UnknownPayload : UsageEventPayload;
+
     private readonly string directory = Path.Combine(
         Path.GetTempPath(),
         "RestCue.Tests",
@@ -90,6 +92,76 @@ public sealed class SqliteUsageEventRepositoryTests : IDisposable
         var p = Assert.IsType<RestDebtLevelChangedPayload>(events[0].Payload);
         Assert.Equal(RestDebtLevel.Level0, p.Previous);
         Assert.Equal(RestDebtLevel.Level2, p.Current);
+    }
+
+    [Fact]
+    public async Task ForegroundProcessChanged_payload_round_trips()
+    {
+        var (repo, _) = await CreateRepositoryAsync();
+        var occurred = new DateTimeOffset(2026, 7, 2, 9, 0, 0, TimeSpan.Zero);
+
+        await repo.WriteAsync(
+            UsageEventType.ForegroundProcessChanged, occurred,
+            new ForegroundProcessChangedPayload("notepad"));
+
+        var events = await repo.QueryAsync(occurred.AddMinutes(-1), occurred.AddMinutes(1));
+        Assert.Single(events);
+        var p = Assert.IsType<ForegroundProcessChangedPayload>(events[0].Payload);
+        Assert.Equal("notepad", p.ProcessName);
+    }
+
+    [Fact]
+    public async Task ErrorOccurred_payload_round_trips()
+    {
+        var (repo, _) = await CreateRepositoryAsync();
+        var occurred = new DateTimeOffset(2026, 7, 3, 9, 0, 0, TimeSpan.Zero);
+
+        await repo.WriteAsync(
+            UsageEventType.ErrorOccurred, occurred,
+            new ErrorOccurredPayload("TestError"));
+
+        var events = await repo.QueryAsync(occurred.AddMinutes(-1), occurred.AddMinutes(1));
+        Assert.Single(events);
+        var p = Assert.IsType<ErrorOccurredPayload>(events[0].Payload);
+        Assert.Equal("TestError", p.ErrorCategory);
+    }
+
+    [Theory]
+    [InlineData(UsageEventType.ReminderDismissed)]
+    [InlineData(UsageEventType.RestDebtLevelChanged)]
+    [InlineData(UsageEventType.ForegroundProcessChanged)]
+    [InlineData(UsageEventType.ErrorOccurred)]
+    public async Task Mismatched_payload_is_rejected_without_writing_a_row(UsageEventType eventType)
+    {
+        var (repo, _) = await CreateRepositoryAsync();
+        var occurred = new DateTimeOffset(2026, 7, 4, 9, 0, 0, TimeSpan.Zero);
+
+        UsageEventPayload mismatched = eventType == UsageEventType.ForegroundProcessChanged
+            ? new ErrorOccurredPayload("TestError")
+            : new ForegroundProcessChangedPayload("notepad");
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => repo.WriteAsync(eventType, occurred, mismatched));
+
+        var events = await repo.QueryAsync(occurred.AddDays(-1), occurred.AddDays(1));
+        Assert.Empty(events);
+    }
+
+    [Theory]
+    [InlineData(UsageEventType.ReminderDismissed)]
+    [InlineData(UsageEventType.RestDebtLevelChanged)]
+    [InlineData(UsageEventType.ForegroundProcessChanged)]
+    [InlineData(UsageEventType.ErrorOccurred)]
+    public async Task Unknown_payload_type_is_rejected_without_writing_a_row(UsageEventType eventType)
+    {
+        var (repo, _) = await CreateRepositoryAsync();
+        var occurred = new DateTimeOffset(2026, 7, 5, 9, 0, 0, TimeSpan.Zero);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => repo.WriteAsync(eventType, occurred, new UnknownPayload()));
+
+        var events = await repo.QueryAsync(occurred.AddDays(-1), occurred.AddDays(1));
+        Assert.Empty(events);
     }
 
     [Fact]

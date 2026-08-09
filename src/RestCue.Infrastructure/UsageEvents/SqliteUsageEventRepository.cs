@@ -23,13 +23,14 @@ public sealed class SqliteUsageEventRepository : IUsageEventRepository
         }.ToString();
     }
 
-    private static readonly HashSet<UsageEventType> PayloadEventTypes =
-    [
-        UsageEventType.ReminderDismissed,
-        UsageEventType.RestDebtLevelChanged,
-        UsageEventType.ForegroundProcessChanged,
-        UsageEventType.ErrorOccurred,
-    ];
+    private static readonly Dictionary<UsageEventType, Type> PayloadTypeByEventType =
+        new()
+        {
+            [UsageEventType.ReminderDismissed] = typeof(ReminderDismissedPayload),
+            [UsageEventType.RestDebtLevelChanged] = typeof(RestDebtLevelChangedPayload),
+            [UsageEventType.ForegroundProcessChanged] = typeof(ForegroundProcessChangedPayload),
+            [UsageEventType.ErrorOccurred] = typeof(ErrorOccurredPayload),
+        };
 
     public async Task WriteAsync(
         UsageEventType eventType,
@@ -37,12 +38,16 @@ public sealed class SqliteUsageEventRepository : IUsageEventRepository
         UsageEventPayload? payload = null,
         CancellationToken cancellationToken = default)
     {
-        if (payload != null && !PayloadEventTypes.Contains(eventType))
+        if (payload != null && !PayloadTypeByEventType.ContainsKey(eventType))
             throw new ArgumentException(
                 $"Event type {eventType} does not accept a payload.", nameof(payload));
-        if (payload == null && PayloadEventTypes.Contains(eventType))
+        if (payload == null && PayloadTypeByEventType.ContainsKey(eventType))
             throw new ArgumentException(
                 $"Event type {eventType} requires a payload.", nameof(payload));
+        if (payload != null && payload.GetType() != PayloadTypeByEventType[eventType])
+            throw new ArgumentException(
+                $"Event type {eventType} expects a {PayloadTypeByEventType[eventType].Name} payload.",
+                nameof(payload));
 
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
@@ -119,7 +124,7 @@ public sealed class SqliteUsageEventRepository : IUsageEventRepository
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
 
-        if (!PayloadEventTypes.Contains(eventType))
+        if (!PayloadTypeByEventType.ContainsKey(eventType))
             throw new InvalidOperationException(
                 $"Event type {eventType} is not expected to have a stored payload.");
 
