@@ -38,6 +38,12 @@ public sealed class WindowXamlLoadTests
     }
 
     [Fact]
+    public void SuggestionWindow_loads()
+    {
+        wpf.Construct(() => new SuggestionWindow());
+    }
+
+    [Fact]
     public void AboutWindow_loads()
     {
         wpf.Construct(() => new AboutWindow());

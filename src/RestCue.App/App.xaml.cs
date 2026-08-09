@@ -625,6 +625,7 @@ public partial class App : System.Windows.Application
     }
 
     private ISuggestionStore? suggestionStore;
+    private SuggestionWindow? suggestionWindow;
 
     private void WireSuggestionPrompting()
     {
@@ -657,31 +658,82 @@ public partial class App : System.Windows.Application
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
-    private async void OnSuggestionRequested(object? sender, SuggestionEventArgs e)
+    private void OnSuggestionRequested(object? sender, SuggestionEventArgs e)
     {
         if (ruleRepository == null || suggestionStore == null) return;
 
-        var result = System.Windows.MessageBox.Show(
-            $"已檢測到「{e.ProcessName}」正在執行。\n\nRestCue 建議為此應用程式套用「僅系統列」規則，避免休息提醒干擾。\n\n要套用此建議嗎？",
-            "RestCue – 應用程式規則建議",
-            System.Windows.MessageBoxButton.YesNo,
-            System.Windows.MessageBoxImage.Question);
+        // The polling path can raise this for a different default process while a
+        // suggestion is already showing. One suggestion at a time: ignore the rest.
+        if (suggestionWindow?.IsVisible == true) return;
 
-        if (result == System.Windows.MessageBoxResult.Yes)
+        var window = new SuggestionWindow();
+        suggestionWindow = window;
+        window.Approved += async (_, _) =>
         {
-            var rule = new ApplicationRule
+            try
             {
-                ProcessName = e.ProcessName,
-                RuleType = ApplicationRuleType.TrayOnly,
-            };
-            await ruleRepository.SaveAsync(rule);
-            var loadedRules = await ruleRepository.LoadAllAsync();
-            statusWindow?.UpdateApplicationRules(loadedRules);
-        }
-        else
+                await ApproveSuggestionAsync(
+                    ruleRepository,
+                    rules => statusWindow?.UpdateApplicationRules(rules),
+                    e.ProcessName);
+            }
+            finally
+            {
+                window.Close();
+            }
+        };
+        window.Dismissed += async (_, _) =>
         {
-            await suggestionStore.DismissAsync(e.ProcessName);
-        }
+            try
+            {
+                await DismissSuggestionAsync(suggestionStore, e.ProcessName);
+            }
+            finally
+            {
+                window.Close();
+            }
+        };
+        window.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(suggestionWindow, window))
+                suggestionWindow = null;
+        };
+        window.ShowSuggestion(e.ProcessName);
+    }
+
+    /// <summary>
+    /// Persists the suggestion as a TrayOnly rule and re-applies the rule set to the
+    /// status surface, so the suggestion is not offered again for this process.
+    /// </summary>
+    internal static async Task ApproveSuggestionAsync(
+        IApplicationRuleRepository ruleRepository,
+        Action<IReadOnlyList<ApplicationRule>>? applyRules,
+        string processName)
+    {
+        ArgumentNullException.ThrowIfNull(ruleRepository);
+        ArgumentNullException.ThrowIfNull(processName);
+
+        var rule = new ApplicationRule
+        {
+            ProcessName = processName,
+            RuleType = ApplicationRuleType.TrayOnly,
+        };
+        await ruleRepository.SaveAsync(rule);
+        var loadedRules = await ruleRepository.LoadAllAsync();
+        applyRules?.Invoke(loadedRules);
+    }
+
+    /// <summary>
+    /// Records the dismissal so the suggestion is not offered again for this process.
+    /// </summary>
+    internal static async Task DismissSuggestionAsync(
+        ISuggestionStore suggestionStore,
+        string processName)
+    {
+        ArgumentNullException.ThrowIfNull(suggestionStore);
+        ArgumentNullException.ThrowIfNull(processName);
+
+        await suggestionStore.DismissAsync(processName);
     }
 
     private void OnReminderSuppressedEvent(object? sender, ReminderSuppressedEventArgs e)
