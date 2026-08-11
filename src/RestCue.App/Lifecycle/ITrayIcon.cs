@@ -1,4 +1,5 @@
 using RestCue.Core.Settings;
+using RestCue.Core.Domain;
 
 namespace RestCue.App.Lifecycle;
 
@@ -59,4 +60,13 @@ public interface ITrayIcon : IDisposable
     void ApplyViewState(TrayViewState state);
 
     void ShowLightTouchNotification(string title, string text, NotificationDuration duration);
+
+    void ShowLightTouchNotification(
+        string title,
+        string text,
+        NotificationDuration duration,
+        RestDebtLevel level)
+    {
+        ShowLightTouchNotification(title, text, duration);
+    }
 }

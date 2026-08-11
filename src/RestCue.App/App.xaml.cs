@@ -1025,7 +1025,8 @@ public partial class App : System.Windows.Application
         tray.ShowLightTouchNotification(
             "RestCue – 休息提醒",
             "該休息了！請查看 RestCue 系統列狀態。",
-            duration);
+            duration,
+            level);
 
         if (soundEnabled)
         {
@@ -1115,6 +1116,7 @@ public partial class App : System.Windows.Application
         tray.ShowLightTouchNotification(
             GetStatusTextForDebtLevel(level),
             "休息需求已提升，建議安排短暫休息。請查看 RestCue 系統列狀態。",
-            duration);
+            duration,
+            level);
     }
 }

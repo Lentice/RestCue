@@ -44,6 +44,7 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
     private readonly Dispatcher uiDispatcher;
     private ToastWindow? toastWindow;
+    private TrayViewState viewState;
 
     public WindowsTrayIcon()
     {
@@ -170,11 +171,12 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
     public void ApplyViewState(TrayViewState state)
     {
+        viewState = state;
         notifyIcon.Icon = GetIconForState(state);
         notifyIcon.Text = App.GetTrayTooltip(state);
     }
 
-    private Icon GetIconForDebtLevel(RestDebtLevel level)
+    private static Icon GetIconForDebtLevel(RestDebtLevel level)
     {
         return level switch
         {
@@ -186,7 +188,7 @@ public sealed class WindowsTrayIcon : ITrayIcon
         };
     }
 
-    private Icon GetIconForState(TrayViewState state)
+    internal static Icon GetIconForState(TrayViewState state)
     {
         // Pause and Disable mean the user has asked for calm: reminders are off, and no
         // rest-debt urgency may override that, no matter how high the level has climbed.
@@ -259,10 +261,25 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
     public void ShowLightTouchNotification(string title, string text, NotificationDuration duration)
     {
+        ShowLightTouchNotification(title, text, duration, viewState.DebtLevel);
+    }
+
+    public void ShowLightTouchNotification(
+        string title,
+        string text,
+        NotificationDuration duration,
+        RestDebtLevel level)
+    {
         void ShowToast()
         {
-            toastWindow ??= new ToastWindow();
-            toastWindow.ShowToast(title, text, duration);
+            if (toastWindow == null)
+            {
+                toastWindow = new ToastWindow();
+                toastWindow.BreakNowRequested += (_, _) =>
+                    BreakNowRequested?.Invoke(this, EventArgs.Empty);
+            }
+
+            toastWindow.ShowToast(title, text, duration, viewState with { DebtLevel = level });
         }
 
         if (uiDispatcher.CheckAccess())

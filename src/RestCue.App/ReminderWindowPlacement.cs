@@ -10,4 +10,11 @@ internal static class ReminderWindowPlacement
             Math.Max(workAreaLeft, workAreaRight - windowWidth - gap),
             Math.Max(workAreaTop, workAreaTop + (workAreaBottom - workAreaTop - windowHeight) / 2));
     }
+
+    public static PixelPoint BottomRight(int workAreaLeft, int workAreaTop, int workAreaRight, int workAreaBottom, int windowWidth, int windowHeight, int gap)
+    {
+        return new PixelPoint(
+            Math.Max(workAreaLeft, workAreaRight - windowWidth - gap),
+            Math.Max(workAreaTop, workAreaBottom - windowHeight - gap));
+    }
 }

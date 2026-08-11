@@ -13,26 +13,51 @@
         WindowStartupLocation="Manual"
         Background="Transparent"
         Opacity="0.92"
-        IsHitTestVisible="False"
-        Foreground="{StaticResource ReminderTextBrush}"
+        Foreground="{StaticResource TextPrimaryBrush}"
         FontFamily="{StaticResource AppFontFamily}"
         SnapsToDevicePixels="True">
     <Border CornerRadius="10"
-            Background="{StaticResource ReminderSurfaceBrush}"
+            Background="{StaticResource CardBrush}"
+            BorderBrush="{StaticResource CardBorderBrush}"
+            BorderThickness="1"
             Padding="18,14">
-        <StackPanel>
-            <TextBlock x:Name="TitleText"
-                       FontSize="15"
-                       FontWeight="SemiBold"
-                       TextWrapping="Wrap"
-                       AutomationProperties.Name="通知標題" />
-            <TextBlock x:Name="MessageText"
-                       FontSize="13"
-                       TextWrapping="Wrap"
-                       LineHeight="20"
-                       LineStackingStrategy="BlockLineHeight"
-                       Margin="0,6,0,0"
-                       AutomationProperties.Name="通知內容" />
-        </StackPanel>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Image x:Name="IconImage"
+                   Width="32"
+                   Height="32"
+                   Margin="0,0,12,0"
+                   VerticalAlignment="Top"
+                   AutomationProperties.Name="提醒狀態圖示" />
+            <StackPanel Grid.Column="1">
+                <TextBlock x:Name="TitleText"
+                           FontSize="15"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap"
+                           AutomationProperties.Name="通知標題" />
+                <TextBlock x:Name="MessageText"
+                           FontSize="13"
+                           TextWrapping="Wrap"
+                           LineHeight="20"
+                           LineStackingStrategy="BlockLineHeight"
+                           Margin="0,6,0,0"
+                           AutomationProperties.Name="通知內容" />
+            </StackPanel>
+            <Button x:Name="BreakNowButton"
+                    Grid.Row="1"
+                    Grid.ColumnSpan="2"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Content="立即休息"
+                    ToolTip="立即開始一段休息引導。"
+                    Margin="0,12,0,0"
+                    Click="OnBreakNowButtonClick" />
+        </Grid>
     </Border>
 </Window>

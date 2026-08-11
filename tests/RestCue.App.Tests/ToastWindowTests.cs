@@ -1,4 +1,9 @@
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media.Imaging;
+using RestCue.App.Lifecycle;
+using RestCue.Core.Domain;
+using RestCue.Core.Reminders;
 using RestCue.Core.Settings;
 using Xunit;
 
@@ -15,7 +20,7 @@ public sealed class ToastWindowTests
     }
 
     [Fact]
-    public void Toast_is_transparent_non_activating_and_click_through()
+    public void Toast_is_transparent_non_activating_and_clickable()
     {
         wpf.Run(() =>
         {
@@ -26,7 +31,7 @@ public sealed class ToastWindowTests
                 Assert.True(window.Opacity < 1.0);
                 Assert.False(window.ShowActivated);
                 Assert.False(window.ShowInTaskbar);
-                Assert.False(window.IsHitTestVisible);
+                Assert.True(window.IsHitTestVisible);
             }
             finally
             {
@@ -41,12 +46,18 @@ public sealed class ToastWindowTests
         wpf.Run(() =>
         {
             var window = new ToastWindow();
-            window.ShowToast("標題", "內容", NotificationDuration.UntilDismissed);
+            window.ShowToast(
+                "標題",
+                "內容",
+                NotificationDuration.UntilDismissed,
+                new TrayViewState(WorkCyclePhase.PendingReminder, RestDebtLevel.Level4, true));
             try
             {
                 Assert.True(window.IsVisible);
                 Assert.Equal("標題", ((TextBlock)window.FindName("TitleText")!).Text);
                 Assert.Equal("內容", ((TextBlock)window.FindName("MessageText")!).Text);
+                Assert.IsAssignableFrom<BitmapSource>(
+                    ((System.Windows.Controls.Image)window.FindName("IconImage")!).Source);
             }
             finally
             {
@@ -54,6 +65,38 @@ public sealed class ToastWindowTests
             }
 
             Assert.False(window.IsVisible);
+        });
+    }
+
+    [Fact]
+    public void Toast_offers_an_enabled_break_now_button_without_activating()
+    {
+        wpf.Run(() =>
+        {
+            var window = new ToastWindow();
+            int requests = 0;
+            window.BreakNowRequested += (_, _) => requests++;
+            window.ShowToast(
+                "標題",
+                "內容",
+                NotificationDuration.UntilDismissed,
+                new TrayViewState(WorkCyclePhase.PendingReminder, RestDebtLevel.Level4, true));
+            try
+            {
+                var button = (Button)(window.FindName("BreakNowButton")
+                    ?? throw new InvalidOperationException("Toast is missing BreakNowButton."));
+
+                Assert.Equal("立即休息", button.Content);
+                Assert.True(button.IsEnabled);
+                button.RaiseEvent(new System.Windows.RoutedEventArgs(ButtonBase.ClickEvent));
+                Assert.Equal(1, requests);
+                Assert.False(window.IsVisible);
+                Assert.False(window.ShowActivated);
+            }
+            finally
+            {
+                window.Dispose();
+            }
         });
     }
 }

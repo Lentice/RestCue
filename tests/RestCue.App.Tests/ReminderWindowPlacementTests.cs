@@ -31,4 +31,22 @@ public sealed class ReminderWindowPlacementTests
         Assert.Equal(3236, position.X);
         Assert.Equal(440, position.Y);
     }
+
+    [Fact]
+    public void BottomRight_places_window_at_the_work_area_corner()
+    {
+        var position = ReminderWindowPlacement.BottomRight(1920, 100, 3840, 1180, 600, 400, 12);
+
+        Assert.Equal(3228, position.X);
+        Assert.Equal(768, position.Y);
+    }
+
+    [Fact]
+    public void BottomRight_clamps_oversized_window_to_work_area_origin()
+    {
+        var position = ReminderWindowPlacement.BottomRight(-1920, -100, 0, 980, 2400, 1200, 12);
+
+        Assert.Equal(-1920, position.X);
+        Assert.Equal(-100, position.Y);
+    }
 }
