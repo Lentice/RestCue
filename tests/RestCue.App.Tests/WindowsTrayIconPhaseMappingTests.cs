@@ -233,45 +233,6 @@ public sealed class WindowsTrayIconPhaseMappingTests
         Assert.True(invoked);
     }
 
-    [Fact]
-    public void WindowsTrayIcon_BreakNowToastActivation_RaisesBreakNowRequested()
-    {
-        using var tray = new WindowsTrayIcon();
-        tray.SetBreakNowEnabled(true);
-        bool invoked = false;
-        tray.BreakNowRequested += (_, _) => invoked = true;
-
-        tray.HandleToastActivation(WindowsTrayIcon.BreakNowToastArgument);
-
-        Assert.True(invoked);
-    }
-
-    [Fact]
-    public void WindowsTrayIcon_BreakNowToastActivation_IgnoredWhenBreakNowDisabled()
-    {
-        using var tray = new WindowsTrayIcon();
-        tray.SetBreakNowEnabled(false);
-        bool invoked = false;
-        tray.BreakNowRequested += (_, _) => invoked = true;
-
-        tray.HandleToastActivation(WindowsTrayIcon.BreakNowToastArgument);
-
-        Assert.False(invoked);
-    }
-
-    [Fact]
-    public void WindowsTrayIcon_UnrelatedToastActivation_IsIgnored()
-    {
-        using var tray = new WindowsTrayIcon();
-        tray.SetBreakNowEnabled(true);
-        bool invoked = false;
-        tray.BreakNowRequested += (_, _) => invoked = true;
-
-        tray.HandleToastActivation("something-else");
-
-        Assert.False(invoked);
-    }
-
     [Theory]
     [InlineData(RestDebtLevel.Level0, "SuppressedIcon")]
     [InlineData(RestDebtLevel.Level1, "Level1Icon")]

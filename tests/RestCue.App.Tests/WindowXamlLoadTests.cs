@@ -44,6 +44,12 @@ public sealed class WindowXamlLoadTests
     }
 
     [Fact]
+    public void ToastWindow_loads()
+    {
+        wpf.Construct(() => new ToastWindow());
+    }
+
+    [Fact]
     public void AboutWindow_loads()
     {
         wpf.Construct(() => new AboutWindow());

@@ -1,10 +1,10 @@
 using System.Drawing;
 using System.Windows.Forms;
-using Microsoft.Toolkit.Uwp.Notifications;
+using System.Windows.Threading;
+using RestCue.App;
 using RestCue.Core.Domain;
 using RestCue.Core.Reminders;
 using RestCue.Core.Settings;
-using Windows.UI.Notifications;
 
 namespace RestCue.App.Lifecycle;
 
@@ -25,7 +25,6 @@ public sealed class WindowsTrayIcon : ITrayIcon
     private bool isPaused;
     private bool isFocusMode;
     private bool isDisabled;
-    private TrayViewState currentState;
     private ContextMenuStrip menu;
     private int pauseMenuIndex;
     private static readonly Color NormalColor = Color.FromArgb(47, 111, 235);
@@ -43,11 +42,12 @@ public sealed class WindowsTrayIcon : ITrayIcon
     private static readonly Icon SuppressedIcon = TrayIconFactory.Create(TrayIconKind.Suppressed, SuppressedColor);
     private static readonly Icon RemindersOffIcon = TrayIconFactory.Create(TrayIconKind.RemindersOff, RemindersOffColor);
 
-    internal const string BreakNowToastArgument = "restcue-break-now";
-    private readonly SynchronizationContext? uiContext;
+    private readonly Dispatcher uiDispatcher;
+    private ToastWindow? toastWindow;
 
     public WindowsTrayIcon()
     {
+        uiDispatcher = Dispatcher.CurrentDispatcher;
         pause15 = CreatePauseItem(PausePresets.FifteenMinutes);
         pause30 = CreatePauseItem(PausePresets.ThirtyMinutes);
         pause60 = CreatePauseItem(PausePresets.OneHour);
@@ -87,47 +87,6 @@ public sealed class WindowsTrayIcon : ITrayIcon
         };
         this.menu = menu;
         notifyIcon.DoubleClick += (_, _) => OpenRequested?.Invoke(this, EventArgs.Empty);
-
-        uiContext = SynchronizationContext.Current;
-        try
-        {
-            ToastNotificationManagerCompat.OnActivated += OnToastActivated;
-        }
-        catch (Exception)
-        {
-            // Registering the toast activator needs a working notification platform. Losing
-            // the toast button is survivable; the tray menu still offers 立即休息.
-        }
-    }
-
-    private void OnToastActivated(ToastNotificationActivatedEventArgsCompat e) =>
-        HandleToastActivation(e.Argument);
-
-    /// <summary>
-    /// Toast activations arrive on a platform thread, so the request is marshalled back to
-    /// the UI context the tray icon was created on before any window work happens.
-    /// </summary>
-    internal void HandleToastActivation(string? argument)
-    {
-        if (!string.Equals(argument, BreakNowToastArgument, StringComparison.Ordinal))
-            return;
-
-        void Raise()
-        {
-            if (breakNowItem.Enabled)
-            {
-                BreakNowRequested?.Invoke(this, EventArgs.Empty);
-            }
-        }
-
-        if (uiContext != null && uiContext != SynchronizationContext.Current)
-        {
-            uiContext.Post(_ => Raise(), null);
-        }
-        else
-        {
-            Raise();
-        }
     }
 
     private ToolStripMenuItem CreatePauseItem(PausePreset preset) =>
@@ -211,7 +170,6 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
     public void ApplyViewState(TrayViewState state)
     {
-        currentState = state;
         notifyIcon.Icon = GetIconForState(state);
         notifyIcon.Text = App.GetTrayTooltip(state);
     }
@@ -225,18 +183,6 @@ public sealed class WindowsTrayIcon : ITrayIcon
             RestDebtLevel.Level3 => Level3Icon,
             RestDebtLevel.Level4 => Level4Icon,
             _ => NormalIcon
-        };
-    }
-
-    private static Color GetColorForDebtLevel(RestDebtLevel level)
-    {
-        return level switch
-        {
-            RestDebtLevel.Level1 => Level1Color,
-            RestDebtLevel.Level2 => Level2Color,
-            RestDebtLevel.Level3 => Level3Color,
-            RestDebtLevel.Level4 => Level4Color,
-            _ => NormalColor
         };
     }
 
@@ -293,69 +239,39 @@ public sealed class WindowsTrayIcon : ITrayIcon
 
     public void Dispose()
     {
-        try
+        void DisposeToast()
         {
-            ToastNotificationManagerCompat.OnActivated -= OnToastActivated;
-
-            // A toast left in Action Center outlives the process, and its 立即休息 button
-            // cannot be honoured once RestCue is gone. Clearing on shutdown keeps the
-            // notification list free of buttons that would do nothing.
-            ToastNotificationManagerCompat.History.Clear();
+            toastWindow?.Dispose();
+            toastWindow = null;
         }
-        catch (Exception)
+
+        if (uiDispatcher.CheckAccess())
         {
-            // Mirrors the guarded subscription in the constructor.
+            DisposeToast();
+        }
+        else if (!uiDispatcher.HasShutdownStarted)
+        {
+            uiDispatcher.Invoke(DisposeToast);
         }
 
         notifyIcon.Dispose();
     }
 
-    /// <summary>
-    /// Shows a real WinRT toast. The legacy <see cref="NotifyIcon.ShowBalloonTip"/> path is
-    /// kept only as a fallback: its timeout argument is ignored by Windows, so it cannot
-    /// honour <paramref name="duration"/>.
-    /// </summary>
     public void ShowLightTouchNotification(string title, string text, NotificationDuration duration)
     {
-        try
+        void ShowToast()
         {
-            var builder = new ToastContentBuilder()
-                .AddText(title)
-                .AddText(text);
-
-            string? accent = ToastAccentImage.TryGetPath(GetColorForDebtLevel(currentState.DebtLevel));
-            if (accent != null)
-            {
-                builder.AddAppLogoOverride(new Uri(accent), ToastGenericAppLogoCrop.Circle);
-            }
-
-            builder.AddButton(new ToastButton()
-                .SetContent("立即休息")
-                .AddArgument(BreakNowToastArgument)
-                .SetBackgroundActivation());
-
-            if (duration == NotificationDuration.UntilDismissed)
-            {
-                // Only the reminder scenario keeps a toast on screen indefinitely, and
-                // Windows expects such a toast to carry a way out of it.
-                builder.SetToastScenario(ToastScenario.Reminder)
-                    .AddButton(new ToastButton().SetContent("知道了").SetDismissActivation());
-            }
-
-            ToastContent content = builder.GetToastContent();
-            content.Duration = duration == NotificationDuration.Default
-                ? ToastDuration.Short
-                : ToastDuration.Long;
-
-            ToastNotificationManagerCompat.CreateToastNotifier()
-                .Show(new ToastNotification(content.GetXml()));
+            toastWindow ??= new ToastWindow();
+            toastWindow.ShowToast(title, text, duration);
         }
-        catch (Exception)
+
+        if (uiDispatcher.CheckAccess())
         {
-            // Toasts can be unavailable entirely (group policy, broken notification
-            // platform). A reminder the user never sees is worse than one of the wrong
-            // length, so degrade to the balloon rather than swallow the cue.
-            notifyIcon.ShowBalloonTip(10000, title, text, ToolTipIcon.Info);
+            ShowToast();
+        }
+        else
+        {
+            uiDispatcher.Invoke(ShowToast);
         }
     }
 }
