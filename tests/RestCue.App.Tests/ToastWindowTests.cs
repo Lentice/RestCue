@@ -99,4 +99,34 @@ public sealed class ToastWindowTests
             }
         });
     }
+
+    [Fact]
+    public void Toast_close_button_hides_without_requesting_a_break()
+    {
+        wpf.Run(() =>
+        {
+            var window = new ToastWindow();
+            int requests = 0;
+            window.BreakNowRequested += (_, _) => requests++;
+            window.ShowToast(
+                "標題",
+                "內容",
+                NotificationDuration.UntilDismissed,
+                new TrayViewState(WorkCyclePhase.PendingReminder, RestDebtLevel.Level4, true));
+            try
+            {
+                var button = (Button)(window.FindName("CloseButton")
+                    ?? throw new InvalidOperationException("Toast is missing CloseButton."));
+
+                Assert.Equal("×", button.Content);
+                button.RaiseEvent(new System.Windows.RoutedEventArgs(ButtonBase.ClickEvent));
+                Assert.Equal(0, requests);
+                Assert.False(window.IsVisible);
+            }
+            finally
+            {
+                window.Dispose();
+            }
+        });
+    }
 }

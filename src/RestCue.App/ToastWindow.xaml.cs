@@ -135,6 +135,12 @@ public partial class ToastWindow : Window, IDisposable
         BreakNowRequested?.Invoke(this, EventArgs.Empty);
     }
 
+    private void OnCloseButtonClick(object sender, RoutedEventArgs e)
+    {
+        dismissalTimer.Stop();
+        Hide();
+    }
+
     private const int GWL_EXSTYLE = -20;
     private const int WS_EX_NOACTIVATE = 0x08000000;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
