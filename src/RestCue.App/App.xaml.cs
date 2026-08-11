@@ -23,6 +23,7 @@ namespace RestCue.App;
 public partial class App : System.Windows.Application
 {
     private ApplicationLifecycle? lifecycle;
+    private SessionInstanceGuard? instanceGuard;
     private ApplicationStartup? startup;
     private WindowsTrayIcon? trayIcon;
     private MainWindow? statusWindow;
@@ -40,6 +41,18 @@ public partial class App : System.Windows.Application
         base.OnStartup(e);
 
         DispatcherUnhandledException += OnDispatcherUnhandledException;
+
+        // The single-instance claim comes first: a duplicate must never create the
+        // tray, SQLite repository, tracker or any other normal service.
+        if (!StartAsPrimaryInstance(
+                () => SessionInstanceGuard.Acquire(),
+                ShowDuplicateInstanceWarning,
+                message => Trace.TraceError(message),
+                Shutdown,
+                out instanceGuard))
+        {
+            return;
+        }
 
         statusWindow = new MainWindow();
         trayIcon = new WindowsTrayIcon();
@@ -208,6 +221,54 @@ public partial class App : System.Windows.Application
         releaseRecordingAndResources();
     }
 
+    /// <summary>
+    /// The single-instance gate at the head of startup. A primary claim proceeds;
+    /// a duplicate shows the one-button warning and skips all normal services; an
+    /// unexpected claim error takes the safe startup-failure path — logged and
+    /// exited — never a duplicate verdict.
+    /// </summary>
+    internal static bool StartAsPrimaryInstance(
+        Func<SessionInstanceGuard> acquireGuard,
+        Action showDuplicateWarning,
+        Action<string> logError,
+        Action shutdown,
+        out SessionInstanceGuard? guard)
+    {
+        ArgumentNullException.ThrowIfNull(acquireGuard);
+        ArgumentNullException.ThrowIfNull(showDuplicateWarning);
+        ArgumentNullException.ThrowIfNull(logError);
+        ArgumentNullException.ThrowIfNull(shutdown);
+
+        try
+        {
+            guard = acquireGuard();
+        }
+        catch (Exception exception)
+        {
+            guard = null;
+            logError($"RestCue could not claim the single-instance right and will exit. {exception.Message}");
+            shutdown();
+            return false;
+        }
+
+        if (guard.IsPrimary)
+        {
+            return true;
+        }
+
+        guard.Dispose();
+        guard = null;
+        showDuplicateWarning();
+        return false;
+    }
+
+    private void ShowDuplicateInstanceWarning()
+    {
+        var window = new DuplicateInstanceWindow();
+        window.Confirmed += (_, _) => Shutdown();
+        window.Show();
+    }
+
     private void ReleaseShutdownResources()
     {
         UnwireUsageEventEmitters();
@@ -220,6 +281,7 @@ public partial class App : System.Windows.Application
         }
         UnwireUsageEventPersistence();
         audioPlayer?.Dispose();
+        instanceGuard?.Dispose();
         lifecycle?.Dispose();
     }
 

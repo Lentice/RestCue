@@ -56,6 +56,12 @@ public sealed class WindowXamlLoadTests
     }
 
     [Fact]
+    public void DuplicateInstanceWindow_loads()
+    {
+        wpf.Construct(() => new DuplicateInstanceWindow());
+    }
+
+    [Fact]
     public void SettingsWindow_loads()
     {
         wpf.Construct(() => new SettingsWindow(new StubSettingsRepository(), new StubApplicationRuleRepository(), AppSettings.Default));
