@@ -9,6 +9,7 @@
         ResizeMode="NoResize"
         Width="228" Height="308"
         WindowStartupLocation="Manual"
+        ShowActivated="False"
         Background="Transparent"
         Foreground="{StaticResource ReminderTextBrush}"
         FontFamily="{StaticResource AppFontFamily}"
