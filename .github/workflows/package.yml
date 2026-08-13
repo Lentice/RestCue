@@ -22,8 +22,11 @@ jobs:
             **/*.csproj
 
       - name: Install Inno Setup
+        # Pinned to an immutable GitHub release; jrsoftware moved downloads off
+        # files.jrsoftware.org in March 2026. Bump this when a newer Inno Setup
+        # 7 stable ships: https://github.com/jrsoftware/issrc/releases
         run: |
-          $url = "https://files.jrsoftware.org/is/7/innosetup-7.0.1.exe"
+          $url = "https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe"
           $installer = "$env:TEMP\innosetup.exe"
           Invoke-WebRequest -Uri $url -OutFile $installer
           & $installer /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-
