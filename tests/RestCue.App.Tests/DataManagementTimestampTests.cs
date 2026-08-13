@@ -56,28 +56,51 @@ public sealed class DataManagementTimestampTests
     public async Task ClearAndRecordAsync_runs_both_steps_inside_exclusive_channel()
     {
         var order = new List<string>();
-        var fake = new FakeUsageEventRepository(onWrite: () => order.Add("event"));
+        void Record(string step)
+        {
+            lock (order)
+            {
+                order.Add(step);
+            }
+        }
+
+        var fake = new FakeUsageEventRepository(onWrite: () => Record("event"));
         using var writer = new BackgroundUsageEventWriter(fake);
 
         writer.Write(UsageEventType.BreakStarted, DateTimeOffset.UtcNow);
         ClearResult result = await writer.RunExclusiveAsync(() => App.ClearAndRecordAsync(
             async () =>
             {
-                order.Add("clear");
+                Record("clear");
                 await Task.Yield();
                 return new ClearResult(true, 10, null);
             },
             () =>
             {
-                order.Add("record");
+                Record("record");
                 return Task.CompletedTask;
             }));
         writer.Write(UsageEventType.BreakCompleted, DateTimeOffset.UtcNow);
 
-        writer.Dispose();
+        // Dispose caps its drain wait at 2s so shutdown never hangs, which is
+        // not guaranteed to cover the trailing write on a loaded CI runner.
+        // Wait for it deterministically before asserting instead of racing it.
+        bool drained = SpinWait.SpinUntil(
+            () =>
+            {
+                lock (order)
+                {
+                    return order.Count == 4;
+                }
+            },
+            TimeSpan.FromSeconds(10));
 
         Assert.True(result.Succeeded);
-        Assert.Equal(["event", "clear", "record", "event"], order);
+        Assert.True(drained, "The trailing usage event was not drained within 10 seconds.");
+        lock (order)
+        {
+            Assert.Equal(["event", "clear", "record", "event"], order);
+        }
     }
 
     private sealed class FakeUsageEventRepository : IUsageEventRepository
