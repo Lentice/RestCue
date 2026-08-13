@@ -30,7 +30,6 @@ jobs:
           $installer = "$env:TEMP\innosetup.exe"
           Invoke-WebRequest -Uri $url -OutFile $installer
           & $installer /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-
-          Remove-Item $installer
 
       - name: Verify package workflow contract
         run: .\packaging\windows\test-package-workflow.ps1
