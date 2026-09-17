@@ -11,7 +11,7 @@ threshold boundary must be testable without waiting for real user input.
 Core owns `IUserActivityMonitor`, an availability-aware idle-duration sample, and the
 threshold evaluator. Infrastructure implements the monitor with only
 `GetLastInputInfo` and `GetTickCount`; it does not install input hooks or receive key
-or mouse payloads. App polls the monitor once per second and presents the evaluated
+or mouse payloads. App polls the monitor every five seconds and presents the evaluated
 Working or Idle status.
 
 The evaluator treats the configured threshold as inclusive. An unavailable Windows

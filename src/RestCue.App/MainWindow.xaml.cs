@@ -51,7 +51,7 @@ public partial class MainWindow : System.Windows.Window, IStatusWindow, IWorkPha
         PauseFor60MenuItem.Header = PausePresets.OneHour.Label;
         activityTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = TimeSpan.FromSeconds(1)
+            Interval = TimeSpan.FromSeconds(5)
         };
         activityTimer.Tick += OnActivityTimerTick;
 
