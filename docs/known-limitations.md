@@ -4,13 +4,15 @@
 - 休息期間按鈕已停用；休息完成完全由 WorkCycleTracker 的 fake-clock 相容邏輯控制，UI 不提前宣告完成。移除 IReminderPresenter 規格介面。
 - 提醒逾時不自動淡出（逾時直接結束該次提醒）。全螢幕降級已實作：偵測到全螢幕（Confirmed／Uncertain）時，透過 `PresentationIntensityPolicy.FromFullscreenState` 將提醒強度降級為 LightTouch，並抑制一般提醒視窗；休息引導 (Break Guide) 語音／音效已實作（音訊播放僅經手動 smoke test 驗證，未自動化測試，見下方音訊條目）。暫停與專注模式、停用狀態、tray 狀態圖示切換、完整選單命令、session lock 與 power events 已於 v1.3 完整實作。
 - 若 Windows `GetLastInputInfo` 失敗，狀態會保守降級為 Idle，避免把未知活動誤算成有效工作；目前狀態頁不另外顯示偵測錯誤。
-- WorkCycleTracker 累積工作時間的最小粒度為 1 秒（對應輪詢間隔），從 Idle 恢復的第一個 Tick 不累積，最多損失 1 秒。
+- WorkCycleTracker 累積工作時間的最小粒度為 5 秒（對應輪詢間隔），從 Idle 恢復的第一個 Tick 不累積，最多損失 5 秒。
 - ReminderWindow 的多螢幕／mixed-DPI 定位已實作並通過 PerMonitorV2 runtime probe、單元測試與 code review；Win32 定位失敗時會退回主螢幕右側邊緣。由於缺少不同 DPI 的雙螢幕硬體，mixed-DPI、primary switch 與 display reconnect 的實機驗收證據仍待補齊。
 - 開發與 CI 環境以 .NET 10 SDK 為基準。
 - 視覺引導的進度呈現不精確，因為刻意不顯示剩餘時間。
 - Windows 音訊播放（`WindowsBreakGuideAudioPlayer`）未自動化測試，因為實機播放無法在 CI 驗證。手動 smoke test 涵蓋：啟動 app 後休息觸發時聽到提示音或語音、拔除輸出裝置後不彈窗、app 退出時資源正確釋放。
 - 資料匯出（#21）使用純 JSON 格式，不含數位簽章或校驗和；使用者應自行驗證匯出檔案的完整性。
 - 清除使用記錄後會自動執行 `VACUUM` 回收空間，但失敗不致命（資料已清除）；SQLite `-wal` 與 `-shm` 檔案仍可能殘留，工具不自動刪除 `-wal`／`-shm`。
+- 資料庫以 WAL 模式寫入（`PRAGMA journal_mode=WAL`，migration 時設定一次），且使用記錄寫入連線採 `PRAGMA synchronous=NORMAL`：`-wal`／`-shm` 檔案會常駐於資料庫目錄，且作業系統或電源突然中斷時，最近尚未 checkpoint 的少量使用事件可能遺失（資料庫本身不會損毀）。設定與應用程式規則以單筆 commit 寫入，不受此影響。
+- 使用事件為批次寫入：`BackgroundUsageEventWriter` 會把佇列中已排隊的事件（每批最多 64 筆）合併成一個 transaction，因此事件從產生到落地存在一個極短的延遲窗口，此期間行程被強制結束會遺失該批事件。
 - 儲存設定後，可即時套用者（前景程式名稱蒐集、減少動態效果、休息引導模式、提醒透明度、延後長度）立即生效；提醒引擎的建構參數（工作間隔、各停頓／離席門檻、最長提醒等待、休息長度、提醒顯示時間、提醒重試冷卻、休息債務門檻、專注模式長度）須待下次啟動，因為重建引擎會清掉累積工作時間，等同使用者未要求的可信重設。儲存確認訊息會逐項列出真正需要重新啟動的設定。「延後長度」是唯一可即時套用的引擎時間值：它只在 `Snooze()` 計算期限時讀取，不持有累積狀態，因此經 `UpdateSnoozeDuration` 就地更新；已在進行中的延後保留原有期限，新值套用於下一次延後。
 - 全域「取消休息」快捷鍵為 `Ctrl+Alt+Shift+B`。先前的 `Ctrl+Shift+Esc` 是 Windows 保留給工作管理員的組合，註冊必然失敗且完全無聲。註冊失敗（例如被其他應用程式佔用）現在會寫入診斷訊息。`RegisterHotKey` 的實際結果無法由單元測試觀察，仍待 Windows 11 實機驗證。
 - 「暫停提醒」、「專注模式」與「停用提醒」在執行中休息期間皆可用，並會先明確取消並記錄該次休息，再進行狀態轉換。取消是刻意且被記錄的後果，不是狀態改變的副作用。快捷鍵註冊仍由 `StartActivityTracking` 觸發（而非規格所述的「視窗 handle 可用時」），但以 `EnsureHandle()` 強制建立 handle，因此不再依賴主視窗曾被顯示。

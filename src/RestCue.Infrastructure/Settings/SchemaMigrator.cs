@@ -10,6 +10,12 @@ public static class SchemaMigrator
         SqliteConnection connection,
         CancellationToken cancellationToken = default)
     {
+        // WAL is a persistent database property, so setting it here covers every other
+        // connection: commits append to the log instead of building and fsyncing a
+        // rollback journal file per write. Applied before the version check so databases
+        // already at the latest schema get it too.
+        await ExecuteNonQueryAsync(connection, "PRAGMA journal_mode=WAL;", cancellationToken);
+
         long version = await GetUserVersionAsync(connection, cancellationToken);
 
         if (version > LatestSchemaVersion)

@@ -116,8 +116,12 @@ public sealed class SqliteSettingsRepositoryTests : IDisposable
             lockCommand.CommandText = "BEGIN EXCLUSIVE;";
             await lockCommand.ExecuteNonQueryAsync();
 
+            // In WAL mode a concurrent writer no longer blocks readers, so the load
+            // still sees the stored settings; only another write hits the lock.
+            Assert.Equal(saved, (await repository.LoadAsync()).Settings);
+
             SqliteException exception = await Assert.ThrowsAsync<SqliteException>(
-                () => repository.LoadAsync());
+                () => repository.SaveAsync(saved with { WorkInterval = TimeSpan.FromMinutes(21) }));
 
             Assert.Contains(exception.SqliteErrorCode, new[] { 5, 6 });
             Assert.True(File.Exists(databasePath));

@@ -28,27 +28,33 @@ public sealed class SqliteSuggestionStore : ISuggestionStore
     {
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
+        return await ReadDismissedAsync(connection, cancellationToken);
+    }
 
+    private static async Task<HashSet<string>> ReadDismissedAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT value FROM settings WHERE key = $key;";
         command.Parameters.AddWithValue("$key", DismissedKey);
 
         var result = await command.ExecuteScalarAsync(cancellationToken);
         if (result is not string json || string.IsNullOrWhiteSpace(json))
-            return new HashSet<string>();
+            return [];
 
         return JsonSerializer.Deserialize<HashSet<string>>(json, JsonOptions) ?? [];
     }
 
     public async Task DismissAsync(string processName, CancellationToken cancellationToken = default)
     {
-        var dismissed = new HashSet<string>(await GetDismissedProcessNamesAsync(cancellationToken))
-        {
-            processName
-        };
-
+        // Read and write share one connection: dismissing a suggestion opens the
+        // database once, not twice.
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
+
+        var dismissed = await ReadDismissedAsync(connection, cancellationToken);
+        dismissed.Add(processName);
 
         await using var command = connection.CreateCommand();
         command.CommandText =

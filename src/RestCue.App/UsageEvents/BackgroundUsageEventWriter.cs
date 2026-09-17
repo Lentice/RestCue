@@ -10,6 +10,7 @@ public sealed class BackgroundUsageEventWriter : IDisposable
     private readonly Channel<WriteRequest> channel;
     private readonly CancellationTokenSource cts;
     private readonly Task consumerTask;
+    private const int MaxBatchSize = 64;
 
     public BackgroundUsageEventWriter(
         IUsageEventRepository repository,
@@ -74,6 +75,8 @@ public sealed class BackgroundUsageEventWriter : IDisposable
 
     private async Task ConsumeAsync(CancellationToken ct)
     {
+        var batch = new List<UsageEventWrite>();
+
         await foreach (var request in channel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
         {
             try
@@ -92,7 +95,20 @@ public sealed class BackgroundUsageEventWriter : IDisposable
                     continue;
                 }
 
-                await repository.WriteAsync(request.EventType!.Value, request.OccurredUtc, request.Payload, ct);
+                // Whatever has already queued up behind this event goes in the same
+                // transaction. Draining stops at an exclusive operation so it still runs
+                // in the order it was queued.
+                batch.Clear();
+                batch.Add(request.ToWrite());
+                while (batch.Count < MaxBatchSize &&
+                       channel.Reader.TryPeek(out var next) &&
+                       next.Operation == null &&
+                       channel.Reader.TryRead(out var queued))
+                {
+                    batch.Add(queued.ToWrite());
+                }
+
+                await repository.WriteManyAsync(batch, ct);
             }
             catch
             {
@@ -113,6 +129,8 @@ public sealed class BackgroundUsageEventWriter : IDisposable
             DateTimeOffset occurredUtc,
             UsageEventPayload? payload) =>
             new(eventType, occurredUtc, payload, null, null);
+
+        public UsageEventWrite ToWrite() => new(EventType!.Value, OccurredUtc, Payload);
 
         public static WriteRequest Exclusive(
             Func<Task> operation,

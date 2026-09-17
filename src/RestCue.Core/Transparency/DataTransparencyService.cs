@@ -72,7 +72,12 @@ public sealed class DataTransparencyService : IDataTransparencyService
         {
             var fileInfo = new System.IO.FileInfo(databasePath);
             if (fileInfo.Exists)
-                databaseSizeBytes = fileInfo.Length;
+            {
+                // In WAL mode the newest events still sit in the log, so the reported
+                // footprint counts it alongside the main database file.
+                var walInfo = new System.IO.FileInfo($"{databasePath}-wal");
+                databaseSizeBytes = fileInfo.Length + (walInfo.Exists ? walInfo.Length : 0);
+            }
         }
         catch
         {

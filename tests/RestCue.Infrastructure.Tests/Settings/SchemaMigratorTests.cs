@@ -31,6 +31,26 @@ public sealed class SchemaMigratorTests : IDisposable
     }
 
     [Fact]
+    public async Task Migration_switches_the_database_to_wal_journalling()
+    {
+        string databasePath = Path.Combine(directory, "restcue.db");
+        Directory.CreateDirectory(directory);
+
+        await using (var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            await SchemaMigrator.EnsureSchemaAsync(connection);
+        }
+
+        // Persistent property: a fresh connection that never migrates still sees WAL.
+        await using var reopened = new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        await reopened.OpenAsync();
+        await using var command = reopened.CreateCommand();
+        command.CommandText = "PRAGMA journal_mode;";
+        Assert.Equal("wal", ((string)(await command.ExecuteScalarAsync())!).ToLowerInvariant());
+    }
+
+    [Fact]
     public async Task V2_database_upgrades_to_v3_and_preserves_settings()
     {
         string databasePath = Path.Combine(directory, "restcue.db");

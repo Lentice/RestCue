@@ -32,11 +32,55 @@ public sealed class SqliteUsageEventRepository : IUsageEventRepository
             [UsageEventType.ErrorOccurred] = typeof(ErrorOccurredPayload),
         };
 
-    public async Task WriteAsync(
+    public Task WriteAsync(
         UsageEventType eventType,
         DateTimeOffset occurredUtc,
         UsageEventPayload? payload = null,
+        CancellationToken cancellationToken = default) =>
+        WriteManyAsync([new UsageEventWrite(eventType, occurredUtc, payload)], cancellationToken);
+
+    public async Task WriteManyAsync(
+        IReadOnlyList<UsageEventWrite> events,
         CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        if (events.Count == 0)
+            return;
+
+        foreach (var e in events)
+            Validate(e.EventType, e.Payload);
+
+        await using var connection = new SqliteConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await ApplyWritePragmasAsync(connection, cancellationToken);
+
+        // One transaction for the whole batch: the rollback journal (or WAL) is
+        // written and synced once instead of once per event.
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = (SqliteTransaction)transaction;
+        command.CommandText =
+            """
+            INSERT INTO usage_events (occurred_utc, event_type, payload)
+            VALUES ($occurredUtc, $eventType, $payload);
+            """;
+        var occurredParam = command.Parameters.Add("$occurredUtc", SqliteType.Text);
+        var typeParam = command.Parameters.Add("$eventType", SqliteType.Text);
+        var payloadParam = command.Parameters.Add("$payload", SqliteType.Text);
+
+        foreach (var e in events)
+        {
+            occurredParam.Value = e.OccurredUtc.ToUniversalTime().ToString("O");
+            typeParam.Value = e.EventType.ToString();
+            payloadParam.Value = SerializePayload(e.Payload);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    private static void Validate(UsageEventType eventType, UsageEventPayload? payload)
     {
         if (payload != null && !PayloadTypeByEventType.ContainsKey(eventType))
             throw new ArgumentException(
@@ -48,19 +92,20 @@ public sealed class SqliteUsageEventRepository : IUsageEventRepository
             throw new ArgumentException(
                 $"Event type {eventType} expects a {PayloadTypeByEventType[eventType].Name} payload.",
                 nameof(payload));
+    }
 
-        await using var connection = new SqliteConnection(connectionString);
-        await connection.OpenAsync(cancellationToken);
-
+    /// <summary>
+    /// The journal mode is a persistent database property set during migration; the sync
+    /// level is per connection, so the write path sets it on every connection it opens.
+    /// NORMAL keeps commits out of fsync in WAL mode: a crash can cost the most recent
+    /// events, never the database.
+    /// </summary>
+    private static async Task ApplyWritePragmasAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
-            INSERT INTO usage_events (occurred_utc, event_type, payload)
-            VALUES ($occurredUtc, $eventType, $payload);
-            """;
-        command.Parameters.AddWithValue("$occurredUtc", occurredUtc.ToUniversalTime().ToString("O"));
-        command.Parameters.AddWithValue("$eventType", eventType.ToString());
-        command.Parameters.AddWithValue("$payload", SerializePayload(payload));
+        command.CommandText = "PRAGMA synchronous=NORMAL;";
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
